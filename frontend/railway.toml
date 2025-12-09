@@ -1,6 +1,7 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "frontend/Dockerfile"
+dockerContext = "frontend"
 
 [deploy]
 startCommand = "nginx -g 'daemon off;'"
