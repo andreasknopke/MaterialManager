@@ -42,14 +42,27 @@ const Dashboard: React.FC = () => {
           cabinetAPI.getAll(),
         ]);
 
+        console.log('Dashboard API Responses:', { materials, lowStock, expiring, cabinets });
+
+        const materialsData = Array.isArray(materials.data) ? materials.data : [];
+        const lowStockData = Array.isArray(lowStock.data) ? lowStock.data : [];
+        const expiringData = Array.isArray(expiring.data) ? expiring.data : [];
+        const cabinetsData = Array.isArray(cabinets.data) ? cabinets.data : [];
+
         setStats({
-          totalMaterials: materials.data.length,
-          lowStockCount: lowStock.data.length,
-          expiringCount: expiring.data.length,
-          totalCabinets: cabinets.data.length,
+          totalMaterials: materialsData.length,
+          lowStockCount: lowStockData.length,
+          expiringCount: expiringData.length,
+          totalCabinets: cabinetsData.length,
         });
       } catch (error) {
         console.error('Fehler beim Laden der Statistiken:', error);
+        setStats({
+          totalMaterials: 0,
+          lowStockCount: 0,
+          expiringCount: 0,
+          totalCabinets: 0,
+        });
       } finally {
         setLoading(false);
       }
