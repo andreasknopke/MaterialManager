@@ -17,7 +17,7 @@ import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/ico
 import { cabinetAPI } from '../services/api';
 
 const Cabinets: React.FC = () => {
-  const [cabinets, setCabinets] = useState([]);
+  const [cabinets, setCabinets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingCabinet, setEditingCabinet] = useState<any>(null);
@@ -35,9 +35,11 @@ const Cabinets: React.FC = () => {
   const fetchCabinets = async () => {
     try {
       const response = await cabinetAPI.getAll();
-      setCabinets(response.data);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setCabinets(data);
     } catch (error) {
       console.error('Fehler beim Laden der Schränke:', error);
+      setCabinets([]);
     } finally {
       setLoading(false);
     }

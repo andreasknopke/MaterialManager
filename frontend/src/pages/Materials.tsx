@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { materialAPI } from '../services/api';
 
 const Materials: React.FC = () => {
-  const [materials, setMaterials] = useState([]);
+  const [materials, setMaterials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
@@ -26,9 +26,13 @@ const Materials: React.FC = () => {
   const fetchMaterials = async () => {
     try {
       const response = await materialAPI.getAll();
-      setMaterials(response.data);
+      console.log('API Response:', response.data);
+      // Sicherstellen, dass wir ein Array haben
+      const data = Array.isArray(response.data) ? response.data : [];
+      setMaterials(data);
     } catch (error) {
       console.error('Fehler beim Laden der Materialien:', error);
+      setMaterials([]);
     } finally {
       setLoading(false);
     }

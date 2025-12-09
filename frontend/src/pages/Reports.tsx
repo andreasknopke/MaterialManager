@@ -27,8 +27,8 @@ function TabPanel(props: TabPanelProps) {
 
 const Reports: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
-  const [lowStockMaterials, setLowStockMaterials] = useState([]);
-  const [expiringMaterials, setExpiringMaterials] = useState([]);
+  const [lowStockMaterials, setLowStockMaterials] = useState<any[]>([]);
+  const [expiringMaterials, setExpiringMaterials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,10 +41,14 @@ const Reports: React.FC = () => {
         materialAPI.getLowStock(),
         materialAPI.getExpiring(),
       ]);
-      setLowStockMaterials(lowStock.data);
-      setExpiringMaterials(expiring.data);
+      const lowStockData = Array.isArray(lowStock.data) ? lowStock.data : [];
+      const expiringData = Array.isArray(expiring.data) ? expiring.data : [];
+      setLowStockMaterials(lowStockData);
+      setExpiringMaterials(expiringData);
     } catch (error) {
       console.error('Fehler beim Laden der Berichte:', error);
+      setLowStockMaterials([]);
+      setExpiringMaterials([]);
     } finally {
       setLoading(false);
     }

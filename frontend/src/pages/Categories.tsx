@@ -16,7 +16,7 @@ import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/ico
 import { categoryAPI } from '../services/api';
 
 const Categories: React.FC = () => {
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
@@ -29,9 +29,11 @@ const Categories: React.FC = () => {
   const fetchCategories = async () => {
     try {
       const response = await categoryAPI.getAll();
-      setCategories(response.data);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setCategories(data);
     } catch (error) {
       console.error('Fehler beim Laden der Kategorien:', error);
+      setCategories([]);
     } finally {
       setLoading(false);
     }

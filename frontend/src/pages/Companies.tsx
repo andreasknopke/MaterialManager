@@ -17,7 +17,7 @@ import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/ico
 import { companyAPI } from '../services/api';
 
 const Companies: React.FC = () => {
-  const [companies, setCompanies] = useState([]);
+  const [companies, setCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<any>(null);
@@ -36,9 +36,11 @@ const Companies: React.FC = () => {
   const fetchCompanies = async () => {
     try {
       const response = await companyAPI.getAll();
-      setCompanies(response.data);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setCompanies(data);
     } catch (error) {
       console.error('Fehler beim Laden der Firmen:', error);
+      setCompanies([]);
     } finally {
       setLoading(false);
     }
