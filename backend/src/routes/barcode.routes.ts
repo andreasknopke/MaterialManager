@@ -1,0 +1,217 @@
+import { Router, Request, Response } from 'express';
+import pool from '../config/database';
+import { ResultSetHeader, RowDataPacket } from 'mysql2';
+
+const router = Router();
+
+// GET Barcode suchen
+router.get('/search/:barcode', async (req: Request, res: Response) => {
+  try {
+    const [barcodeRows] = await pool.query<RowDataPacket[]>(
+      'SELECT * FROM barcodes WHERE barcode = ?',
+      [req.params.barcode]
+    );
+    
+    if (barcodeRows.length === 0) {
+      return res.status(404).json({ error: 'Barcode nicht gefunden' });
+    }
+    
+    const barcode = barcodeRows[0];
+    
+    // Material-Informationen abrufen
+    const [materialRows] = await pool.query<RowDataPacket[]>(
+      'SELECT * FROM v_materials_overview WHERE id = ?',
+      [barcode.material_id]
+    );
+    
+    if (materialRows.length === 0) {
+      return res.status(404).json({ error: 'Material nicht gefunden' });
+    }
+    
+    res.json({
+      barcode: barcode,
+      material: materialRows[0]
+    });
+  } catch (error) {
+    console.error('Fehler bei der Barcode-Suche:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// GET alle Barcodes eines Materials
+router.get('/material/:materialId', async (req: Request, res: Response) => {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT * FROM barcodes WHERE material_id = ? ORDER BY is_primary DESC, created_at',
+      [req.params.materialId]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Barcodes:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// POST neuer Barcode
+router.post('/', async (req: Request, res: Response) => {
+  const { material_id, barcode, barcode_type, is_primary } = req.body;
+  
+  if (!material_id || !barcode) {
+    return res.status(400).json({ error: 'Material-ID und Barcode sind erforderlich' });
+  }
+  
+  try {
+    // Wenn is_primary = true, alle anderen Barcodes des Materials auf false setzen
+    if (is_primary) {
+      await pool.query(
+        'UPDATE barcodes SET is_primary = FALSE WHERE material_id = ?',
+        [material_id]
+      );
+    }
+    
+    const [result] = await pool.query<ResultSetHeader>(
+      'INSERT INTO barcodes (material_id, barcode, barcode_type, is_primary) VALUES (?, ?, ?, ?)',
+      [material_id, barcode, barcode_type || 'CODE128', is_primary || false]
+    );
+    
+    res.status(201).json({
+      id: result.insertId,
+      message: 'Barcode erfolgreich erstellt'
+    });
+  } catch (error: any) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Barcode existiert bereits' });
+    }
+    console.error('Fehler beim Erstellen des Barcodes:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// PUT Barcode aktualisieren
+router.put('/:id', async (req: Request, res: Response) => {
+  const { barcode, barcode_type, is_primary } = req.body;
+  
+  try {
+    // Wenn is_primary = true, Material-ID ermitteln und andere Barcodes auf false setzen
+    if (is_primary) {
+      const [existingBarcode] = await pool.query<RowDataPacket[]>(
+        'SELECT material_id FROM barcodes WHERE id = ?',
+        [req.params.id]
+      );
+      
+      if (existingBarcode.length > 0) {
+        await pool.query(
+          'UPDATE barcodes SET is_primary = FALSE WHERE material_id = ? AND id != ?',
+          [existingBarcode[0].material_id, req.params.id]
+        );
+      }
+    }
+    
+    const [result] = await pool.query<ResultSetHeader>(
+      'UPDATE barcodes SET barcode = ?, barcode_type = ?, is_primary = ? WHERE id = ?',
+      [barcode, barcode_type, is_primary, req.params.id]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Barcode nicht gefunden' });
+    }
+    
+    res.json({ message: 'Barcode erfolgreich aktualisiert' });
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren des Barcodes:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// DELETE Barcode
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const [result] = await pool.query<ResultSetHeader>(
+      'DELETE FROM barcodes WHERE id = ?',
+      [req.params.id]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Barcode nicht gefunden' });
+    }
+    
+    res.json({ message: 'Barcode erfolgreich gelöscht' });
+  } catch (error) {
+    console.error('Fehler beim Löschen des Barcodes:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// POST Barcode scannen und Material-Ausgang buchen
+router.post('/scan-out', async (req: Request, res: Response) => {
+  const { barcode, quantity, user_name, notes } = req.body;
+  
+  if (!barcode || !quantity) {
+    return res.status(400).json({ error: 'Barcode und Menge sind erforderlich' });
+  }
+  
+  const connection = await pool.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    // Barcode suchen
+    const [barcodeRows] = await connection.query<RowDataPacket[]>(
+      'SELECT material_id FROM barcodes WHERE barcode = ?',
+      [barcode]
+    );
+    
+    if (barcodeRows.length === 0) {
+      throw new Error('Barcode nicht gefunden');
+    }
+    
+    const materialId = barcodeRows[0].material_id;
+    
+    // Bestand prüfen und aktualisieren
+    const [materials] = await connection.query<RowDataPacket[]>(
+      'SELECT current_stock FROM materials WHERE id = ?',
+      [materialId]
+    );
+    
+    if (materials.length === 0) {
+      throw new Error('Material nicht gefunden');
+    }
+    
+    const previousStock = materials[0].current_stock;
+    const newStock = previousStock - quantity;
+    
+    if (newStock < 0) {
+      throw new Error('Nicht genügend Bestand verfügbar');
+    }
+    
+    await connection.query(
+      'UPDATE materials SET current_stock = ? WHERE id = ?',
+      [newStock, materialId]
+    );
+    
+    // Transaktion aufzeichnen
+    await connection.query(
+      `INSERT INTO material_transactions 
+       (material_id, transaction_type, quantity, previous_stock, new_stock, notes, user_name)
+       VALUES (?, 'out', ?, ?, ?, ?, ?)`,
+      [materialId, quantity, previousStock, newStock, notes || 'Barcode-Scan Ausgang', user_name]
+    );
+    
+    await connection.commit();
+    
+    res.json({
+      message: 'Ausgang erfolgreich gebucht',
+      material_id: materialId,
+      previous_stock: previousStock,
+      new_stock: newStock
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Fehler beim Barcode-Scan:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Datenbankfehler' });
+  } finally {
+    connection.release();
+  }
+});
+
+export default router;

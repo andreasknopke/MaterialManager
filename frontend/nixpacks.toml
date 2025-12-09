@@ -1,0 +1,10 @@
+builder = "npm"
+
+[build]
+buildCommand = "npm install --legacy-peer-deps && npm run build"
+
+[start]
+cmd = "npx serve -s build -l $PORT"
+
+[phases.setup]
+nixPkgs = ["nodejs-18_x"]

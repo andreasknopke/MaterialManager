@@ -1,0 +1,155 @@
+import React, { useEffect, useState } from 'react';
+import {
+  Grid,
+  Paper,
+  Typography,
+  Box,
+  Card,
+  CardContent,
+  CircularProgress,
+} from '@mui/material';
+import {
+  Inventory as InventoryIcon,
+  Warning as WarningIcon,
+  EventBusy as EventBusyIcon,
+  Storage as StorageIcon,
+} from '@mui/icons-material';
+import { materialAPI, cabinetAPI } from '../services/api';
+
+interface Stats {
+  totalMaterials: number;
+  lowStockCount: number;
+  expiringCount: number;
+  totalCabinets: number;
+}
+
+const Dashboard: React.FC = () => {
+  const [stats, setStats] = useState<Stats>({
+    totalMaterials: 0,
+    lowStockCount: 0,
+    expiringCount: 0,
+    totalCabinets: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const [materials, lowStock, expiring, cabinets] = await Promise.all([
+          materialAPI.getAll(),
+          materialAPI.getLowStock(),
+          materialAPI.getExpiring(),
+          cabinetAPI.getAll(),
+        ]);
+
+        setStats({
+          totalMaterials: materials.data.length,
+          lowStockCount: lowStock.data.length,
+          expiringCount: expiring.data.length,
+          totalCabinets: cabinets.data.length,
+        });
+      } catch (error) {
+        console.error('Fehler beim Laden der Statistiken:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  const statCards = [
+    {
+      title: 'Materialien gesamt',
+      value: stats.totalMaterials,
+      icon: <InventoryIcon sx={{ fontSize: 40 }} />,
+      color: '#1976d2',
+    },
+    {
+      title: 'Niedriger Bestand',
+      value: stats.lowStockCount,
+      icon: <WarningIcon sx={{ fontSize: 40 }} />,
+      color: '#ff9800',
+    },
+    {
+      title: 'Ablaufende Materialien',
+      value: stats.expiringCount,
+      icon: <EventBusyIcon sx={{ fontSize: 40 }} />,
+      color: '#f44336',
+    },
+    {
+      title: 'Schränke',
+      value: stats.totalCabinets,
+      icon: <StorageIcon sx={{ fontSize: 40 }} />,
+      color: '#4caf50',
+    },
+  ];
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      <Typography variant="h4" gutterBottom>
+        Dashboard
+      </Typography>
+      <Typography variant="body1" color="text.secondary" gutterBottom sx={{ mb: 3 }}>
+        Übersicht über Ihre Materialverwaltung
+      </Typography>
+
+      <Grid container spacing={3}>
+        {statCards.map((card, index) => (
+          <Grid item xs={12} sm={6} md={3} key={index}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Box display="flex" alignItems="center" justifyContent="space-between">
+                  <Box>
+                    <Typography color="text.secondary" variant="body2" gutterBottom>
+                      {card.title}
+                    </Typography>
+                    <Typography variant="h4">{card.value}</Typography>
+                  </Box>
+                  <Box sx={{ color: card.color }}>{card.icon}</Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      <Grid container spacing={3} sx={{ mt: 2 }}>
+        <Grid item xs={12}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Willkommen im Material Manager
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Verwalten Sie Ihre medizinischen Materialien effizient und übersichtlich.
+              Nutzen Sie die Navigation links, um auf die verschiedenen Funktionen zuzugreifen.
+            </Typography>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" component="div">
+                <strong>Funktionen:</strong>
+                <ul>
+                  <li>Materialverwaltung mit Barcode-Unterstützung</li>
+                  <li>Schrankorganisation</li>
+                  <li>Ein- und Ausgangsbuchungen</li>
+                  <li>Bestandsüberwachung und Warnungen</li>
+                  <li>Verfallsdatum-Tracking</li>
+                  <li>Berichte und Auswertungen</li>
+                </ul>
+              </Typography>
+            </Box>
+          </Paper>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
+
+export default Dashboard;

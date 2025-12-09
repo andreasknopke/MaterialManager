@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: material_manager_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: material_manager
+      MYSQL_USER: materialmanager
+      MYSQL_PASSWORD: secure_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    networks:
+      - material_manager_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: material_manager_backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: materialmanager
+      DB_PASSWORD: secure_password
+      DB_NAME: material_manager
+      JWT_SECRET: your_super_secret_jwt_key_change_this_in_production
+      CORS_ORIGIN: http://localhost:3000
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - material_manager_network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: material_manager_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      REACT_APP_API_URL: http://localhost:3001/api
+    depends_on:
+      - backend
+    networks:
+      - material_manager_network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  material_manager_network:
+    driver: bridge

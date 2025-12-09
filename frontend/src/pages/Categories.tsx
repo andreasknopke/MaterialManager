@@ -1,0 +1,157 @@
+import React, { useEffect, useState } from 'react';
+import {
+  Box,
+  Button,
+  Typography,
+  Paper,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+} from '@mui/material';
+import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { categoryAPI } from '../services/api';
+
+const Categories: React.FC = () => {
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<any>(null);
+  const [formData, setFormData] = useState({ name: '', description: '' });
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await categoryAPI.getAll();
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Fehler beim Laden der Kategorien:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpen = (category?: any) => {
+    if (category) {
+      setEditingCategory(category);
+      setFormData({ name: category.name, description: category.description });
+    } else {
+      setEditingCategory(null);
+      setFormData({ name: '', description: '' });
+    }
+    setOpen(true);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setEditingCategory(null);
+  };
+
+  const handleSave = async () => {
+    try {
+      if (editingCategory) {
+        await categoryAPI.update(editingCategory.id, formData);
+      } else {
+        await categoryAPI.create(formData);
+      }
+      fetchCategories();
+      handleClose();
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (window.confirm('Kategorie wirklich löschen?')) {
+      try {
+        await categoryAPI.delete(id);
+        fetchCategories();
+      } catch (error) {
+        console.error('Fehler beim Löschen:', error);
+      }
+    }
+  };
+
+  const columns: GridColDef[] = [
+    { field: 'id', headerName: 'ID', width: 70 },
+    { field: 'name', headerName: 'Name', width: 250 },
+    { field: 'description', headerName: 'Beschreibung', flex: 1 },
+    {
+      field: 'actions',
+      headerName: 'Aktionen',
+      width: 120,
+      sortable: false,
+      renderCell: (params) => (
+        <>
+          <IconButton size="small" onClick={() => handleOpen(params.row)}>
+            <EditIcon fontSize="small" />
+          </IconButton>
+          <IconButton size="small" onClick={() => handleDelete(params.row.id)}>
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </>
+      ),
+    },
+  ];
+
+  return (
+    <Box>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h4">Kategorien</Typography>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()}>
+          Neue Kategorie
+        </Button>
+      </Box>
+
+      <Paper sx={{ height: 600, width: '100%' }}>
+        <DataGrid
+          rows={categories}
+          columns={columns}
+          loading={loading}
+          pageSizeOptions={[10, 25, 50]}
+          initialState={{
+            pagination: { paginationModel: { pageSize: 25 } },
+          }}
+          disableRowSelectionOnClick
+        />
+      </Paper>
+
+      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingCategory ? 'Kategorie bearbeiten' : 'Neue Kategorie'}</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            margin="normal"
+            required
+          />
+          <TextField
+            fullWidth
+            label="Beschreibung"
+            multiline
+            rows={3}
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            margin="normal"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose}>Abbrechen</Button>
+          <Button onClick={handleSave} variant="contained">
+            Speichern
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+};
+
+export default Categories;
