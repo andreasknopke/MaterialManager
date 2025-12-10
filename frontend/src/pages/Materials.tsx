@@ -8,6 +8,8 @@ import {
   IconButton,
   Chip,
   Alert,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
@@ -19,6 +21,7 @@ const Materials: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [hideZeroStock, setHideZeroStock] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -124,11 +127,15 @@ const Materials: React.FC = () => {
     },
   ];
 
-  const filteredMaterials = materials.filter((material: any) =>
-    material.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    material.category_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    material.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMaterials = materials.filter((material: any) => {
+    const matchesSearch = material.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      material.category_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      material.company_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const hasStock = hideZeroStock ? material.current_stock > 0 : true;
+    
+    return matchesSearch && hasStock;
+  });
 
   const getFilterTitle = () => {
     if (activeFilter === 'lowStock') return 'Niedriger Bestand';
@@ -181,6 +188,18 @@ const Materials: React.FC = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Nach Name, Kategorie oder Firma suchen..."
         />
+        <Box sx={{ mt: 2 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={hideZeroStock}
+                onChange={(e) => setHideZeroStock(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Materialien mit Bestand 0 ausblenden"
+          />
+        </Box>
       </Paper>
 
       <Paper sx={{ height: { xs: 400, sm: 600 }, width: '100%' }}>
