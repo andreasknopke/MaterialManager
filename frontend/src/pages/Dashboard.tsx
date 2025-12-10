@@ -46,22 +46,36 @@ const Dashboard: React.FC = () => {
           cabinetAPI.getAll(),
         ]);
 
-        console.log('Dashboard API Responses:', { materials, lowStock, expiring, cabinets });
+        console.log('=== DASHBOARD DEBUG ===');
+        console.log('Materials response:', materials.data);
+        console.log('LowStock response:', lowStock.data);
+        console.log('Expiring response:', expiring.data);
+        console.log('Cabinets response:', cabinets.data);
+        console.log('Cabinets count:', cabinets.data?.length);
 
         const materialsData = Array.isArray(materials.data) ? materials.data : [];
         const lowStockData = Array.isArray(lowStock.data) ? lowStock.data : [];
         const expiringData = Array.isArray(expiring.data) ? expiring.data : [];
         const cabinetsData = Array.isArray(cabinets.data) ? cabinets.data : [];
 
+        console.log('Processed arrays:');
+        console.log('  materialsData.length:', materialsData.length);
+        console.log('  lowStockData.length:', lowStockData.length);
+        console.log('  expiringData.length:', expiringData.length);
+        console.log('  cabinetsData.length:', cabinetsData.length);
+
         // Nur aktive Materialien zählen
         const activeMaterials = materialsData.filter((m: any) => m.active);
 
-        setStats({
+        const newStats = {
           totalMaterials: activeMaterials.length,
           lowStockCount: lowStockData.length,
           expiringCount: expiringData.length,
           totalCabinets: cabinetsData.length,
-        });
+        };
+
+        console.log('Setting stats:', newStats);
+        setStats(newStats);
       } catch (error) {
         console.error('Fehler beim Laden der Statistiken:', error);
         setStats({
