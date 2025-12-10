@@ -44,55 +44,60 @@ const BarcodeScanner: React.FC = () => {
 
   useEffect(() => {
     if (cameraOpen && videoRef.current) {
-      // ZXing Scanner mit GS1-128 Support initialisieren
+      console.log('Initialisiere Scanner...');
       const codeReader = new BrowserMultiFormatReader();
       codeReaderRef.current = codeReader;
 
-      // Alle wichtigen Barcode-Formate aktivieren
-      const hints = new Map();
-      const formats = [
-        BarcodeFormat.CODE_128,  // GS1-128 basiert auf CODE_128
-        BarcodeFormat.CODE_39,
-        BarcodeFormat.CODE_93,
-        BarcodeFormat.EAN_13,
-        BarcodeFormat.EAN_8,
-        BarcodeFormat.UPC_A,
-        BarcodeFormat.UPC_E,
-        BarcodeFormat.QR_CODE,
-      ];
+      // Liste verfügbare Kameras
+      navigator.mediaDevices.enumerateDevices()
+        .then(devices => {
+          const videoDevices = devices.filter(device => device.kind === 'videoinput');
+          console.log('Verfügbare Kameras:', videoDevices);
+          
+          if (videoDevices.length === 0) {
+            throw new Error('Keine Kamera gefunden');
+          }
 
-      codeReader.decodeFromVideoDevice(null, videoRef.current, (result, error) => {
-        if (result) {
-          const scannedCode = result.getText();
-          console.log('Barcode gescannt:', scannedCode);
-          console.log('Format:', result.getBarcodeFormat());
-          
-          setBarcode(scannedCode);
+          // Starte Scanning mit der ersten verfügbaren Kamera
+          const deviceId = videoDevices[0].deviceId;
+          console.log('Verwende Kamera:', deviceId);
+
+          return codeReader.decodeFromVideoDevice(deviceId, videoRef.current!, (result, error) => {
+            if (result) {
+              const scannedCode = result.getText();
+              console.log('✓ Barcode gescannt:', scannedCode);
+              console.log('Format:', result.getBarcodeFormat());
+              
+              setBarcode(scannedCode);
+              setCameraOpen(false);
+              setError('');
+              setSuccess('Barcode erfolgreich gescannt');
+              setTimeout(() => setSuccess(''), 2000);
+              
+              // Automatisch suchen
+              setTimeout(() => {
+                barcodeAPI.search(scannedCode)
+                  .then(response => setMaterial(response.data.material))
+                  .catch(() => setNotFound(true));
+              }, 100);
+            }
+            
+            // Nur echte Fehler loggen
+            if (error && error.name !== 'NotFoundException') {
+              console.warn('Scanner:', error.message);
+            }
+          });
+        })
+        .catch((err) => {
+          console.error('Fehler beim Starten der Kamera:', err);
+          setError(`Kamera-Fehler: ${err.message}`);
           setCameraOpen(false);
-          setError('');
-          setSuccess('Barcode erfolgreich gescannt');
-          setTimeout(() => setSuccess(''), 2000);
-          
-          // Automatisch suchen
-          setTimeout(() => {
-            barcodeAPI.search(scannedCode)
-              .then(response => setMaterial(response.data.material))
-              .catch(() => setNotFound(true));
-          }, 100);
-        }
-        
-        if (error && !(error.name === 'NotFoundException')) {
-          console.error('Scanner error:', error);
-        }
-      }).catch((err) => {
-        console.error('Fehler beim Starten der Kamera:', err);
-        setError('Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.');
-        setCameraOpen(false);
-      });
+        });
     }
 
     return () => {
       if (codeReaderRef.current) {
+        console.log('Stoppe Scanner...');
         codeReaderRef.current.reset();
       }
     };
