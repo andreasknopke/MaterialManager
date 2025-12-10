@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Grid,
   Paper,
@@ -7,12 +8,14 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Button,
 } from '@mui/material';
 import {
   Inventory as InventoryIcon,
   Warning as WarningIcon,
   EventBusy as EventBusyIcon,
   Storage as StorageIcon,
+  QrCodeScanner as QrCodeScannerIcon,
 } from '@mui/icons-material';
 import { materialAPI, cabinetAPI } from '../services/api';
 
@@ -24,6 +27,7 @@ interface Stats {
 }
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<Stats>({
     totalMaterials: 0,
     lowStockCount: 0,
@@ -116,6 +120,36 @@ const Dashboard: React.FC = () => {
       </Typography>
 
       <Grid container spacing={3}>
+        {/* Barcode Scanner - Große Kachel */}
+        <Grid item xs={12}>
+          <Card 
+            sx={{ 
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              cursor: 'pointer',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              '&:hover': {
+                transform: 'translateY(-4px)',
+                boxShadow: 6,
+              }
+            }}
+            onClick={() => navigate('/barcode-scanner')}
+          >
+            <CardContent sx={{ py: 4 }}>
+              <Box display="flex" alignItems="center" justifyContent="center" flexDirection="column" gap={2}>
+                <QrCodeScannerIcon sx={{ fontSize: 80 }} />
+                <Typography variant="h4" align="center" fontWeight="bold">
+                  Barcode Scanner
+                </Typography>
+                <Typography variant="body1" align="center" sx={{ opacity: 0.9 }}>
+                  Material scannen und direkt ein- oder ausbuchen
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Statistik-Karten */}
         {statCards.map((card, index) => (
           <Grid item xs={12} sm={6} md={3} key={index}>
             <Card sx={{ height: '100%' }}>
