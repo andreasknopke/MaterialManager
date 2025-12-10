@@ -195,7 +195,7 @@ router.post('/logout', authenticate, async (req: Request, res: Response) => {
 router.get('/me', authenticate, async (req: Request, res: Response) => {
   try {
     const [users] = await pool.query<RowDataPacket[]>(
-      `SELECT id, username, email, full_name, role, is_root, active, 
+      `SELECT id, username, email, full_name, role, is_root, department_id, active, 
               email_verified, must_change_password, last_login, created_at 
        FROM users WHERE id = ?`,
       [req.user!.id]
@@ -205,7 +205,19 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Benutzer nicht gefunden' });
     }
 
-    res.json(users[0]);
+    const user = users[0];
+
+    // Konvertiere snake_case zu camelCase für Frontend
+    res.json({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      fullName: user.full_name,
+      role: user.role,
+      isRoot: user.is_root,
+      departmentId: user.department_id,
+      mustChangePassword: user.must_change_password,
+    });
   } catch (error) {
     console.error('Fehler beim Abrufen des Benutzers:', error);
     res.status(500).json({ error: 'Fehler beim Abrufen der Benutzerdaten' });
