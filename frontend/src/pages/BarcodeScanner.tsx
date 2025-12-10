@@ -43,11 +43,11 @@ const BarcodeScanner: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
 
-  // Auto-open camera if navigated from dashboard
+  // Auto-open camera if navigated from dashboard or scanning cabinet
   useEffect(() => {
-    const state = location.state as { autoOpenCamera?: boolean } | null;
-    if (state?.autoOpenCamera) {
-      console.log('Auto-opening camera from dashboard');
+    const state = location.state as { autoOpenCamera?: boolean; scanCabinet?: boolean; returnTo?: string } | null;
+    if (state?.autoOpenCamera || state?.scanCabinet) {
+      console.log('Auto-opening camera:', state);
       setCameraOpen(true);
     }
   }, [location.state]);
@@ -110,6 +110,28 @@ const BarcodeScanner: React.FC = () => {
                     
                     // Stream stoppen
                     stream.getTracks().forEach(track => track.stop());
+                    
+                    // Check if we're scanning a cabinet QR code
+                    const state = location.state as { scanCabinet?: boolean; returnTo?: string } | null;
+                    if (state?.scanCabinet) {
+                      try {
+                        const cabinetData = JSON.parse(scannedCode);
+                        if (cabinetData.type === 'CABINET') {
+                          console.log('Cabinet QR code detected:', cabinetData);
+                          setCameraOpen(false);
+                          // Navigate back with cabinet data
+                          navigate(state.returnTo || '/materials/new', {
+                            state: {
+                              cabinetId: cabinetData.id,
+                              cabinetName: cabinetData.name,
+                            }
+                          });
+                          return;
+                        }
+                      } catch (e) {
+                        // Not a JSON QR code, continue with regular barcode handling
+                      }
+                    }
                     
                     setBarcode(scannedCode);
                     setCameraOpen(false);

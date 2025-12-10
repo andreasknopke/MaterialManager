@@ -110,6 +110,14 @@ const MaterialForm: React.FC = () => {
       console.log('Current URL id:', id);
       console.log('isNew:', isNew);
       
+      // Check for scanned cabinet
+      if (state?.cabinetId) {
+        console.log('Cabinet vom Scanner:', state.cabinetName, state.cabinetId);
+        setFormData(prev => ({ ...prev, cabinet_id: state.cabinetId }));
+        setSuccess(`Schrank "${state.cabinetName}" übernommen!`);
+        setTimeout(() => setSuccess(null), 3000);
+      }
+      
       if (state?.fromScanner && state?.gs1_barcode) {
         console.log('GS1 Barcode vom Scanner:', state.gs1_barcode);
         console.log('GS1 Data vom Scanner:', state.gs1Data);
@@ -465,6 +473,17 @@ const MaterialForm: React.FC = () => {
                 label="Schrank"
                 value={formData.cabinet_id}
                 onChange={handleChange('cabinet_id')}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Tooltip title="Schrank-QR-Code scannen">
+                        <IconButton size="small" onClick={() => navigate('/scanner', { state: { scanCabinet: true, returnTo: location.pathname } })}>
+                          <QrCodeScannerIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </InputAdornment>
+                  ),
+                }}
               >
                 <MenuItem value="">Kein Schrank</MenuItem>
                 {cabinets.map((cab) => (

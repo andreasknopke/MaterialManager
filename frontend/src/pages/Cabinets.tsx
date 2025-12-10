@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Box,
   Button,
@@ -13,14 +13,26 @@ import {
   Grid,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { 
+  Add as AddIcon, 
+  Edit as EditIcon, 
+  Delete as DeleteIcon,
+  QrCode2 as QrCodeIcon,
+  Print as PrintIcon,
+} from '@mui/icons-material';
 import { cabinetAPI } from '../services/api';
+import QRCode from 'qrcode';
+import { useReactToPrint } from 'react-to-print';
 
 const Cabinets: React.FC = () => {
   const [cabinets, setCabinets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingCabinet, setEditingCabinet] = useState<any>(null);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [selectedCabinet, setSelectedCabinet] = useState<any>(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const printRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState({
     name: '',
     location: '',
@@ -91,6 +103,36 @@ const Cabinets: React.FC = () => {
     }
   };
 
+  const handleShowQR = async (cabinet: any) => {
+    setSelectedCabinet(cabinet);
+    // Generate QR code with cabinet data
+    const qrData = JSON.stringify({
+      type: 'CABINET',
+      id: cabinet.id,
+      name: cabinet.name,
+      location: cabinet.location,
+    });
+    
+    try {
+      const url = await QRCode.toDataURL(qrData, {
+        width: 400,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      setQrCodeUrl(url);
+      setQrDialogOpen(true);
+    } catch (error) {
+      console.error('Fehler beim Generieren des QR-Codes:', error);
+    }
+  };
+
+  const handlePrint = useReactToPrint({
+    content: () => printRef.current,
+  });
+
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
     { field: 'name', headerName: 'Name', width: 200 },
@@ -100,14 +142,17 @@ const Cabinets: React.FC = () => {
     {
       field: 'actions',
       headerName: 'Aktionen',
-      width: 120,
+      width: 180,
       sortable: false,
       renderCell: (params) => (
         <>
           <IconButton size="small" onClick={() => handleOpen(params.row)}>
             <EditIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" onClick={() => handleDelete(params.row.id)}>
+          <IconButton size="small" onClick={() => handleShowQR(params.row)} color="primary">
+            <QrCodeIcon fontSize="small" />
+          </IconButton>
+          <IconButton size="small" onClick={() => handleDelete(params.row.id)} color="error">
             <DeleteIcon fontSize="small" />
           </IconButton>
         </>
@@ -183,6 +228,44 @@ const Cabinets: React.FC = () => {
           <Button onClick={handleClose}>Abbrechen</Button>
           <Button onClick={handleSave} variant="contained">
             Speichern
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* QR Code Dialog */}
+      <Dialog 
+        open={qrDialogOpen} 
+        onClose={() => setQrDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          QR-Code für Schrank: {selectedCabinet?.name}
+        </DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" alignItems="center" gap={2} py={2}>
+            <div ref={printRef} style={{ padding: '20px', textAlign: 'center', backgroundColor: 'white' }}>
+              {qrCodeUrl && (
+                <>
+                  <Typography variant="h6" gutterBottom>
+                    {selectedCabinet?.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    {selectedCabinet?.location}
+                  </Typography>
+                  <img src={qrCodeUrl} alt="QR Code" style={{ width: '100%', maxWidth: '400px' }} />
+                  <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                    Scannen Sie diesen Code beim Erfassen von Material
+                  </Typography>
+                </>
+              )}
+            </div>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQrDialogOpen(false)}>Schließen</Button>
+          <Button onClick={handlePrint} variant="contained" startIcon={<PrintIcon />}>
+            Drucken
           </Button>
         </DialogActions>
       </Dialog>
