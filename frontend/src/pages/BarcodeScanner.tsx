@@ -25,8 +25,9 @@ import {
   ContentPaste as PasteIcon,
   CameraAlt as CameraIcon,
   Close as CloseIcon,
+  PowerSettingsNew as ReactivateIcon,
 } from '@mui/icons-material';
-import { barcodeAPI } from '../services/api';
+import { barcodeAPI, materialAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
 import { BrowserMultiFormatReader } from '@zxing/library';
 
@@ -200,7 +201,13 @@ const BarcodeScanner: React.FC = () => {
 
     try {
       const response = await barcodeAPI.search(barcode);
-      setMaterial(response.data.material);
+      const foundMaterial = response.data.material;
+      setMaterial(foundMaterial);
+      
+      // Warnung wenn Material deaktiviert ist
+      if (!foundMaterial.active) {
+        setError('⚠️ Dieses Material ist deaktiviert (Bestand 0). Sie können es unten reaktivieren.');
+      }
     } catch (err) {
       setError('Barcode nicht gefunden');
       setNotFound(true);
@@ -234,6 +241,27 @@ const BarcodeScanner: React.FC = () => {
         fromScanner: true,
       }
     });
+  };
+
+  const handleReactivate = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!material) {
+      setError('Kein Material ausgewählt');
+      return;
+    }
+
+    try {
+      await materialAPI.reactivate(material.id);
+      setSuccess('Material erfolgreich reaktiviert! Sie können jetzt Wareneingang buchen.');
+      
+      // Material-Daten aktualisieren
+      const response = await barcodeAPI.search(barcode);
+      setMaterial(response.data.material);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fehler beim Reaktivieren');
+    }
   };
 
   const handleScanOut = async () => {
@@ -403,30 +431,45 @@ const BarcodeScanner: React.FC = () => {
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                     Aktueller Bestand
                   </Typography>
-                  <Typography variant="h5" color="primary" gutterBottom>
-                    {material.current_stock}
+                  <Typography variant="h5" color={material.active ? 'primary' : 'error'} gutterBottom>
+                    {material.current_stock} {!material.active && '(Deaktiviert)'}
                   </Typography>
 
-                  <TextField
-                    fullWidth
-                    label="Menge"
-                    type="number"
-                    value={quantity}
-                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                    margin="normal"
-                    InputProps={{ inputProps: { min: 1 } }}
-                  />
+                  {material.active ? (
+                    <>
+                      <TextField
+                        fullWidth
+                        label="Menge"
+                        type="number"
+                        value={quantity}
+                        onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                        margin="normal"
+                        InputProps={{ inputProps: { min: 1 } }}
+                      />
 
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    color="secondary"
-                    startIcon={<RemoveIcon />}
-                    onClick={handleScanOut}
-                    sx={{ mt: 2 }}
-                  >
-                    Entnahme ({quantity} Stück)
-                  </Button>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<RemoveIcon />}
+                        onClick={handleScanOut}
+                        sx={{ mt: 2 }}
+                      >
+                        Entnahme ({quantity} Stück)
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      color="success"
+                      startIcon={<ReactivateIcon />}
+                      onClick={handleReactivate}
+                      sx={{ mt: 2 }}
+                    >
+                      Material reaktivieren
+                    </Button>
+                  )}
                 </Box>
               </CardContent>
             </Card>

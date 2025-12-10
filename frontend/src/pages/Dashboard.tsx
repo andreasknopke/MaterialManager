@@ -53,8 +53,11 @@ const Dashboard: React.FC = () => {
         const expiringData = Array.isArray(expiring.data) ? expiring.data : [];
         const cabinetsData = Array.isArray(cabinets.data) ? cabinets.data : [];
 
+        // Nur aktive Materialien zählen
+        const activeMaterials = materialsData.filter((m: any) => m.active);
+
         setStats({
-          totalMaterials: materialsData.length,
+          totalMaterials: activeMaterials.length,
           lowStockCount: lowStockData.length,
           expiringCount: expiringData.length,
           totalCabinets: cabinetsData.length,

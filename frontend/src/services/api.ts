@@ -52,6 +52,7 @@ export const materialAPI = {
   create: (data: any) => api.post('/materials', data),
   update: (id: number, data: any) => api.put(`/materials/${id}`, data),
   delete: (id: number) => api.delete(`/materials/${id}`),
+  reactivate: (id: number) => api.post(`/materials/${id}/reactivate`),
   stockIn: (id: number, data: any) => api.post(`/materials/${id}/stock-in`, data),
   stockOut: (id: number, data: any) => api.post(`/materials/${id}/stock-out`, data),
   getExpiring: () => api.get('/materials/reports/expiring'),

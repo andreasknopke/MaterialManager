@@ -307,9 +307,12 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
       throw new Error('Nicht genügend Bestand verfügbar');
     }
     
+    // Material deaktivieren wenn Bestand auf 0 fällt
+    const shouldDeactivate = newStock === 0;
+    
     await connection.query(
-      'UPDATE materials SET current_stock = ? WHERE id = ?',
-      [newStock, req.params.id]
+      'UPDATE materials SET current_stock = ?, active = ? WHERE id = ?',
+      [newStock, !shouldDeactivate, req.params.id]
     );
     
     await connection.query(
@@ -322,9 +325,10 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
     await connection.commit();
     
     res.json({
-      message: 'Ausgang erfolgreich gebucht',
+      message: shouldDeactivate ? 'Ausgang gebucht - Material deaktiviert (Bestand 0)' : 'Ausgang erfolgreich gebucht',
       previous_stock: previousStock,
-      new_stock: newStock
+      new_stock: newStock,
+      deactivated: shouldDeactivate
     });
   } catch (error) {
     await connection.rollback();
@@ -350,6 +354,25 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.json({ message: 'Material erfolgreich deaktiviert' });
   } catch (error) {
     console.error('Fehler beim Löschen des Materials:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// POST Material reaktivieren
+router.post('/:id/reactivate', async (req: Request, res: Response) => {
+  try {
+    const [result] = await pool.query<ResultSetHeader>(
+      'UPDATE materials SET active = TRUE WHERE id = ?',
+      [req.params.id]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Material nicht gefunden' });
+    }
+    
+    res.json({ message: 'Material erfolgreich reaktiviert' });
+  } catch (error) {
+    console.error('Fehler beim Reaktivieren des Materials:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
   }
 });
