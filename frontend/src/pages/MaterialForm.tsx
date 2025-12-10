@@ -48,6 +48,10 @@ const MaterialForm: React.FC = () => {
   const location = useLocation();
   const isNew = id === 'new';
 
+  console.log('MaterialForm rendered');
+  console.log('id from URL:', id);
+  console.log('isNew:', isNew);
+
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,12 +86,18 @@ const MaterialForm: React.FC = () => {
   });
 
   useEffect(() => {
+    console.log('MaterialForm useEffect triggered');
+    console.log('isNew in useEffect:', isNew);
+    console.log('id in useEffect:', id);
+    
     fetchDropdownData();
     
     // Nur Material laden, wenn es eine gültige ID ist (nicht "new" und numerisch)
     if (!isNew && id && !isNaN(Number(id))) {
+      console.log('Fetching material for ID:', id);
       fetchMaterial();
     } else if (isNew) {
+      console.log('Creating new material - setting loading to false');
       // Bei neuem Material: Loading beenden
       setLoading(false);
       
@@ -126,17 +136,22 @@ const MaterialForm: React.FC = () => {
         setSuccess('GS1-Barcode vom Scanner übernommen!');
         setTimeout(() => setSuccess(null), 3000);
       }
+    } else {
+      console.log('Edge case: not new, but invalid ID');
+      setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isNew]);
 
   const fetchDropdownData = async () => {
+    console.log('fetchDropdownData called');
     try {
       const [categoriesRes, companiesRes, cabinetsRes] = await Promise.all([
         categoryAPI.getAll(),
         companyAPI.getAll(),
         cabinetAPI.getAll(),
       ]);
+      console.log('Dropdown data loaded successfully');
       setCategories(categoriesRes.data);
       setCompanies(companiesRes.data);
       setCabinets(cabinetsRes.data);
@@ -276,6 +291,7 @@ const MaterialForm: React.FC = () => {
   };
 
   if (loading) {
+    console.log('MaterialForm: showing loading spinner');
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
@@ -283,6 +299,7 @@ const MaterialForm: React.FC = () => {
     );
   }
 
+  console.log('MaterialForm: rendering form');
   return (
     <Box>
       <Button
