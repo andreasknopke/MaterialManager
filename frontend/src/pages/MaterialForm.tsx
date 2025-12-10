@@ -88,6 +88,9 @@ const MaterialForm: React.FC = () => {
     if (!isNew && id && !isNaN(Number(id))) {
       fetchMaterial();
     } else if (isNew) {
+      // Bei neuem Material: Loading beenden
+      setLoading(false);
+      
       // Prüfe ob Daten vom Scanner übergeben wurden
       const state = location.state as any;
       console.log('MaterialForm location.state:', state);
