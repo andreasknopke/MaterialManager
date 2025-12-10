@@ -7,25 +7,42 @@ import {
   TextField,
   IconButton,
   Chip,
+  Alert,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { materialAPI } from '../services/api';
 
 const Materials: React.FC = () => {
   const [materials, setMaterials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
+    const filter = location.state?.filter;
+    if (filter) {
+      setActiveFilter(filter);
+    }
     fetchMaterials();
-  }, []);
+  }, [location.state]);
 
   const fetchMaterials = async () => {
     try {
-      const response = await materialAPI.getAll();
+      let response;
+      const filter = location.state?.filter;
+      
+      if (filter === 'lowStock') {
+        response = await materialAPI.getLowStock();
+      } else if (filter === 'expiring') {
+        response = await materialAPI.getExpiring();
+      } else {
+        response = await materialAPI.getAll();
+      }
+      
       console.log('API Response:', response.data);
       // Sicherstellen, dass wir ein Array haben
       const data = Array.isArray(response.data) ? response.data : [];
@@ -113,6 +130,12 @@ const Materials: React.FC = () => {
     material.company_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const getFilterTitle = () => {
+    if (activeFilter === 'lowStock') return 'Niedriger Bestand';
+    if (activeFilter === 'expiring') return 'Ablaufende Materialien';
+    return null;
+  };
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={1}>
@@ -128,6 +151,26 @@ const Materials: React.FC = () => {
           <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Neu</Box>
         </Button>
       </Box>
+
+      {activeFilter && (
+        <Alert 
+          severity={activeFilter === 'lowStock' ? 'warning' : 'error'}
+          sx={{ mb: 2 }}
+          onClose={async () => {
+            setActiveFilter(null);
+            navigate('/materials', { replace: true, state: {} });
+            try {
+              const response = await materialAPI.getAll();
+              const data = Array.isArray(response.data) ? response.data : [];
+              setMaterials(data);
+            } catch (error) {
+              console.error('Fehler beim Laden der Materialien:', error);
+            }
+          }}
+        >
+          Filter aktiv: <strong>{getFilterTitle()}</strong> ({filteredMaterials.length} {filteredMaterials.length === 1 ? 'Material' : 'Materialien'})
+        </Alert>
+      )}
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <TextField

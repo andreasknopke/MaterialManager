@@ -81,24 +81,28 @@ const Dashboard: React.FC = () => {
       value: stats.totalMaterials,
       icon: <InventoryIcon sx={{ fontSize: 40 }} />,
       color: '#1976d2',
+      onClick: () => navigate('/materials'),
     },
     {
       title: 'Niedriger Bestand',
       value: stats.lowStockCount,
       icon: <WarningIcon sx={{ fontSize: 40 }} />,
       color: '#ff9800',
+      onClick: () => navigate('/materials', { state: { filter: 'lowStock' } }),
     },
     {
       title: 'Ablaufende Materialien',
       value: stats.expiringCount,
       icon: <EventBusyIcon sx={{ fontSize: 40 }} />,
       color: '#f44336',
+      onClick: () => navigate('/materials', { state: { filter: 'expiring' } }),
     },
     {
       title: 'Schränke',
       value: stats.totalCabinets,
       icon: <StorageIcon sx={{ fontSize: 40 }} />,
       color: '#4caf50',
+      onClick: () => navigate('/cabinets'),
     },
   ];
 
@@ -139,7 +143,18 @@ const Dashboard: React.FC = () => {
         {/* Statistik-Karten */}
         {statCards.map((card, index) => (
           <Grid item xs={12} sm={6} md={3} key={index}>
-            <Card sx={{ height: '100%' }}>
+            <Card 
+              sx={{ 
+                height: '100%',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 4,
+                }
+              }}
+              onClick={card.onClick}
+            >
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
