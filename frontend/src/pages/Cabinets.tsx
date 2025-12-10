@@ -130,7 +130,7 @@ const Cabinets: React.FC = () => {
   };
 
   const handlePrint = useReactToPrint({
-    content: () => printRef.current,
+    contentRef: printRef,
   });
 
   const columns: GridColDef[] = [
