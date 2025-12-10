@@ -25,6 +25,7 @@ import {
   Assessment as AssessmentIcon,
   Storage as StorageIcon,
   Checklist as ChecklistIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -53,6 +54,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { text: 'Berichte', icon: <AssessmentIcon />, path: '/reports' },
   ];
 
+  const adminItems = [
+    { text: 'Administration', icon: <SettingsIcon />, path: '/admin' },
+  ];
+
   const drawer = (
     <div>
       <Toolbar>
@@ -63,6 +68,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <Divider />
       <List>
         {menuItems.map((item) => (
+          <ListItem key={item.text} disablePadding>
+            <ListItemButton
+              selected={location.pathname === item.path}
+              onClick={() => {
+                navigate(item.path);
+                setMobileOpen(false);
+              }}
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+      <Divider />
+      <List>
+        {adminItems.map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton
               selected={location.pathname === item.path}

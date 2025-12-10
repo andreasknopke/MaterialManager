@@ -1,14 +1,20 @@
 /**
  * GS1 Barcode Parser
  * Parst GS1-128 Barcodes und extrahiert relevante Application Identifier (AI)
+ * 
+ * Verwendung in MaterialManager:
+ * - GTIN (AI 01) → Artikelnummer zur Produktidentifikation
+ * - Batch/Lot (AI 10) → Chargennummer
+ * - Expiration Date (AI 17) → Verfallsdatum
+ * - SSCC (AI 00) → Serial Shipping Container Code (optional)
  */
 
 export interface GS1Data {
-  gtin?: string;              // AI 01 - Global Trade Item Number (GTIN)
-  batchNumber?: string;       // AI 10 - Batch/Lot Number
-  expiryDate?: string;        // AI 17 - Expiration Date (YYMMDD)
+  gtin?: string;              // AI 01 - Global Trade Item Number (GTIN) → Artikelnummer
+  batchNumber?: string;       // AI 10 - Batch/Lot Number → Chargennummer
+  expiryDate?: string;        // AI 17 - Expiration Date (YYMMDD) → Verfallsdatum
   serialNumber?: string;      // AI 21 - Serial Number
-  sscc?: string;             // AI 00 - Serial Shipping Container Code
+  sscc?: string;             // AI 00 - Serial Shipping Container Code (optional)
   productionDate?: string;    // AI 11 - Production Date (YYMMDD)
   raw?: string;              // Original Barcode
 }

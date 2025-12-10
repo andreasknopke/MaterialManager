@@ -12,6 +12,7 @@ import Companies from './pages/Companies';
 import BarcodeScanner from './pages/BarcodeScanner';
 import Reports from './pages/Reports';
 import Inventory from './pages/Inventory';
+import Admin from './pages/Admin';
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
           <Route path="/scanner" element={<BarcodeScanner />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/inventory" element={<Inventory />} />
+          <Route path="/admin" element={<Admin />} />
         </Routes>
       </Layout>
     </Box>

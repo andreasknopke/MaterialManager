@@ -38,7 +38,6 @@ interface MaterialFormData {
   location_in_cabinet: string;
   notes: string;
   gs1_barcode: string;
-  shipping_container_code: string;
 }
 
 const MaterialForm: React.FC = () => {
@@ -83,7 +82,6 @@ const MaterialForm: React.FC = () => {
     location_in_cabinet: '',
     notes: '',
     gs1_barcode: '',
-    shipping_container_code: '',
   });
 
   useEffect(() => {
@@ -126,14 +124,14 @@ const MaterialForm: React.FC = () => {
         };
         
         if (state.gs1Data) {
-          if (state.gs1Data.expiryDate) {
-            updates.expiry_date = state.gs1Data.expiryDate;
+          if (state.gs1Data.gtin) {
+            updates.article_number = state.gs1Data.gtin;
           }
           if (state.gs1Data.batchNumber) {
-            updates.article_number = state.gs1Data.batchNumber;
+            updates.lot_number = state.gs1Data.batchNumber;
           }
-          if (state.gs1Data.sscc || state.gs1Data.gtin) {
-            updates.shipping_container_code = state.gs1Data.sscc || state.gs1Data.gtin || '';
+          if (state.gs1Data.expiryDate) {
+            updates.expiry_date = state.gs1Data.expiryDate;
           }
           
           setGs1Data(state.gs1Data);
@@ -222,16 +220,16 @@ const MaterialForm: React.FC = () => {
       // Auto-Fill Felder
       const updates: Partial<MaterialFormData> = {};
 
-      if (parsed.expiryDate) {
-        updates.expiry_date = parsed.expiryDate;
+      if (parsed.gtin) {
+        updates.article_number = parsed.gtin;
       }
 
       if (parsed.batchNumber) {
-        updates.article_number = parsed.batchNumber;
+        updates.lot_number = parsed.batchNumber;
       }
 
-      if (parsed.sscc || parsed.gtin) {
-        updates.shipping_container_code = parsed.sscc || parsed.gtin || '';
+      if (parsed.expiryDate) {
+        updates.expiry_date = parsed.expiryDate;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -250,7 +248,6 @@ const MaterialForm: React.FC = () => {
       gs1_barcode: '',
       expiry_date: '',
       lot_number: '',
-      shipping_container_code: '',
     }));
     setGs1Data(null);
     setGs1Warning(null);
@@ -374,10 +371,10 @@ const MaterialForm: React.FC = () => {
                   <Typography variant="body2">
                     <strong>Geparste GS1-Daten:</strong>
                   </Typography>
-                  {gs1Data.gtin && <Typography variant="body2">• GTIN (01): {gs1Data.gtin}</Typography>}
-                  {gs1Data.batchNumber && <Typography variant="body2">• Batch/Lot (10): {gs1Data.batchNumber}</Typography>}
-                  {gs1Data.expiryDate && <Typography variant="body2">• Verfallsdatum (17): {gs1Data.expiryDate}</Typography>}
-                  {gs1Data.sscc && <Typography variant="body2">• SSCC (00): {gs1Data.sscc}</Typography>}
+                  {gs1Data.gtin && <Typography variant="body2">• GTIN/Artikelnummer (AI 01): {gs1Data.gtin}</Typography>}
+                  {gs1Data.batchNumber && <Typography variant="body2">• LOT/Chargennummer (AI 10): {gs1Data.batchNumber}</Typography>}
+                  {gs1Data.expiryDate && <Typography variant="body2">• Verfallsdatum (AI 17): {gs1Data.expiryDate}</Typography>}
+                  {gs1Data.sscc && <Typography variant="body2">• SSCC (AI 00): {gs1Data.sscc}</Typography>}
                 </Alert>
               )}
             </Grid>
@@ -402,10 +399,10 @@ const MaterialForm: React.FC = () => {
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
-                label="Artikelnummer / Chargennummer"
+                label="Artikelnummer (GTIN)"
                 value={formData.article_number}
                 onChange={handleChange('article_number')}
-                helperText={gs1Data?.batchNumber ? `Batch-Nummer aus GS1: ${gs1Data.batchNumber}` : 'Artikelnummer oder Chargennummer'}
+                helperText={gs1Data?.gtin ? `GTIN aus GS1-Barcode: ${gs1Data.gtin}` : 'Global Trade Item Number (GTIN)'}
               />
             </Grid>
 
@@ -535,22 +532,22 @@ const MaterialForm: React.FC = () => {
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
-                type="date"
-                label="Verfallsdatum"
-                value={formData.expiry_date}
-                onChange={handleChange('expiry_date')}
-                InputLabelProps={{ shrink: true }}
-                helperText={gs1Data?.expiryDate ? 'Aus GS1-Barcode übernommen' : ''}
+                label="Chargennummer (LOT)"
+                value={formData.lot_number}
+                onChange={handleChange('lot_number')}
+                helperText={gs1Data?.batchNumber ? `LOT-Nummer aus GS1-Barcode: ${gs1Data.batchNumber}` : 'Batch/Lot Number aus GS1 AI 10'}
               />
             </Grid>
 
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
-                label="Shipping Container Code"
-                value={formData.shipping_container_code}
-                onChange={handleChange('shipping_container_code')}
-                helperText={gs1Data?.sscc || gs1Data?.gtin ? 'Aus GS1-Barcode übernommen' : ''}
+                type="date"
+                label="Verfallsdatum"
+                value={formData.expiry_date}
+                onChange={handleChange('expiry_date')}
+                InputLabelProps={{ shrink: true }}
+                helperText={gs1Data?.expiryDate ? 'Aus GS1-Barcode übernommen' : ''}
               />
             </Grid>
 

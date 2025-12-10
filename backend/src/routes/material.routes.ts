@@ -28,9 +28,9 @@ router.get('/', async (req: Request, res: Response) => {
     }
     
     if (search) {
-      query += ' AND (name LIKE ? OR description LIKE ? OR article_number LIKE ?)';
+      query += ' AND (name LIKE ? OR description LIKE ? OR article_number LIKE ? OR lot_number LIKE ?)';
       const searchParam = `%${search}%`;
-      params.push(searchParam, searchParam, searchParam);
+      params.push(searchParam, searchParam, searchParam, searchParam);
     }
     
     if (lowStock === 'true') {

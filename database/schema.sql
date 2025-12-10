@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS field_configurations (
 ) ENGINE=InnoDB;
 
 -- Tabelle für Materialien
+-- Feldverwendung für GS1-Barcodes:
+-- article_number: GTIN (AI 01) - Global Trade Item Number zur Produktidentifikation
+-- lot_number: Batch/Lot Number (AI 10) - Chargennummer
+-- shipping_container_code: SSCC (AI 00) - Serial Shipping Container Code (optional)
 CREATE TABLE IF NOT EXISTS materials (
     id INT AUTO_INCREMENT PRIMARY KEY,
     category_id INT,
@@ -69,10 +73,10 @@ CREATE TABLE IF NOT EXISTS materials (
     min_stock INT DEFAULT 0,
     current_stock INT DEFAULT 0,
     expiry_date DATE,
-    lot_number VARCHAR(100),
-    article_number VARCHAR(100),
+    lot_number VARCHAR(100) COMMENT 'Chargennummer (GS1 AI 10)',
+    article_number VARCHAR(100) COMMENT 'GTIN - Artikelnummer zur Produktidentifikation (GS1 AI 01)',
     location_in_cabinet VARCHAR(100),
-    shipping_container_code VARCHAR(200),
+    shipping_container_code VARCHAR(200) COMMENT 'SSCC - Serial Shipping Container Code (GS1 AI 00, optional)',
     notes TEXT,
     active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

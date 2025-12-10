@@ -7,6 +7,7 @@ import categoryRoutes from './routes/category.routes';
 import companyRoutes from './routes/company.routes';
 import barcodeRoutes from './routes/barcode.routes';
 import fieldConfigRoutes from './routes/fieldConfig.routes';
+import adminRoutes from './routes/admin.routes';
 
 dotenv.config();
 
@@ -34,6 +35,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/barcodes', barcodeRoutes);
 app.use('/api/field-configs', fieldConfigRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health Check
 app.get('/health', (req: Request, res: Response) => {
