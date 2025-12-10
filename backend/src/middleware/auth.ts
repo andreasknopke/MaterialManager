@@ -48,16 +48,26 @@ export const verifyToken = (token: string): any => {
 // Middleware: Authentifizierung erforderlich
 export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    console.log('=== AUTHENTICATE MIDDLEWARE ===');
+    console.log('Path:', req.path);
+    console.log('Method:', req.method);
+    
     const authHeader = req.headers.authorization;
+    console.log('Auth Header:', authHeader ? `${authHeader.substring(0, 20)}...` : 'MISSING');
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ No Bearer token in header');
       return res.status(401).json({ error: 'Nicht authentifiziert' });
     }
 
     const token = authHeader.substring(7);
+    console.log('Token length:', token.length);
+    
     const decoded = verifyToken(token);
+    console.log('Token decoded:', decoded ? { id: decoded.id, username: decoded.username, exp: decoded.exp } : 'FAILED');
 
     if (!decoded) {
+      console.log('❌ Token verification failed');
       return res.status(401).json({ error: 'Ungültiges oder abgelaufenes Token' });
     }
 
@@ -78,12 +88,19 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     }
 
     // Lade Benutzerdaten
+    console.log('Loading user from DB, ID:', decoded.id);
     const [users] = await pool.query<RowDataPacket[]>(
       'SELECT id, username, email, role, is_root, department_id, active, must_change_password FROM users WHERE id = ?',
       [decoded.id]
     );
 
+    console.log('Users found:', users.length);
+    if (users.length > 0) {
+      console.log('User:', { id: users[0].id, username: users[0].username, active: users[0].active, department_id: users[0].department_id });
+    }
+
     if (users.length === 0 || !users[0].active) {
+      console.log('❌ User not found or inactive');
       return res.status(401).json({ error: 'Benutzer nicht gefunden oder deaktiviert' });
     }
 
@@ -96,9 +113,11 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       departmentId: users[0].department_id,
     };
 
+    console.log('✅ Authentication successful for:', req.user.username);
     next();
   } catch (error) {
-    console.error('Authentifizierungsfehler:', error);
+    console.error('❌ Authentifizierungsfehler:', error);
+    console.error('Stack:', error instanceof Error ? error.stack : 'No stack');
     res.status(401).json({ error: 'Authentifizierung fehlgeschlagen' });
   }
 };
