@@ -87,35 +87,48 @@ const BarcodeScanner: React.FC = () => {
             
             console.log('Starte Barcode-Erkennung...');
             
-            // Kontinuierliches Scanning - wartet bis Barcode erkannt wird
-            codeReader.decodeFromVideoElement(videoRef.current)
-              .then((result) => {
-                const scannedCode = result.getText();
-                console.log('✓ Barcode gescannt:', scannedCode);
-                console.log('Format:', result.getBarcodeFormat());
-                
-                // Stream stoppen
-                stream.getTracks().forEach(track => track.stop());
-                
-                setBarcode(scannedCode);
-                setCameraOpen(false);
-                setError('');
-                setSuccess('Barcode erfolgreich gescannt');
-                setTimeout(() => setSuccess(''), 2000);
-                
-                // Automatisch suchen
-                setTimeout(() => {
-                  barcodeAPI.search(scannedCode)
-                    .then(response => setMaterial(response.data.material))
-                    .catch(() => setNotFound(true));
-                }, 100);
-              })
-              .catch((err) => {
-                // Ignoriere Abbruch-Fehler beim Schließen
-                if (err.name !== 'NotFoundException') {
-                  console.error('Scan-Fehler:', err);
+            // Kontinuierliches Scanning direkt vom Stream
+            const scanLoop = async () => {
+              while (cameraOpen && videoRef.current) {
+                try {
+                  const result = await codeReader.decodeOnce(videoRef.current);
+                  
+                  if (result) {
+                    const scannedCode = result.getText();
+                    console.log('✓ Barcode gescannt:', scannedCode);
+                    console.log('Format:', result.getBarcodeFormat());
+                    
+                    // Stream stoppen
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    setBarcode(scannedCode);
+                    setCameraOpen(false);
+                    setError('');
+                    setSuccess('Barcode erfolgreich gescannt');
+                    setTimeout(() => setSuccess(''), 2000);
+                    
+                    // Automatisch suchen
+                    setTimeout(() => {
+                      barcodeAPI.search(scannedCode)
+                        .then(response => setMaterial(response.data.material))
+                        .catch(() => setNotFound(true));
+                    }, 100);
+                    
+                    break; // Schleife beenden nach erfolgreichem Scan
+                  }
+                } catch (err: any) {
+                  // Ignoriere NotFoundException - normal beim Scannen
+                  if (err.name !== 'NotFoundException') {
+                    console.error('Scan-Fehler:', err);
+                  }
                 }
-              });
+                
+                // Kurze Pause zwischen Scans
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
+            };
+            
+            scanLoop();
           }
         } catch (err: any) {
           console.error('Fehler beim Kamera-Zugriff:', err);
