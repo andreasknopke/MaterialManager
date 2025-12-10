@@ -46,63 +46,82 @@ const BarcodeScanner: React.FC = () => {
     if (cameraOpen && videoRef.current) {
       console.log('Initialisiere Scanner...');
       
-      // Kurze Verzögerung damit das Video-Element bereit ist
-      const timer = setTimeout(() => {
-        if (!videoRef.current) {
-          console.error('Video-Element nicht verfügbar');
-          return;
-        }
-
-        const codeReader = new BrowserMultiFormatReader();
-        codeReaderRef.current = codeReader;
-
-        console.log('Starte Kamera-Stream...');
-
-        // Starte kontinuierliches Scanning
-        codeReader.decodeFromConstraints(
-          {
-            video: {
-              facingMode: 'environment' // Rückkamera auf Mobile
+      const startCamera = async () => {
+        try {
+          // Explizit Kamera-Berechtigung anfordern
+          console.log('Fordere Kamera-Zugriff an...');
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
             }
-          },
-          videoRef.current,
-          (result, error) => {
-            if (result) {
-              const scannedCode = result.getText();
-              console.log('✓ Barcode gescannt:', scannedCode);
-              console.log('Format:', result.getBarcodeFormat());
-              
-              setBarcode(scannedCode);
-              setCameraOpen(false);
-              setError('');
-              setSuccess('Barcode erfolgreich gescannt');
-              setTimeout(() => setSuccess(''), 2000);
-              
-              // Automatisch suchen
-              setTimeout(() => {
-                barcodeAPI.search(scannedCode)
-                  .then(response => setMaterial(response.data.material))
-                  .catch(() => setNotFound(true));
-              }, 100);
-            }
+          });
+          
+          console.log('✓ Kamera-Berechtigung erhalten');
+          
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            await videoRef.current.play();
+            console.log('✓ Video-Stream gestartet');
+            
+            // Jetzt ZXing Scanner starten
+            const codeReader = new BrowserMultiFormatReader();
+            codeReaderRef.current = codeReader;
+            
+            console.log('Starte Barcode-Erkennung...');
+            
+            codeReader.decodeFromVideoElement(videoRef.current, (result, error) => {
+              if (result) {
+                const scannedCode = result.getText();
+                console.log('✓ Barcode gescannt:', scannedCode);
+                console.log('Format:', result.getBarcodeFormat());
+                
+                // Stream stoppen
+                stream.getTracks().forEach(track => track.stop());
+                
+                setBarcode(scannedCode);
+                setCameraOpen(false);
+                setError('');
+                setSuccess('Barcode erfolgreich gescannt');
+                setTimeout(() => setSuccess(''), 2000);
+                
+                // Automatisch suchen
+                setTimeout(() => {
+                  barcodeAPI.search(scannedCode)
+                    .then(response => setMaterial(response.data.material))
+                    .catch(() => setNotFound(true));
+                }, 100);
+              }
+            });
           }
-        ).then(() => {
-          console.log('✓ Kamera gestartet');
-        }).catch((err) => {
-          console.error('Fehler beim Starten der Kamera:', err);
-          setError(`Kamera-Fehler: ${err.message}`);
+        } catch (err: any) {
+          console.error('Fehler beim Kamera-Zugriff:', err);
+          if (err.name === 'NotAllowedError') {
+            setError('Kamera-Zugriff wurde verweigert. Bitte Berechtigungen erteilen.');
+          } else if (err.name === 'NotFoundError') {
+            setError('Keine Kamera gefunden.');
+          } else {
+            setError(`Kamera-Fehler: ${err.message}`);
+          }
           setCameraOpen(false);
-        });
-      }, 250);
-
-      return () => {
-        clearTimeout(timer);
-        if (codeReaderRef.current) {
-          console.log('Stoppe Scanner...');
-          codeReaderRef.current.reset();
         }
       };
+      
+      startCamera();
     }
+
+    return () => {
+      if (codeReaderRef.current) {
+        console.log('Stoppe Scanner...');
+        codeReaderRef.current.reset();
+      }
+      // Video-Stream stoppen
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
   }, [cameraOpen]);
 
   const handleSearch = async () => {
