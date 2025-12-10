@@ -4,11 +4,6 @@ import crypto from 'crypto';
 import pool from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { generateToken, authenticate, requireAdmin, requireRoot } from '../middleware/auth';
-import { 
-  generateVerificationToken, 
-  sendVerificationEmail, 
-  sendPasswordResetEmail 
-} from '../services/email.service';
 
 const router = Router();
 
@@ -41,21 +36,13 @@ router.post('/register', async (req: Request, res: Response) => {
     // Passwort hashen
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // E-Mail-Verifizierungs-Token generieren
-    const verificationToken = generateVerificationToken();
-    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 Stunden
-
-    // Benutzer erstellen
+    // Benutzer erstellen (email_verified = TRUE, da keine Verifizierung)
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO users (
-        username, email, password_hash, full_name,
-        email_verification_token, email_verification_expires
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
-      [username, email, passwordHash, fullName || null, verificationToken, verificationExpires]
+        username, email, password_hash, full_name, email_verified
+      ) VALUES (?, ?, ?, ?, TRUE)`,
+      [username, email, passwordHash, fullName || null]
     );
-
-    // E-Mail senden
-    await sendVerificationEmail(email, verificationToken, username);
 
     // Audit-Log
     await connection.query(
@@ -64,7 +51,7 @@ router.post('/register', async (req: Request, res: Response) => {
     );
 
     res.status(201).json({
-      message: 'Registrierung erfolgreich. Bitte prüfen Sie Ihre E-Mails zur Verifizierung.',
+      message: 'Benutzer erfolgreich erstellt.',
       userId: result.insertId,
     });
   } catch (error) {
@@ -225,52 +212,6 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/auth/verify-email - E-Mail verifizieren
-router.post('/verify-email', async (req: Request, res: Response) => {
-  try {
-    const { token } = req.body;
-
-    if (!token) {
-      return res.status(400).json({ error: 'Token ist erforderlich' });
-    }
-
-    const [users] = await pool.query<RowDataPacket[]>(
-      `SELECT id, username, email FROM users 
-       WHERE email_verification_token = ? 
-       AND email_verification_expires > NOW()
-       AND email_verified = FALSE`,
-      [token]
-    );
-
-    if (users.length === 0) {
-      return res.status(400).json({ error: 'Ungültiger oder abgelaufener Token' });
-    }
-
-    const user = users[0];
-
-    // E-Mail als verifiziert markieren
-    await pool.query(
-      `UPDATE users 
-       SET email_verified = TRUE, 
-           email_verification_token = NULL, 
-           email_verification_expires = NULL 
-       WHERE id = ?`,
-      [user.id]
-    );
-
-    // Audit-Log
-    await pool.query(
-      'INSERT INTO user_audit_log (user_id, action, details) VALUES (?, ?, ?)',
-      [user.id, 'email_verified', JSON.stringify({ email: user.email })]
-    );
-
-    res.json({ message: 'E-Mail erfolgreich verifiziert' });
-  } catch (error) {
-    console.error('E-Mail-Verifizierungsfehler:', error);
-    res.status(500).json({ error: 'Verifizierung fehlgeschlagen' });
-  }
-});
-
 // POST /api/auth/change-password - Passwort ändern
 router.post('/change-password', authenticate, async (req: Request, res: Response) => {
   try {
@@ -325,102 +266,6 @@ router.post('/change-password', authenticate, async (req: Request, res: Response
   } catch (error) {
     console.error('Passwortänderungsfehler:', error);
     res.status(500).json({ error: 'Passwortänderung fehlgeschlagen' });
-  }
-});
-
-// POST /api/auth/request-password-reset - Passwort-Reset anfordern
-router.post('/request-password-reset', async (req: Request, res: Response) => {
-  try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ error: 'E-Mail ist erforderlich' });
-    }
-
-    const [users] = await pool.query<RowDataPacket[]>(
-      'SELECT id, username, email FROM users WHERE email = ?',
-      [email]
-    );
-
-    // Aus Sicherheitsgründen immer erfolgreiche Antwort geben
-    if (users.length === 0) {
-      return res.json({ message: 'Falls die E-Mail existiert, wurde eine Nachricht gesendet' });
-    }
-
-    const user = users[0];
-
-    // Reset-Token generieren
-    const resetToken = generateVerificationToken();
-    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 Stunde
-
-    await pool.query(
-      'UPDATE users SET password_reset_token = ?, password_reset_expires = ? WHERE id = ?',
-      [resetToken, resetExpires, user.id]
-    );
-
-    // E-Mail senden
-    await sendPasswordResetEmail(user.email, resetToken, user.username);
-
-    res.json({ message: 'Falls die E-Mail existiert, wurde eine Nachricht gesendet' });
-  } catch (error) {
-    console.error('Passwort-Reset-Anforderungsfehler:', error);
-    res.status(500).json({ error: 'Anforderung fehlgeschlagen' });
-  }
-});
-
-// POST /api/auth/reset-password - Passwort zurücksetzen
-router.post('/reset-password', async (req: Request, res: Response) => {
-  try {
-    const { token, newPassword } = req.body;
-
-    if (!token || !newPassword) {
-      return res.status(400).json({ error: 'Token und neues Passwort sind erforderlich' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen lang sein' });
-    }
-
-    const [users] = await pool.query<RowDataPacket[]>(
-      `SELECT id FROM users 
-       WHERE password_reset_token = ? 
-       AND password_reset_expires > NOW()`,
-      [token]
-    );
-
-    if (users.length === 0) {
-      return res.status(400).json({ error: 'Ungültiger oder abgelaufener Token' });
-    }
-
-    const userId = users[0].id;
-
-    // Neues Passwort hashen
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-
-    // Passwort aktualisieren
-    await pool.query(
-      `UPDATE users 
-       SET password_hash = ?, 
-           password_reset_token = NULL, 
-           password_reset_expires = NULL,
-           must_change_password = FALSE 
-       WHERE id = ?`,
-      [passwordHash, userId]
-    );
-
-    // Alle Sessions löschen
-    await pool.query('DELETE FROM user_sessions WHERE user_id = ?', [userId]);
-
-    // Audit-Log
-    await pool.query(
-      'INSERT INTO user_audit_log (user_id, action, details) VALUES (?, ?, ?)',
-      [userId, 'password_reset', JSON.stringify({ method: 'email_token' })]
-    );
-
-    res.json({ message: 'Passwort erfolgreich zurückgesetzt' });
-  } catch (error) {
-    console.error('Passwort-Reset-Fehler:', error);
-    res.status(500).json({ error: 'Passwort-Reset fehlgeschlagen' });
   }
 });
 
