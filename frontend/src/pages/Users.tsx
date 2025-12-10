@@ -60,7 +60,7 @@ interface Department {
 }
 
 const Users: React.FC = () => {
-  const { isRoot } = useAuth();
+  const { isRoot, user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(false);
@@ -421,25 +421,24 @@ const Users: React.FC = () => {
               <MenuItem value="viewer">Viewer</MenuItem>
             </Select>
           </FormControl>
-          {isRoot && (
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Department</InputLabel>
-              <Select
-                value={formData.departmentId || ''}
-                label="Department"
-                onChange={(e) => setFormData({ ...formData, departmentId: e.target.value ? Number(e.target.value) : null })}
-              >
-                <MenuItem value="">
-                  <em>Kein Department (Root)</em>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Department</InputLabel>
+            <Select
+              value={formData.departmentId || ''}
+              label="Department"
+              onChange={(e) => setFormData({ ...formData, departmentId: e.target.value ? Number(e.target.value) : null })}
+              disabled={!isRoot}
+            >
+              <MenuItem value="">
+                <em>Kein Department (Root)</em>
+              </MenuItem>
+              {departments.map((dept) => (
+                <MenuItem key={dept.id} value={dept.id}>
+                  {dept.name}
                 </MenuItem>
-                {departments.map((dept) => (
-                  <MenuItem key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
+              ))}
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateDialogOpen(false)}>Abbrechen</Button>
@@ -487,25 +486,24 @@ const Users: React.FC = () => {
               <MenuItem value="viewer">Viewer</MenuItem>
             </Select>
           </FormControl>
-          {isRoot && (
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Department</InputLabel>
-              <Select
-                value={formData.departmentId || ''}
-                label="Department"
-                onChange={(e) => setFormData({ ...formData, departmentId: e.target.value ? Number(e.target.value) : null })}
-              >
-                <MenuItem value="">
-                  <em>Kein Department (Root)</em>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Department</InputLabel>
+            <Select
+              value={formData.departmentId || ''}
+              label="Department"
+              onChange={(e) => setFormData({ ...formData, departmentId: e.target.value ? Number(e.target.value) : null })}
+              disabled={!isRoot}
+            >
+              <MenuItem value="">
+                <em>Kein Department (Root)</em>
+              </MenuItem>
+              {departments.map((dept) => (
+                <MenuItem key={dept.id} value={dept.id}>
+                  {dept.name}
                 </MenuItem>
-                {departments.map((dept) => (
-                  <MenuItem key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
+              ))}
+            </Select>
+          </FormControl>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditDialogOpen(false)}>Abbrechen</Button>
