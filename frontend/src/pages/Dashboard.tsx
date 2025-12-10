@@ -120,27 +120,20 @@ const Dashboard: React.FC = () => {
       </Typography>
 
       <Grid container spacing={3}>
-        {/* Barcode Scanner - Große Kachel */}
-        <Grid item xs={12}>
-          <Card 
+        {/* Barcode Scanner - Icon */}
+        <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+          <QrCodeScannerIcon 
             sx={{ 
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
+              fontSize: 120,
+              color: '#000',
               cursor: 'pointer',
-              transition: 'transform 0.2s, box-shadow 0.2s',
+              transition: 'transform 0.2s',
               '&:hover': {
-                transform: 'translateY(-4px)',
-                boxShadow: 6,
+                transform: 'scale(1.1)',
               }
             }}
-            onClick={() => navigate('/scanner')}
-          >
-            <CardContent sx={{ py: 6 }}>
-              <Box display="flex" alignItems="center" justifyContent="center">
-                <QrCodeScannerIcon sx={{ fontSize: 120 }} />
-              </Box>
-            </CardContent>
-          </Card>
+            onClick={() => navigate('/scanner', { state: { autoOpenCamera: true } })}
+          />
         </Grid>
 
         {/* Statistik-Karten */}

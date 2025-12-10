@@ -32,6 +32,7 @@ import { BrowserMultiFormatReader } from '@zxing/library';
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [barcode, setBarcode] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [material, setMaterial] = useState<any>(null);
@@ -41,6 +42,15 @@ const BarcodeScanner: React.FC = () => {
   const [cameraOpen, setCameraOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+
+  // Auto-open camera if navigated from dashboard
+  useEffect(() => {
+    const state = location.state as { autoOpenCamera?: boolean } | null;
+    if (state?.autoOpenCamera) {
+      console.log('Auto-opening camera from dashboard');
+      setCameraOpen(true);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     console.log('useEffect triggered, cameraOpen:', cameraOpen, 'videoRef.current:', !!videoRef.current);
