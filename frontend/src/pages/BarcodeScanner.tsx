@@ -43,13 +43,25 @@ const BarcodeScanner: React.FC = () => {
   };
 
   const handleAddNewMaterial = () => {
+    console.log('handleAddNewMaterial called');
+    console.log('Current barcode:', barcode);
+    
     // GS1-Barcode parsen, falls vorhanden
     let gs1Data = null;
     if (isValidGS1Barcode(barcode)) {
       gs1Data = parseGS1Barcode(barcode);
+      console.log('GS1 barcode parsed:', gs1Data);
+    } else {
+      console.log('Not a valid GS1 barcode');
     }
 
     // Zu neuem Material navigieren und Barcode-Daten im State übergeben
+    console.log('Navigating to /materials/new with state:', {
+      gs1_barcode: barcode,
+      gs1Data: gs1Data,
+      fromScanner: true,
+    });
+    
     navigate('/materials/new', {
       state: {
         gs1_barcode: barcode,
