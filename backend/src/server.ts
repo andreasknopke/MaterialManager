@@ -18,8 +18,32 @@ const app: Express = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://robust-vision-production.up.railway.app',
+  'https://materialmanager-production.up.railway.app'
+];
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN === '*' ? true : process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    // Erlaube Requests ohne Origin (z.B. mobile apps, curl)
+    if (!origin) return callback(null, true);
+    
+    // Wenn CORS_ORIGIN='*' gesetzt ist, erlaube alles
+    if (process.env.CORS_ORIGIN === '*') return callback(null, true);
+    
+    // Wenn CORS_ORIGIN gesetzt ist, nutze nur diese
+    if (process.env.CORS_ORIGIN) {
+      return callback(null, process.env.CORS_ORIGIN);
+    }
+    
+    // Ansonsten prüfe erlaubte Origins
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 app.use(express.json());

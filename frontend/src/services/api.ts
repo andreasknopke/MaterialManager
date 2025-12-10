@@ -1,7 +1,16 @@
 import axios from 'axios';
 
-// Use relative URL for API calls - nginx will proxy to backend
-const API_BASE_URL = '/api';
+// Bestimme API-URL basierend auf Umgebung
+const getApiBaseUrl = () => {
+  // Prüfe ob wir auf Railway Production sind
+  if (window.location.hostname.includes('railway.app')) {
+    return 'https://materialmanager-production.up.railway.app/api';
+  }
+  // Lokal: nutze relativen Pfad (Vite Proxy)
+  return '/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
