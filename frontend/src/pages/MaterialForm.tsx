@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -45,6 +45,7 @@ interface MaterialFormData {
 const MaterialForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const isNew = id === 'new';
 
   const [loading, setLoading] = useState(!isNew);
@@ -84,6 +85,31 @@ const MaterialForm: React.FC = () => {
     fetchDropdownData();
     if (!isNew) {
       fetchMaterial();
+    } else {
+      // Prüfe ob Daten vom Scanner übergeben wurden
+      const state = location.state as any;
+      if (state?.fromScanner && state?.gs1_barcode) {
+        // Automatisch GS1-Barcode verarbeiten
+        setFormData(prev => ({ ...prev, gs1_barcode: state.gs1_barcode }));
+        
+        if (state.gs1Data) {
+          const updates: Partial<MaterialFormData> = {};
+          if (state.gs1Data.expiryDate) {
+            updates.expiry_date = state.gs1Data.expiryDate;
+          }
+          if (state.gs1Data.batchNumber) {
+            updates.lot_number = state.gs1Data.batchNumber;
+          }
+          if (state.gs1Data.sscc || state.gs1Data.gtin) {
+            updates.shipping_container_code = state.gs1Data.sscc || state.gs1Data.gtin || '';
+          }
+          
+          setFormData(prev => ({ ...prev, ...updates }));
+          setGs1Data(state.gs1Data);
+          setSuccess('GS1-Barcode vom Scanner übernommen!');
+          setTimeout(() => setSuccess(null), 3000);
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isNew]);

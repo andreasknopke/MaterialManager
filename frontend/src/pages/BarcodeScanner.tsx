@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -10,27 +11,49 @@ import {
   Grid,
   Alert,
 } from '@mui/material';
-import { QrCodeScanner as ScannerIcon } from '@mui/icons-material';
+import { QrCodeScanner as ScannerIcon, Remove as RemoveIcon, Add as AddIcon } from '@mui/icons-material';
 import { barcodeAPI } from '../services/api';
+import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
 
 const BarcodeScanner: React.FC = () => {
+  const navigate = useNavigate();
   const [barcode, setBarcode] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [material, setMaterial] = useState<any>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [notFound, setNotFound] = useState(false);
 
   const handleSearch = async () => {
     setError('');
     setSuccess('');
     setMaterial(null);
+    setNotFound(false);
 
     try {
       const response = await barcodeAPI.search(barcode);
       setMaterial(response.data.material);
     } catch (err) {
       setError('Barcode nicht gefunden');
+      setNotFound(true);
     }
+  };
+
+  const handleAddNewMaterial = () => {
+    // GS1-Barcode parsen, falls vorhanden
+    let gs1Data = null;
+    if (isValidGS1Barcode(barcode)) {
+      gs1Data = parseGS1Barcode(barcode);
+    }
+
+    // Zu neuem Material navigieren und Barcode-Daten im State übergeben
+    navigate('/materials/new', {
+      state: {
+        gs1_barcode: barcode,
+        gs1Data: gs1Data,
+        fromScanner: true,
+      }
+    });
   };
 
   const handleScanOut = async () => {
@@ -102,6 +125,20 @@ const BarcodeScanner: React.FC = () => {
               Suchen
             </Button>
 
+            {/* Hinzufügen-Button wenn nicht gefunden */}
+            {notFound && (
+              <Button
+                fullWidth
+                variant="contained"
+                color="success"
+                startIcon={<AddIcon />}
+                onClick={handleAddNewMaterial}
+                sx={{ mt: 2 }}
+              >
+                Material hinzufügen
+              </Button>
+            )}
+
             {error && (
               <Alert severity="error" sx={{ mt: 2 }}>
                 {error}
@@ -166,10 +203,11 @@ const BarcodeScanner: React.FC = () => {
                     fullWidth
                     variant="contained"
                     color="secondary"
+                    startIcon={<RemoveIcon />}
                     onClick={handleScanOut}
                     sx={{ mt: 2 }}
                   >
-                    Ausgang buchen
+                    Entnahme ({quantity} Stück)
                   </Button>
                 </Box>
               </CardContent>
