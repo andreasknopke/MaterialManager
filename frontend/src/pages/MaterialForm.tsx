@@ -124,7 +124,7 @@ const MaterialForm: React.FC = () => {
             updates.expiry_date = state.gs1Data.expiryDate;
           }
           if (state.gs1Data.batchNumber) {
-            updates.lot_number = state.gs1Data.batchNumber;
+            updates.article_number = state.gs1Data.batchNumber;
           }
           if (state.gs1Data.sscc || state.gs1Data.gtin) {
             updates.shipping_container_code = state.gs1Data.sscc || state.gs1Data.gtin || '';
@@ -132,7 +132,6 @@ const MaterialForm: React.FC = () => {
           
           setGs1Data(state.gs1Data);
         }
-        
         console.log('Applying updates:', updates);
         // Alle Updates auf einmal anwenden
         setFormData(prev => ({ ...prev, ...updates }));
@@ -223,7 +222,7 @@ const MaterialForm: React.FC = () => {
       }
 
       if (parsed.batchNumber) {
-        updates.lot_number = parsed.batchNumber;
+        updates.article_number = parsed.batchNumber;
       }
 
       if (parsed.sscc || parsed.gtin) {
@@ -400,9 +399,10 @@ const MaterialForm: React.FC = () => {
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
-                label="Artikelnummer"
+                label="Artikelnummer / Chargennummer"
                 value={formData.article_number}
                 onChange={handleChange('article_number')}
+                helperText={gs1Data?.batchNumber ? `Batch-Nummer aus GS1: ${gs1Data.batchNumber}` : 'Artikelnummer oder Chargennummer'}
               />
             </Grid>
 
@@ -530,7 +530,7 @@ const MaterialForm: React.FC = () => {
               </Typography>
             </Grid>
 
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
                 type="date"
@@ -542,17 +542,7 @@ const MaterialForm: React.FC = () => {
               />
             </Grid>
 
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Chargennummer / Lot"
-                value={formData.lot_number}
-                onChange={handleChange('lot_number')}
-                helperText={gs1Data?.batchNumber ? 'Aus GS1-Barcode übernommen' : ''}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
                 label="Shipping Container Code"
