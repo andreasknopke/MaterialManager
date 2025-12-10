@@ -13,6 +13,7 @@ declare global {
         email: string;
         role: 'admin' | 'user' | 'viewer';
         isRoot: boolean;
+        departmentId: number | null;
       };
     }
   }
@@ -21,9 +22,16 @@ declare global {
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const JWT_EXPIRES_IN = '24h' as const;
 
-export const generateToken = (userId: number, username: string, email: string, role: string, isRoot: boolean): string => {
+export const generateToken = (
+  userId: number, 
+  username: string, 
+  email: string, 
+  role: string, 
+  isRoot: boolean,
+  departmentId: number | null
+): string => {
   return jwt.sign(
-    { id: userId, username, email, role, isRoot },
+    { id: userId, username, email, role, isRoot, departmentId },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   );
@@ -66,7 +74,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
 
     // Lade Benutzerdaten
     const [users] = await pool.query<RowDataPacket[]>(
-      'SELECT id, username, email, role, is_root, active, must_change_password FROM users WHERE id = ?',
+      'SELECT id, username, email, role, is_root, department_id, active, must_change_password FROM users WHERE id = ?',
       [decoded.id]
     );
 
@@ -80,6 +88,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       email: users[0].email,
       role: users[0].role,
       isRoot: users[0].is_root,
+      departmentId: users[0].department_id,
     };
 
     next();
@@ -89,7 +98,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
-// Middleware: Admin-Rolle erforderlich
+// Middleware: Admin-Rolle erforderlich (Department Admin oder Root)
 export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Nicht authentifiziert' });
@@ -102,7 +111,7 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction) =>
   next();
 };
 
-// Middleware: Root-User erforderlich
+// Middleware: Root-User erforderlich (nur vollständiger Admin)
 export const requireRoot = (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Nicht authentifiziert' });
@@ -112,6 +121,28 @@ export const requireRoot = (req: Request, res: Response, next: NextFunction) => 
     return res.status(403).json({ error: 'Root-Benutzer erforderlich' });
   }
 
+  next();
+};
+
+// Middleware: Department-Filter hinzufügen
+export const addDepartmentFilter = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Nicht authentifiziert' });
+  }
+
+  // Root sieht alles
+  if (req.user.isRoot) {
+    return next();
+  }
+
+  // Department Admin/User sieht nur sein Department
+  if (!req.user.departmentId) {
+    return res.status(403).json({ error: 'Kein Department zugewiesen' });
+  }
+
+  // Department-ID für Queries verfügbar machen
+  (req as any).departmentId = req.user.departmentId;
+  
   next();
 };
 

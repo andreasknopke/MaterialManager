@@ -132,7 +132,7 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     // Token generieren
-    const token = generateToken(user.id, user.username, user.email, user.role, user.is_root);
+    const token = generateToken(user.id, user.username, user.email, user.role, user.is_root, user.department_id);
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 Stunden
 
@@ -168,6 +168,7 @@ router.post('/login', async (req: Request, res: Response) => {
         fullName: user.full_name,
         role: user.role,
         isRoot: user.is_root,
+        departmentId: user.department_id,
         emailVerified: user.email_verified,
         mustChangePassword: user.must_change_password,
       },

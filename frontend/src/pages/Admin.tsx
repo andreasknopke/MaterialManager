@@ -223,6 +223,52 @@ const Admin: React.FC = () => {
             </CardActions>
           </Card>
         </Grid>
+
+        {/* Department Access Migration */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <SettingsIcon color="info" />
+                <Typography variant="h6">
+                  Department-Zugriffskontrolle
+                </Typography>
+              </Box>
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Erweitert User Management um Department-Zuweisungen für Admin- und User-Rollen.
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Root bleibt globaler Admin, andere Admins werden zu Department Admins.
+              </Typography>
+              <Alert severity="info" sx={{ mt: 2 }}>
+                Nach der Migration können Departments zugewiesen werden.
+              </Alert>
+            </CardContent>
+            <CardActions>
+              <Button
+                variant="contained"
+                color="info"
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    await axios.post('/api/admin/run-department-migration');
+                    setSuccess('Department-Zugriffskontrolle erfolgreich aktiviert!');
+                    setTimeout(() => setSuccess(null), 5000);
+                  } catch (err: any) {
+                    setError(err.response?.data?.error || 'Department-Migration fehlgeschlagen');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                fullWidth
+                disabled={loading}
+              >
+                {loading ? 'Migration läuft...' : 'Department-Zugriff aktivieren'}
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
       </Grid>
 
       {/* Bestätigungs-Dialog */}

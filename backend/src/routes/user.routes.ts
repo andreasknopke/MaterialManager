@@ -12,9 +12,18 @@ router.use(authenticate);
 // GET /api/users - Alle Benutzer abrufen (nur Admin)
 router.get('/', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const [users] = await pool.query<RowDataPacket[]>(
-      'SELECT * FROM v_users_overview ORDER BY created_at DESC'
-    );
+    let query = 'SELECT * FROM v_users_overview';
+    const params: any[] = [];
+
+    // Department Admin sieht nur Benutzer seines Departments
+    if (!req.user!.isRoot) {
+      query += ' WHERE department_id = ? OR id = ?';
+      params.push(req.user!.departmentId, req.user!.id); // Eigener User immer sichtbar
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const [users] = await pool.query<RowDataPacket[]>(query, params);
     
     res.json(users);
   } catch (error) {
@@ -52,11 +61,19 @@ router.get('/:id', async (req: Request, res: Response) => {
 // POST /api/users - Neuen Benutzer erstellen (nur Admin)
 router.post('/', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { username, email, password, fullName, role } = req.body;
+    const { username, email, password, fullName, role, departmentId } = req.body;
 
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Username, E-Mail und Passwort sind erforderlich' });
     }
+
+    // Department Admins können nur User in ihrem eigenen Department erstellen
+    if (!req.user!.isRoot && departmentId && departmentId !== req.user!.departmentId) {
+      return res.status(403).json({ error: 'Sie können nur Benutzer in Ihrem eigenen Department erstellen' });
+    }
+
+    // Department Admins müssen Department zuweisen
+    const finalDepartmentId = req.user!.isRoot ? (departmentId || null) : req.user!.departmentId;
 
     // Prüfe ob Benutzer bereits existiert
     const [existing] = await pool.query<RowDataPacket[]>(
@@ -73,9 +90,9 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
 
     // Benutzer erstellen
     const [result] = await pool.query<ResultSetHeader>(
-      `INSERT INTO users (username, email, password_hash, full_name, role, email_verified, must_change_password)
-       VALUES (?, ?, ?, ?, ?, TRUE, TRUE)`,
-      [username, email, passwordHash, fullName || null, role || 'user']
+      `INSERT INTO users (username, email, password_hash, full_name, role, department_id, email_verified, must_change_password)
+       VALUES (?, ?, ?, ?, ?, ?, TRUE, TRUE)`,
+      [username, email, passwordHash, fullName || null, role || 'user', finalDepartmentId]
     );
 
     // Audit-Log
@@ -98,7 +115,7 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const userId = parseInt(req.params.id);
-    const { fullName, email, role, active } = req.body;
+    const { fullName, email, role, active, departmentId } = req.body;
 
     // Benutzer darf nur eigene Daten ändern, außer er ist Admin
     if (req.user!.id !== userId && req.user!.role !== 'admin') {
@@ -112,12 +129,17 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     // Prüfe ob Root-User
     const [targetUser] = await pool.query<RowDataPacket[]>(
-      'SELECT is_root FROM users WHERE id = ?',
+      'SELECT is_root, department_id FROM users WHERE id = ?',
       [userId]
     );
 
     if (targetUser.length > 0 && targetUser[0].is_root && !req.user!.isRoot) {
       return res.status(403).json({ error: 'Root-Benutzer kann nur von Root geändert werden' });
+    }
+
+    // Department Admin kann nur User im eigenen Department bearbeiten
+    if (!req.user!.isRoot && targetUser[0].department_id !== req.user!.departmentId) {
+      return res.status(403).json({ error: 'Sie können nur Benutzer in Ihrem eigenen Department bearbeiten' });
     }
 
     // Update
@@ -142,6 +164,12 @@ router.put('/:id', async (req: Request, res: Response) => {
     if (active !== undefined && req.user!.role === 'admin') {
       updates.push('active = ?');
       values.push(active);
+    }
+
+    // Nur Root kann Department ändern
+    if (departmentId !== undefined && req.user!.isRoot) {
+      updates.push('department_id = ?');
+      values.push(departmentId);
     }
 
     if (updates.length === 0) {

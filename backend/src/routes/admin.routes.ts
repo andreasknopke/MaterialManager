@@ -416,4 +416,85 @@ router.post('/run-user-migration', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/admin/run-department-migration - Führt die Department-Migration aus
+router.post('/run-department-migration', async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+  
+  try {
+    console.log('🔄 Starting migration 004_add_department_access...');
+    
+    // Step 1: Add department_id to users table
+    await connection.query(`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS department_id INT DEFAULT NULL AFTER role
+    `);
+    console.log('✓ department_id column added to users');
+
+    await connection.query(`
+      ALTER TABLE users 
+      ADD INDEX IF NOT EXISTS idx_department (department_id)
+    `);
+    console.log('✓ department_id index added');
+
+    // Step 2: Add foreign key (nur wenn noch nicht vorhanden)
+    const [fkCheck] = await connection.query(`
+      SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+      WHERE CONSTRAINT_NAME = 'fk_user_department'
+      AND TABLE_SCHEMA = DATABASE()
+    `) as any[];
+
+    if (fkCheck[0].count === 0) {
+      await connection.query(`
+        ALTER TABLE users 
+        ADD CONSTRAINT fk_user_department 
+        FOREIGN KEY (department_id) REFERENCES units(id) ON DELETE SET NULL
+      `);
+      console.log('✓ Foreign key fk_user_department added');
+    } else {
+      console.log('ℹ Foreign key fk_user_department already exists');
+    }
+
+    // Step 3: Update v_users_overview
+    await connection.query(`
+      CREATE OR REPLACE VIEW v_users_overview AS
+      SELECT 
+        u.id,
+        u.username,
+        u.email,
+        u.full_name,
+        u.role,
+        u.department_id,
+        dept.name AS department_name,
+        dept.color AS department_color,
+        u.is_root,
+        u.active,
+        u.email_verified,
+        u.must_change_password,
+        u.last_login,
+        u.created_at,
+        u.updated_at
+      FROM users u
+      LEFT JOIN units dept ON u.department_id = dept.id
+    `);
+    console.log('✓ v_users_overview updated with department info');
+
+    console.log('✅ Migration 004_add_department_access completed!');
+    
+    res.json({ 
+      success: true, 
+      message: 'Department Access Migration completed successfully',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Department Migration failed:', error);
+    res.status(500).json({ 
+      error: 'Department Migration failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  } finally {
+    connection.release();
+  }
+});
+
 export default router;

@@ -43,6 +43,9 @@ interface User {
   full_name?: string;
   role: 'admin' | 'user' | 'viewer';
   is_root: boolean;
+  department_id?: number | null;
+  department_name?: string;
+  department_color?: string;
   active: boolean;
   email_verified: boolean;
   must_change_password: boolean;
@@ -50,9 +53,16 @@ interface User {
   created_at: string;
 }
 
+interface Department {
+  id: number;
+  name: string;
+  color: string;
+}
+
 const Users: React.FC = () => {
   const { isRoot } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -70,10 +80,12 @@ const Users: React.FC = () => {
     password: '',
     fullName: '',
     role: 'user' as 'admin' | 'user' | 'viewer',
+    departmentId: null as number | null,
   });
 
   useEffect(() => {
     loadUsers();
+    loadDepartments();
   }, []);
 
   const loadUsers = async () => {
@@ -86,6 +98,15 @@ const Users: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDepartments = async () => {
+    try {
+      const response = await axios.get('/api/units');
+      setDepartments(response.data);
+    } catch (err: any) {
+      console.error('Fehler beim Laden der Departments:', err);
     }
   };
 
@@ -110,6 +131,7 @@ const Users: React.FC = () => {
         fullName: formData.fullName,
         email: formData.email,
         role: formData.role,
+        departmentId: formData.departmentId,
       });
       setSuccess('Benutzer erfolgreich aktualisiert');
       setEditDialogOpen(false);
@@ -166,6 +188,7 @@ const Users: React.FC = () => {
       password: '',
       fullName: '',
       role: 'user',
+      departmentId: null,
     });
   };
 
@@ -177,6 +200,7 @@ const Users: React.FC = () => {
       password: '',
       fullName: user.full_name || '',
       role: user.role,
+      departmentId: user.department_id || null,
     });
     setEditDialogOpen(true);
   };
@@ -248,6 +272,7 @@ const Users: React.FC = () => {
               <TableCell>E-Mail</TableCell>
               <TableCell>Name</TableCell>
               <TableCell>Rolle</TableCell>
+              <TableCell>Department</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Letzter Login</TableCell>
               <TableCell align="right">Aktionen</TableCell>
@@ -271,6 +296,20 @@ const Users: React.FC = () => {
                     color={getRoleColor(user.role, user.is_root)}
                     size="small"
                   />
+                </TableCell>
+                <TableCell>
+                  {user.department_name ? (
+                    <Chip
+                      label={user.department_name}
+                      size="small"
+                      sx={{
+                        bgcolor: user.department_color || '#1976d2',
+                        color: 'white',
+                      }}
+                    />
+                  ) : (
+                    user.is_root ? <Chip label="Alle" size="small" color="default" /> : '-'
+                  )}
                 </TableCell>
                 <TableCell>
                   <Box display="flex" gap={0.5}>
@@ -381,6 +420,25 @@ const Users: React.FC = () => {
               <MenuItem value="viewer">Viewer</MenuItem>
             </Select>
           </FormControl>
+          {isRoot && (
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Department</InputLabel>
+              <Select
+                value={formData.departmentId || ''}
+                label="Department"
+                onChange={(e) => setFormData({ ...formData, departmentId: e.target.value ? Number(e.target.value) : null })}
+              >
+                <MenuItem value="">
+                  <em>Kein Department (Root)</em>
+                </MenuItem>
+                {departments.map((dept) => (
+                  <MenuItem key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateDialogOpen(false)}>Abbrechen</Button>
@@ -428,6 +486,25 @@ const Users: React.FC = () => {
               <MenuItem value="viewer">Viewer</MenuItem>
             </Select>
           </FormControl>
+          {isRoot && (
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Department</InputLabel>
+              <Select
+                value={formData.departmentId || ''}
+                label="Department"
+                onChange={(e) => setFormData({ ...formData, departmentId: e.target.value ? Number(e.target.value) : null })}
+              >
+                <MenuItem value="">
+                  <em>Kein Department (Root)</em>
+                </MenuItem>
+                {departments.map((dept) => (
+                  <MenuItem key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditDialogOpen(false)}>Abbrechen</Button>

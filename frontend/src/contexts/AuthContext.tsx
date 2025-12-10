@@ -8,6 +8,7 @@ interface User {
   fullName?: string;
   role: 'admin' | 'user' | 'viewer';
   isRoot: boolean;
+  departmentId: number | null;
   mustChangePassword: boolean;
 }
 
