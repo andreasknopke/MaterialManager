@@ -19,10 +19,13 @@ const api = axios.create({
   },
 });
 
-// Request Interceptor
+// Request Interceptor - fügt Auth-Token zu allen Requests hinzu
 api.interceptors.request.use(
   (config) => {
-    // Hier könnte ein Token hinzugefügt werden
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {
