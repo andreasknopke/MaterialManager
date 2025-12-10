@@ -28,7 +28,7 @@ import {
 } from '@mui/icons-material';
 import { barcodeAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
-import { BarcodeScannerComponent } from 'react-qr-barcode-scanner';
+import BarcodeScannerComponent from 'react-qr-barcode-scanner';
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
