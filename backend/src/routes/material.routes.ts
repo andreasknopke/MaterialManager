@@ -510,7 +510,8 @@ router.post('/:id/reactivate', async (req: Request, res: Response) => {
 // GET ablaufende Materialien
 router.get('/reports/expiring', async (req: Request, res: Response) => {
   try {
-    const departmentFilter = getDepartmentFilter(req);
+    // Views verwenden direkt die Spalten ohne Alias, daher '' statt 'm'
+    const departmentFilter = getDepartmentFilter(req, '');
     let query = 'SELECT * FROM v_expiring_materials';
     const params: any[] = [];
     
@@ -519,7 +520,9 @@ router.get('/reports/expiring', async (req: Request, res: Response) => {
       params.push(...departmentFilter.params);
     }
     
+    console.log('[REPORTS] Expiring materials query:', query, 'params:', params);
     const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    console.log('[REPORTS] Expiring materials found:', rows.length);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen ablaufender Materialien:', error);
@@ -530,7 +533,8 @@ router.get('/reports/expiring', async (req: Request, res: Response) => {
 // GET Materialien mit niedrigem Bestand
 router.get('/reports/low-stock', async (req: Request, res: Response) => {
   try {
-    const departmentFilter = getDepartmentFilter(req);
+    // Views verwenden direkt die Spalten ohne Alias, daher '' statt 'm'
+    const departmentFilter = getDepartmentFilter(req, '');
     let query = 'SELECT * FROM v_low_stock_materials';
     const params: any[] = [];
     
@@ -539,7 +543,9 @@ router.get('/reports/low-stock', async (req: Request, res: Response) => {
       params.push(...departmentFilter.params);
     }
     
+    console.log('[REPORTS] Low stock query:', query, 'params:', params);
     const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    console.log('[REPORTS] Low stock materials found:', rows.length);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der Materialien mit niedrigem Bestand:', error);
