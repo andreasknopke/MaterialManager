@@ -69,6 +69,10 @@ router.post('/login', async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body;
 
+    console.log('=== LOGIN ATTEMPT ===');
+    console.log('Username:', username);
+    console.log('Password length:', password ? password.length : 0);
+
     if (!username || !password) {
       return res.status(400).json({ error: 'Username und Passwort sind erforderlich' });
     }
@@ -79,6 +83,8 @@ router.post('/login', async (req: Request, res: Response) => {
        WHERE email = ? AND attempted_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)`,
       [username]
     );
+
+    console.log('Recent login attempts:', recentAttempts[0].count);
 
     if (recentAttempts[0].count >= 5) {
       return res.status(429).json({ 
@@ -92,7 +98,19 @@ router.post('/login', async (req: Request, res: Response) => {
       [username, username]
     );
 
+    console.log('Users found:', users.length);
+    if (users.length > 0) {
+      console.log('User data:', {
+        id: users[0].id,
+        username: users[0].username,
+        email: users[0].email,
+        active: users[0].active,
+        password_hash_start: users[0].password_hash?.substring(0, 20)
+      });
+    }
+
     if (users.length === 0) {
+      console.log('❌ No user found with username/email:', username);
       await connection.query(
         'INSERT INTO login_attempts (email, ip_address, success) VALUES (?, ?, FALSE)',
         [username, req.ip]
@@ -103,7 +121,9 @@ router.post('/login', async (req: Request, res: Response) => {
     const user = users[0];
 
     // Passwort prüfen
+    console.log('Comparing password...');
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    console.log('Password match:', passwordMatch);
 
     if (!passwordMatch) {
       await connection.query(
