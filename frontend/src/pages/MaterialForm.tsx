@@ -88,7 +88,12 @@ const MaterialForm: React.FC = () => {
     } else {
       // Prüfe ob Daten vom Scanner übergeben wurden
       const state = location.state as any;
+      console.log('MaterialForm location.state:', state);
+      
       if (state?.fromScanner && state?.gs1_barcode) {
+        console.log('GS1 Barcode vom Scanner:', state.gs1_barcode);
+        console.log('GS1 Data vom Scanner:', state.gs1Data);
+        
         // GS1-Daten zusammenstellen
         const updates: Partial<MaterialFormData> = {
           gs1_barcode: state.gs1_barcode,
@@ -108,6 +113,7 @@ const MaterialForm: React.FC = () => {
           setGs1Data(state.gs1Data);
         }
         
+        console.log('Applying updates:', updates);
         // Alle Updates auf einmal anwenden
         setFormData(prev => ({ ...prev, ...updates }));
         setSuccess('GS1-Barcode vom Scanner übernommen!');
