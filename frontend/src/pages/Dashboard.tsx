@@ -133,17 +133,11 @@ const Dashboard: React.FC = () => {
                 boxShadow: 6,
               }
             }}
-            onClick={() => navigate('/barcode-scanner')}
+            onClick={() => navigate('/scanner')}
           >
-            <CardContent sx={{ py: 4 }}>
-              <Box display="flex" alignItems="center" justifyContent="center" flexDirection="column" gap={2}>
-                <QrCodeScannerIcon sx={{ fontSize: 80 }} />
-                <Typography variant="h4" align="center" fontWeight="bold">
-                  Barcode Scanner
-                </Typography>
-                <Typography variant="body1" align="center" sx={{ opacity: 0.9 }}>
-                  Material scannen und direkt ein- oder ausbuchen
-                </Typography>
+            <CardContent sx={{ py: 6 }}>
+              <Box display="flex" alignItems="center" justifyContent="center">
+                <QrCodeScannerIcon sx={{ fontSize: 120 }} />
               </Box>
             </CardContent>
           </Card>
