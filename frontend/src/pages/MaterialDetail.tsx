@@ -65,16 +65,25 @@ const MaterialDetail: React.FC = () => {
 
   return (
     <Box>
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={() => navigate('/materials')}
-        sx={{ mb: 2 }}
-      >
-        Zurück
-      </Button>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/materials')}
+        >
+          Zurück
+        </Button>
+        {material && (
+          <Button
+            variant="contained"
+            onClick={() => navigate(`/materials/${id}/edit`)}
+          >
+            Bearbeiten
+          </Button>
+        )}
+      </Box>
 
       <Typography variant="h4" gutterBottom>
-        {id === 'new' ? 'Neues Material' : material?.name || 'Material Details'}
+        {material?.name || 'Material Details'}
       </Typography>
 
       <Paper sx={{ mt: 3 }}>

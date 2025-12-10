@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS materials (
     lot_number VARCHAR(100),
     article_number VARCHAR(100),
     location_in_cabinet VARCHAR(100),
+    shipping_container_code VARCHAR(200),
     notes TEXT,
     active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -84,7 +85,8 @@ CREATE TABLE IF NOT EXISTS materials (
     INDEX idx_company (company_id),
     INDEX idx_cabinet (cabinet_id),
     INDEX idx_expiry (expiry_date),
-    INDEX idx_article_number (article_number)
+    INDEX idx_article_number (article_number),
+    INDEX idx_shipping_container (shipping_container_code)
 ) ENGINE=InnoDB;
 
 -- Tabelle für benutzerdefinierte Feldwerte
@@ -106,7 +108,7 @@ CREATE TABLE IF NOT EXISTS barcodes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     material_id INT NOT NULL,
     barcode VARCHAR(200) NOT NULL UNIQUE,
-    barcode_type ENUM('EAN13', 'EAN8', 'CODE128', 'QR', 'DATAMATRIX') DEFAULT 'CODE128',
+    barcode_type ENUM('EAN13', 'EAN8', 'CODE128', 'GS1-128', 'QR', 'DATAMATRIX') DEFAULT 'CODE128',
     is_primary BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
