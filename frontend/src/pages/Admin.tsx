@@ -136,14 +136,45 @@ const Admin: React.FC = () => {
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Weitere Einstellungen
-              </Typography>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <SettingsIcon color="primary" />
+                <Typography variant="h6">
+                  Datenbank-Migration
+                </Typography>
+              </Box>
               <Divider sx={{ mb: 2 }} />
-              <Typography variant="body2" color="text.secondary">
-                Weitere Administrationsfunktionen werden hier in Zukunft verfügbar sein.
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Führt die neueste Datenbank-Migration aus (Units-System).
               </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Diese Aktion ist sicher und kann mehrfach ausgeführt werden.
+              </Typography>
+              <Alert severity="info" sx={{ mt: 2 }}>
+                Migration wird automatisch überprüft und nur bei Bedarf ausgeführt.
+              </Alert>
             </CardContent>
+            <CardActions>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    await axios.post('/api/admin/run-migration');
+                    setSuccess('Migration erfolgreich ausgeführt!');
+                    setTimeout(() => setSuccess(null), 3000);
+                  } catch (err: any) {
+                    setError(err.response?.data?.error || 'Migration fehlgeschlagen');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                fullWidth
+                disabled={loading}
+              >
+                {loading ? 'Migration läuft...' : 'Migration ausführen'}
+              </Button>
+            </CardActions>
           </Card>
         </Grid>
       </Grid>
