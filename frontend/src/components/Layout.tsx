@@ -14,6 +14,10 @@ import {
   Toolbar,
   Typography,
   Divider,
+  Menu,
+  MenuItem,
+  Avatar,
+  Chip,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -26,7 +30,13 @@ import {
   Storage as StorageIcon,
   Checklist as ChecklistIcon,
   Settings as SettingsIcon,
+  AccountCircle,
+  Logout as LogoutIcon,
+  Lock as LockIcon,
+  People as PeopleIcon,
 } from '@mui/icons-material';
+import { useAuth } from '../contexts/AuthContext';
+import ChangePasswordDialog from './ChangePasswordDialog';
 
 const drawerWidth = 240;
 
@@ -36,11 +46,32 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout, isAdmin } = useAuth();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
+  };
+
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
+  const handleChangePassword = () => {
+    setPasswordDialogOpen(true);
+    handleMenuClose();
   };
 
   const menuItems = [
@@ -57,6 +88,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const adminItems = [
     { text: 'Administration', icon: <SettingsIcon />, path: '/admin' },
+    ...(isAdmin ? [{ text: 'Benutzerverwaltung', icon: <PeopleIcon />, path: '/users' }] : []),
   ];
 
   const drawer = (
@@ -123,9 +155,67 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div">
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Angiographie Material Management
           </Typography>
+          
+          {/* User Menu */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {user?.mustChangePassword && (
+              <Chip
+                label="Passwort ändern!"
+                color="warning"
+                size="small"
+                sx={{ mr: 1 }}
+              />
+            )}
+            <Typography variant="body2" sx={{ mr: 1, display: { xs: 'none', md: 'block' } }}>
+              {user?.username}
+            </Typography>
+            <IconButton
+              onClick={handleMenuOpen}
+              size="small"
+              sx={{ ml: 2 }}
+              aria-controls="account-menu"
+              aria-haspopup="true"
+            >
+              <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
+                {user?.username.charAt(0).toUpperCase()}
+              </Avatar>
+            </IconButton>
+            <Menu
+              id="account-menu"
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleMenuClose}
+              onClick={handleMenuClose}
+            >
+              <MenuItem disabled>
+                <ListItemIcon>
+                  <AccountCircle fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>
+                  <Typography variant="body2">{user?.username}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {user?.email}
+                  </Typography>
+                </ListItemText>
+              </MenuItem>
+              <Divider />
+              <MenuItem onClick={handleChangePassword}>
+                <ListItemIcon>
+                  <LockIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Passwort ändern</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={handleLogout}>
+                <ListItemIcon>
+                  <LogoutIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Abmelden</ListItemText>
+              </MenuItem>
+            </Menu>
+          </Box>
         </Toolbar>
       </AppBar>
       <Box
@@ -175,6 +265,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <Toolbar />
         {children}
       </Box>
+      
+      {/* Change Password Dialog */}
+      <ChangePasswordDialog
+        open={passwordDialogOpen}
+        onClose={() => setPasswordDialogOpen(false)}
+        onSuccess={() => {
+          // Optional: Update user info or show success message
+        }}
+      />
     </Box>
   );
 };
