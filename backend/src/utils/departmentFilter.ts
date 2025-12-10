@@ -12,20 +12,32 @@ export const getDepartmentFilter = (
 ): { whereClause: string; params: any[] } => {
   const user = req.user;
 
+  console.log('getDepartmentFilter called with:', { 
+    userId: user?.id, 
+    isRoot: user?.isRoot, 
+    departmentId: user?.departmentId,
+    tableAlias 
+  });
+
   if (!user) {
+    console.error('❌ User nicht authentifiziert');
     throw new Error('User nicht authentifiziert');
   }
 
   // Root sieht alles
   if (user.isRoot) {
+    console.log('✅ Root user - no filter applied');
     return { whereClause: '', params: [] };
   }
 
   // Department Admin/User sieht nur eigenes Department
   if (!user.departmentId) {
+    console.error('❌ User has no departmentId:', user);
     throw new Error('Kein Department zugewiesen');
   }
 
+  console.log(`✅ Applying department filter: ${tableAlias}.unit_id = ${user.departmentId}`);
+  
   return {
     whereClause: `${tableAlias}.unit_id = ?`,
     params: [user.departmentId],

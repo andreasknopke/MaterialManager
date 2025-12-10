@@ -12,7 +12,12 @@ router.use(authenticate);
 // GET alle Schränke
 router.get('/', async (req: Request, res: Response) => {
   try {
+    console.log('=== GET /api/cabinets ===');
+    console.log('User:', { id: req.user?.id, isRoot: req.user?.isRoot, departmentId: req.user?.departmentId });
+    
     const departmentFilter = getDepartmentFilter(req);
+    console.log('Department Filter:', departmentFilter);
+    
     let query = 'SELECT * FROM cabinets WHERE active = TRUE';
     const params: any[] = [];
     
@@ -23,10 +28,15 @@ router.get('/', async (req: Request, res: Response) => {
     
     query += ' ORDER BY name';
     
+    console.log('Query:', query);
+    console.log('Params:', params);
+    
     const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    console.log('Rows returned:', rows.length);
     res.json(rows);
   } catch (error) {
-    console.error('Fehler beim Abrufen der Schränke:', error);
+    console.error('❌ Fehler beim Abrufen der Schränke:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
     res.status(500).json({ error: 'Datenbankfehler' });
   }
 });
