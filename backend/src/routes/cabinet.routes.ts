@@ -15,7 +15,7 @@ router.get('/', async (req: Request, res: Response) => {
     console.log('=== GET /api/cabinets ===');
     console.log('User:', { id: req.user?.id, isRoot: req.user?.isRoot, departmentId: req.user?.departmentId });
     
-    const departmentFilter = getDepartmentFilter(req);
+    const departmentFilter = getDepartmentFilter(req, 'cabinets');
     console.log('Department Filter:', departmentFilter);
     
     let query = 'SELECT * FROM cabinets WHERE active = TRUE';
@@ -44,7 +44,7 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Schrank nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const departmentFilter = getDepartmentFilter(req);
+    const departmentFilter = getDepartmentFilter(req, 'cabinets');
     let query = 'SELECT * FROM cabinets WHERE id = ?';
     const params: any[] = [req.params.id];
     
@@ -70,7 +70,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.get('/:id/materials', async (req: Request, res: Response) => {
   try {
     // Department-Validierung: Schrank muss zugänglich sein
-    const departmentFilter = getDepartmentFilter(req);
+    const departmentFilter = getDepartmentFilter(req, 'cabinets');
     if (departmentFilter.whereClause) {
       const [cabinets] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM cabinets WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -139,7 +139,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   
   try {
     // Department-Validierung: Schrank muss im erlaubten Department sein
-    const departmentFilter = getDepartmentFilter(req);
+    const departmentFilter = getDepartmentFilter(req, 'cabinets');
     if (departmentFilter.whereClause) {
       const [cabinets] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM cabinets WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -180,7 +180,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     // Department-Validierung
-    const departmentFilter = getDepartmentFilter(req);
+    const departmentFilter = getDepartmentFilter(req, 'cabinets');
     if (departmentFilter.whereClause) {
       const [cabinets] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM cabinets WHERE id = ? AND ${departmentFilter.whereClause}`,
