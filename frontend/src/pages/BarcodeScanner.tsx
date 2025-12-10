@@ -43,8 +43,24 @@ const BarcodeScanner: React.FC = () => {
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
 
   useEffect(() => {
-    if (cameraOpen && videoRef.current) {
-      console.log('Initialisiere Scanner...');
+    console.log('useEffect triggered, cameraOpen:', cameraOpen, 'videoRef.current:', !!videoRef.current);
+    
+    if (!cameraOpen) {
+      return;
+    }
+
+    // Warte kurz, bis der Dialog vollständig gerendert ist
+    const timer = setTimeout(() => {
+      console.log('Timer abgelaufen, videoRef.current:', !!videoRef.current);
+      
+      if (!videoRef.current) {
+        console.error('Video-Element nicht verfügbar nach Timeout');
+        setError('Video-Element konnte nicht initialisiert werden');
+        setCameraOpen(false);
+        return;
+      }
+      
+      console.log('✓ Starte Kamera');
       
       const startCamera = async () => {
         try {
@@ -115,9 +131,10 @@ const BarcodeScanner: React.FC = () => {
       };
       
       startCamera();
-    }
+    }, 300);
 
     return () => {
+      clearTimeout(timer);
       if (codeReaderRef.current) {
         console.log('Stoppe Scanner...');
         codeReaderRef.current.reset();
@@ -249,7 +266,10 @@ const BarcodeScanner: React.FC = () => {
                   <InputAdornment position="end">
                     <Tooltip title="Kamera öffnen">
                       <IconButton
-                        onClick={() => setCameraOpen(true)}
+                        onClick={() => {
+                          console.log('Kamera-Button geklickt');
+                          setCameraOpen(true);
+                        }}
                         edge="end"
                         sx={{ mr: 1 }}
                       >
