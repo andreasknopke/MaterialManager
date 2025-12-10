@@ -32,7 +32,6 @@ interface MaterialFormData {
   size: string;
   unit: string;
   min_stock: number;
-  current_stock: number;
   expiry_date: string;
   lot_number: string;
   article_number: string;
@@ -78,7 +77,6 @@ const MaterialForm: React.FC = () => {
     size: '',
     unit: 'Stück',
     min_stock: 0,
-    current_stock: 0,
     expiry_date: '',
     lot_number: '',
     article_number: '',
@@ -184,7 +182,6 @@ const MaterialForm: React.FC = () => {
         size: material.size || '',
         unit: material.unit || 'Stück',
         min_stock: material.min_stock || 0,
-        current_stock: material.current_stock || 0,
         expiry_date: material.expiry_date ? material.expiry_date.split('T')[0] : '',
         lot_number: material.lot_number || '',
         article_number: material.article_number || '',
@@ -288,9 +285,7 @@ const MaterialForm: React.FC = () => {
         setSuccess('Material erfolgreich erstellt!');
         setTimeout(() => navigate(`/materials/${response.data.id}`), 1500);
       } else {
-        // Bei Update: current_stock nicht senden (wird über Lagerbewegungen verwaltet)
-        const { current_stock, ...updateData } = dataToSend;
-        await materialAPI.update(parseInt(id!), updateData);
+        await materialAPI.update(parseInt(id!), dataToSend);
         setSuccess('Material erfolgreich aktualisiert!');
         setTimeout(() => navigate('/materials'), 1500);
       }
@@ -527,18 +522,6 @@ const MaterialForm: React.FC = () => {
                 label="Mindestbestand"
                 value={formData.min_stock}
                 onChange={handleChange('min_stock')}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={3}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Aktueller Bestand"
-                value={formData.current_stock}
-                onChange={handleChange('current_stock')}
-                disabled={!isNew}
-                helperText={!isNew ? 'Über Lagerbewegungen ändern' : ''}
               />
             </Grid>
 
