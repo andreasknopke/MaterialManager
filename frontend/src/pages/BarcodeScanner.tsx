@@ -28,7 +28,7 @@ import {
 } from '@mui/icons-material';
 import { barcodeAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
-import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/library';
+import { BrowserMultiFormatReader } from '@zxing/library';
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
@@ -71,8 +71,9 @@ const BarcodeScanner: React.FC = () => {
             
             console.log('Starte Barcode-Erkennung...');
             
-            codeReader.decodeFromVideoElement(videoRef.current, (result, error) => {
-              if (result) {
+            // Kontinuierliches Scanning - wartet bis Barcode erkannt wird
+            codeReader.decodeFromVideoElement(videoRef.current)
+              .then((result) => {
                 const scannedCode = result.getText();
                 console.log('✓ Barcode gescannt:', scannedCode);
                 console.log('Format:', result.getBarcodeFormat());
@@ -92,8 +93,13 @@ const BarcodeScanner: React.FC = () => {
                     .then(response => setMaterial(response.data.material))
                     .catch(() => setNotFound(true));
                 }, 100);
-              }
-            });
+              })
+              .catch((err) => {
+                // Ignoriere Abbruch-Fehler beim Schließen
+                if (err.name !== 'NotFoundException') {
+                  console.error('Scan-Fehler:', err);
+                }
+              });
           }
         } catch (err: any) {
           console.error('Fehler beim Kamera-Zugriff:', err);
