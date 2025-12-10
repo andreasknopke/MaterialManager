@@ -44,43 +44,56 @@ const BarcodeScanner: React.FC = () => {
     let html5QrcodeScanner: Html5QrcodeScanner | null = null;
 
     if (cameraOpen) {
-      html5QrcodeScanner = new Html5QrcodeScanner(
-        'qr-reader',
-        { 
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          formatsToSupport: [
-            0, // QR_CODE
-            8, // CODE_128
-            9, // CODE_39
-            13, // EAN_13
-            14, // EAN_8
-          ],
-        },
-        false
-      );
+      // Kurze Verzögerung, damit das DOM-Element verfügbar ist
+      setTimeout(() => {
+        try {
+          html5QrcodeScanner = new Html5QrcodeScanner(
+            'qr-reader',
+            { 
+              fps: 10,
+              qrbox: { width: 250, height: 250 },
+              formatsToSupport: [
+                0, // QR_CODE
+                8, // CODE_128
+                9, // CODE_39
+                13, // EAN_13
+                14, // EAN_8
+              ],
+            },
+            false
+          );
 
-      html5QrcodeScanner.render(
-        (decodedText) => {
-          // Erfolgreicher Scan
-          setBarcode(decodedText);
+          html5QrcodeScanner.render(
+            (decodedText) => {
+              // Erfolgreicher Scan
+              console.log('Barcode gescannt:', decodedText);
+              setBarcode(decodedText);
+              setCameraOpen(false);
+              setError('');
+              setSuccess('Barcode erfolgreich gescannt');
+              setTimeout(() => setSuccess(''), 2000);
+              
+              // Automatisch suchen
+              setTimeout(() => {
+                barcodeAPI.search(decodedText)
+                  .then(response => setMaterial(response.data.material))
+                  .catch(() => setNotFound(true));
+              }, 100);
+            },
+            (errorMessage) => {
+              // Scan-Fehler (normal während des Suchens)
+              // Nur echte Fehler loggen, nicht "No barcode found"
+              if (!errorMessage.includes('NotFoundException')) {
+                console.log('Scanner:', errorMessage);
+              }
+            }
+          );
+        } catch (err) {
+          console.error('Fehler beim Initialisieren des Scanners:', err);
+          setError('Kamera konnte nicht gestartet werden');
           setCameraOpen(false);
-          setError('');
-          setSuccess('Barcode erfolgreich gescannt');
-          setTimeout(() => setSuccess(''), 2000);
-          
-          // Automatisch suchen
-          setTimeout(() => {
-            barcodeAPI.search(decodedText)
-              .then(response => setMaterial(response.data.material))
-              .catch(() => setNotFound(true));
-          }, 100);
-        },
-        (errorMessage) => {
-          // Scan-Fehler (normal während des Suchens)
-          console.log(errorMessage);
         }
-      );
+      }, 100);
     }
 
     return () => {
@@ -344,17 +357,25 @@ const BarcodeScanner: React.FC = () => {
             </IconButton>
           </Box>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ minHeight: 400 }}>
           <Box 
             id="qr-reader" 
             sx={{ 
               width: '100%',
+              minHeight: 350,
               '& video': {
                 width: '100% !important',
                 borderRadius: 1,
               },
               '& #qr-shaded-region': {
                 border: '2px solid #1976d2 !important',
+              },
+              '& button': {
+                backgroundColor: '#1976d2 !important',
+                color: 'white !important',
+                borderRadius: '4px !important',
+                padding: '8px 16px !important',
+                margin: '4px !important',
               }
             }}
           />
