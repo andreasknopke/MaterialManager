@@ -13,10 +13,22 @@ import {
   IconButton,
   Tooltip,
   InputAdornment,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
-import { QrCodeScanner as ScannerIcon, Remove as RemoveIcon, Add as AddIcon, ContentPaste as PasteIcon } from '@mui/icons-material';
+import { 
+  QrCodeScanner as ScannerIcon, 
+  Remove as RemoveIcon, 
+  Add as AddIcon, 
+  ContentPaste as PasteIcon,
+  CameraAlt as CameraIcon,
+  Close as CloseIcon,
+} from '@mui/icons-material';
 import { barcodeAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
+import { BarcodeScannerComponent } from 'react-qr-barcode-scanner';
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
@@ -26,6 +38,7 @@ const BarcodeScanner: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [notFound, setNotFound] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const handleSearch = async () => {
     setError('');
@@ -115,6 +128,25 @@ const BarcodeScanner: React.FC = () => {
     }
   };
 
+  const handleCameraScan = (err: any, result: any) => {
+    if (result) {
+      setBarcode(result.text);
+      setCameraOpen(false);
+      setError('');
+      setSuccess('Barcode erfolgreich gescannt');
+      setTimeout(() => setSuccess(''), 2000);
+      // Automatisch suchen nach Scan
+      setTimeout(() => {
+        barcodeAPI.search(result.text)
+          .then(response => setMaterial(response.data.material))
+          .catch(() => setNotFound(true));
+      }, 100);
+    }
+    if (err) {
+      console.error('Camera scan error:', err);
+    }
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>
@@ -144,6 +176,15 @@ const BarcodeScanner: React.FC = () => {
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
+                    <Tooltip title="Kamera öffnen">
+                      <IconButton
+                        onClick={() => setCameraOpen(true)}
+                        edge="end"
+                        sx={{ mr: 1 }}
+                      >
+                        <CameraIcon />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Aus Zwischenablage einfügen">
                       <IconButton
                         onClick={handlePasteFromClipboard}
@@ -256,6 +297,39 @@ const BarcodeScanner: React.FC = () => {
           )}
         </Grid>
       </Grid>
+
+      {/* Camera Scanner Dialog */}
+      <Dialog 
+        open={cameraOpen} 
+        onClose={() => setCameraOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        fullScreen
+      >
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6">Barcode scannen</Typography>
+            <IconButton onClick={() => setCameraOpen(false)} edge="end">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, position: 'relative', height: '100%' }}>
+          {cameraOpen && (
+            <BarcodeScannerComponent
+              width="100%"
+              height="100%"
+              onUpdate={handleCameraScan}
+              stopStream={!cameraOpen}
+            />
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setCameraOpen(false)} variant="outlined">
+            Abbrechen
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
