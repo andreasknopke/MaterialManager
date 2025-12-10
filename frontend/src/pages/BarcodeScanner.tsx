@@ -45,24 +45,28 @@ const BarcodeScanner: React.FC = () => {
   useEffect(() => {
     if (cameraOpen && videoRef.current) {
       console.log('Initialisiere Scanner...');
-      const codeReader = new BrowserMultiFormatReader();
-      codeReaderRef.current = codeReader;
+      
+      // Kurze Verzögerung damit das Video-Element bereit ist
+      const timer = setTimeout(() => {
+        if (!videoRef.current) {
+          console.error('Video-Element nicht verfügbar');
+          return;
+        }
 
-      // Liste verfügbare Kameras
-      navigator.mediaDevices.enumerateDevices()
-        .then(devices => {
-          const videoDevices = devices.filter(device => device.kind === 'videoinput');
-          console.log('Verfügbare Kameras:', videoDevices);
-          
-          if (videoDevices.length === 0) {
-            throw new Error('Keine Kamera gefunden');
-          }
+        const codeReader = new BrowserMultiFormatReader();
+        codeReaderRef.current = codeReader;
 
-          // Starte Scanning mit der ersten verfügbaren Kamera
-          const deviceId = videoDevices[0].deviceId;
-          console.log('Verwende Kamera:', deviceId);
+        console.log('Starte Kamera-Stream...');
 
-          return codeReader.decodeFromVideoDevice(deviceId, videoRef.current!, (result, error) => {
+        // Starte kontinuierliches Scanning
+        codeReader.decodeFromConstraints(
+          {
+            video: {
+              facingMode: 'environment' // Rückkamera auf Mobile
+            }
+          },
+          videoRef.current,
+          (result, error) => {
             if (result) {
               const scannedCode = result.getText();
               console.log('✓ Barcode gescannt:', scannedCode);
@@ -81,26 +85,24 @@ const BarcodeScanner: React.FC = () => {
                   .catch(() => setNotFound(true));
               }, 100);
             }
-            
-            // Nur echte Fehler loggen
-            if (error && error.name !== 'NotFoundException') {
-              console.warn('Scanner:', error.message);
-            }
-          });
-        })
-        .catch((err) => {
+          }
+        ).then(() => {
+          console.log('✓ Kamera gestartet');
+        }).catch((err) => {
           console.error('Fehler beim Starten der Kamera:', err);
           setError(`Kamera-Fehler: ${err.message}`);
           setCameraOpen(false);
         });
-    }
+      }, 250);
 
-    return () => {
-      if (codeReaderRef.current) {
-        console.log('Stoppe Scanner...');
-        codeReaderRef.current.reset();
-      }
-    };
+      return () => {
+        clearTimeout(timer);
+        if (codeReaderRef.current) {
+          console.log('Stoppe Scanner...');
+          codeReaderRef.current.reset();
+        }
+      };
+    }
   }, [cameraOpen]);
 
   const handleSearch = async () => {
