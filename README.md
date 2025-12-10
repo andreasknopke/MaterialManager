@@ -14,6 +14,8 @@ Ein umfassendes Materialmanagementsystem für Angiographie-Abteilungen mit Barco
 - ✅ **Verfallsdatum-Tracking** - Überwachung ablaufender Materialien
 - ✅ **Konfigurierbare Felder** - Benutzerdefinierte Felder für spezifische Anforderungen
 - ✅ **Berichte** - Übersichten und Auswertungen
+- ✅ **Einheiten-System** - Multi-Departmental Management (Radiologie, Angiologie, etc.)
+- ✅ **User Management** - Rollen-basierte Zugriffskontrolle mit E-Mail-Verifizierung
 
 ### Materialinformationen
 Für jedes Material können folgende Daten erfasst werden:
@@ -27,6 +29,7 @@ Für jedes Material können folgende Daten erfasst werden:
 - Schrank-Zuordnung mit Position
 - Barcodes (mehrere pro Material)
 - Benutzerdefinierte Felder
+- Zuordnung zu Einheit/Abteilung
 
 ## 🏗️ Technologie-Stack
 
@@ -34,6 +37,8 @@ Für jedes Material können folgende Daten erfasst werden:
 - **Node.js** mit **Express.js**
 - **TypeScript** für Type-Safety
 - **MySQL 8.0** Datenbank
+- **JWT** Authentication
+- **Bcrypt** für Passwort-Hashing
 - RESTful API-Design
 - Transaktionsmanagement
 
@@ -47,6 +52,7 @@ Für jedes Material können folgende Daten erfasst werden:
 ### DevOps
 - **Docker** & **Docker Compose** für Container-Orchestrierung
 - **Nginx** als Reverse Proxy für das Frontend
+- **Railway** Deployment-Support
 
 ## 📋 Voraussetzungen
 

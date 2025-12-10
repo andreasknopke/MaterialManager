@@ -9,6 +9,8 @@ import barcodeRoutes from './routes/barcode.routes';
 import fieldConfigRoutes from './routes/fieldConfig.routes';
 import adminRoutes from './routes/admin.routes';
 import unitRoutes from './routes/unit.routes';
+import authRoutes from './routes/auth.routes';
+import userRoutes from './routes/user.routes';
 
 dotenv.config();
 
@@ -30,6 +32,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/cabinets', cabinetRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/categories', categoryRoutes);

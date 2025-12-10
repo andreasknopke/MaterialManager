@@ -139,12 +139,12 @@ const Admin: React.FC = () => {
               <Box display="flex" alignItems="center" gap={1} mb={2}>
                 <SettingsIcon color="primary" />
                 <Typography variant="h6">
-                  Datenbank-Migration
+                  Datenbank-Migration (Units)
                 </Typography>
               </Box>
               <Divider sx={{ mb: 2 }} />
               <Typography variant="body2" color="text.secondary" paragraph>
-                Führt die neueste Datenbank-Migration aus (Units-System).
+                Führt die Datenbank-Migration für das Units-System aus.
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Diese Aktion ist sicher und kann mehrfach ausgeführt werden.
@@ -161,7 +161,7 @@ const Admin: React.FC = () => {
                   try {
                     setLoading(true);
                     await axios.post('/api/admin/run-migration');
-                    setSuccess('Migration erfolgreich ausgeführt!');
+                    setSuccess('Units-Migration erfolgreich ausgeführt!');
                     setTimeout(() => setSuccess(null), 3000);
                   } catch (err: any) {
                     setError(err.response?.data?.error || 'Migration fehlgeschlagen');
@@ -172,7 +172,53 @@ const Admin: React.FC = () => {
                 fullWidth
                 disabled={loading}
               >
-                {loading ? 'Migration läuft...' : 'Migration ausführen'}
+                {loading ? 'Migration läuft...' : 'Units-Migration ausführen'}
+              </Button>
+            </CardActions>
+          </Card>
+        </Grid>
+
+        {/* User Management Migration */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <SettingsIcon color="secondary" />
+                <Typography variant="h6">
+                  User Management Migration
+                </Typography>
+              </Box>
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Erstellt die Tabellen für das User Management System und legt den Root-Benutzer an.
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                <strong>Root-Credentials:</strong> Username: root, Passwort: root
+              </Typography>
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                Nach der Migration MUSS das Root-Passwort geändert werden!
+              </Alert>
+            </CardContent>
+            <CardActions>
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    await axios.post('/api/admin/run-user-migration');
+                    setSuccess('User Management erfolgreich installiert! Login als "root" / "root"');
+                    setTimeout(() => setSuccess(null), 5000);
+                  } catch (err: any) {
+                    setError(err.response?.data?.error || 'User-Migration fehlgeschlagen');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                fullWidth
+                disabled={loading}
+              >
+                {loading ? 'Migration läuft...' : 'User Management installieren'}
               </Button>
             </CardActions>
           </Card>

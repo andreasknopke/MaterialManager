@@ -254,4 +254,166 @@ router.post('/run-migration', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/admin/run-user-migration - Führt die User-Management-Migration aus
+router.post('/run-user-migration', async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+  
+  try {
+    console.log('🔄 Starting migration 003_add_user_management...');
+    
+    // Step 1: Create users table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(50) NOT NULL UNIQUE,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        full_name VARCHAR(100),
+        role ENUM('admin', 'user', 'viewer') DEFAULT 'user',
+        is_root BOOLEAN DEFAULT FALSE,
+        active BOOLEAN DEFAULT TRUE,
+        email_verified BOOLEAN DEFAULT FALSE,
+        email_verification_token VARCHAR(64),
+        email_verification_expires TIMESTAMP NULL,
+        password_reset_token VARCHAR(64),
+        password_reset_expires TIMESTAMP NULL,
+        must_change_password BOOLEAN DEFAULT FALSE,
+        last_login TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_username (username),
+        INDEX idx_email (email),
+        INDEX idx_email_verification_token (email_verification_token),
+        INDEX idx_password_reset_token (password_reset_token)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log('✓ users table created');
+
+    // Step 2: Create user_sessions table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        token VARCHAR(500) NOT NULL,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX idx_user_id (user_id),
+        INDEX idx_token (token(255)),
+        INDEX idx_expires_at (expires_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log('✓ user_sessions table created');
+
+    // Step 3: Create login_attempts table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS login_attempts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(50) NOT NULL,
+        ip_address VARCHAR(45),
+        success BOOLEAN DEFAULT FALSE,
+        attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_username (username),
+        INDEX idx_ip_address (ip_address),
+        INDEX idx_attempt_time (attempt_time)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log('✓ login_attempts table created');
+
+    // Step 4: Create user_audit_log table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS user_audit_log (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT,
+        action VARCHAR(50) NOT NULL,
+        details TEXT,
+        ip_address VARCHAR(45),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX idx_user_id (user_id),
+        INDEX idx_action (action),
+        INDEX idx_created_at (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log('✓ user_audit_log table created');
+
+    // Step 5: Create views
+    await connection.query(`
+      CREATE OR REPLACE VIEW v_users_overview AS
+      SELECT 
+        id,
+        username,
+        email,
+        full_name,
+        role,
+        is_root,
+        active,
+        email_verified,
+        must_change_password,
+        last_login,
+        created_at,
+        updated_at
+      FROM users
+    `);
+    console.log('✓ v_users_overview view created');
+
+    await connection.query(`
+      CREATE OR REPLACE VIEW v_active_sessions AS
+      SELECT 
+        s.id,
+        s.user_id,
+        u.username,
+        u.email,
+        s.ip_address,
+        s.user_agent,
+        s.expires_at,
+        s.created_at
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.expires_at > NOW()
+    `);
+    console.log('✓ v_active_sessions view created');
+
+    // Step 6: Insert Root user (only if not exists)
+    const [existingRoot] = await connection.query(
+      'SELECT id FROM users WHERE username = ?',
+      ['root']
+    ) as any[];
+
+    if (existingRoot.length === 0) {
+      // Password: 'root' hashed with bcrypt
+      const bcrypt = require('bcrypt');
+      const rootPasswordHash = await bcrypt.hash('root', 10);
+      
+      await connection.query(
+        `INSERT INTO users (username, email, password_hash, full_name, role, is_root, email_verified, must_change_password)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ['root', 'root@materialmanager.local', rootPasswordHash, 'Root Administrator', 'admin', true, true, true]
+      );
+      console.log('✓ Root user created (username: root, password: root)');
+    } else {
+      console.log('ℹ Root user already exists, skipping creation');
+    }
+
+    console.log('✅ Migration 003_add_user_management completed!');
+    
+    res.json({ 
+      success: true, 
+      message: 'User Management Migration completed successfully. Root user: root / root',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ User Migration failed:', error);
+    res.status(500).json({ 
+      error: 'User Migration failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  } finally {
+    connection.release();
+  }
+});
+
 export default router;
