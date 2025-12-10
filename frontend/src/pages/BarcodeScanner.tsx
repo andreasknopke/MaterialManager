@@ -61,7 +61,7 @@ const BarcodeScanner: React.FC = () => {
         BarcodeFormat.QR_CODE,
       ];
 
-      codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result, error) => {
+      codeReader.decodeFromVideoDevice(null, videoRef.current, (result, error) => {
         if (result) {
           const scannedCode = result.getText();
           console.log('Barcode gescannt:', scannedCode);
