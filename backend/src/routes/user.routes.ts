@@ -115,7 +115,7 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const userId = parseInt(req.params.id);
-    const { fullName, email, role, active, departmentId } = req.body;
+    const { username, fullName, email, role, active, departmentId } = req.body;
 
     // Benutzer darf nur eigene Daten ändern, außer er ist Admin
     if (req.user!.id !== userId && req.user!.role !== 'admin') {
@@ -145,6 +145,22 @@ router.put('/:id', async (req: Request, res: Response) => {
     // Update
     const updates: string[] = [];
     const values: any[] = [];
+
+    // Nur Admins können Username ändern
+    if (username !== undefined && req.user!.role === 'admin') {
+      // Prüfe ob neuer Username bereits vergeben ist
+      const [existing] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM users WHERE username = ? AND id != ?',
+        [username, userId]
+      );
+      
+      if (existing.length > 0) {
+        return res.status(409).json({ error: 'Benutzername bereits vergeben' });
+      }
+      
+      updates.push('username = ?');
+      values.push(username);
+    }
 
     if (fullName !== undefined) {
       updates.push('full_name = ?');

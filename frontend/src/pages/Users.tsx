@@ -128,6 +128,7 @@ const Users: React.FC = () => {
 
     try {
       await axios.put(`/api/users/${selectedUser.id}`, {
+        username: formData.username,
         fullName: formData.fullName,
         email: formData.email,
         role: formData.role,
@@ -457,7 +458,7 @@ const Users: React.FC = () => {
             label="Benutzername"
             margin="normal"
             value={formData.username}
-            disabled
+            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
           />
           <TextField
             fullWidth
