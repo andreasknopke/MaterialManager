@@ -11,6 +11,7 @@ import Categories from './pages/Categories';
 import Companies from './pages/Companies';
 import BarcodeScanner from './pages/BarcodeScanner';
 import Reports from './pages/Reports';
+import Inventory from './pages/Inventory';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
           <Route path="/companies" element={<Companies />} />
           <Route path="/scanner" element={<BarcodeScanner />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/inventory" element={<Inventory />} />
         </Routes>
       </Layout>
     </Box>

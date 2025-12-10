@@ -24,6 +24,7 @@ import {
   QrCodeScanner as QrCodeScannerIcon,
   Assessment as AssessmentIcon,
   Storage as StorageIcon,
+  Checklist as ChecklistIcon,
 } from '@mui/icons-material';
 
 const drawerWidth = 240;
@@ -45,6 +46,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
     { text: 'Materialien', icon: <InventoryIcon />, path: '/materials' },
     { text: 'Schränke', icon: <StorageIcon />, path: '/cabinets' },
+    { text: 'Inventur', icon: <ChecklistIcon />, path: '/inventory' },
     { text: 'Kategorien', icon: <CategoryIcon />, path: '/categories' },
     { text: 'Firmen', icon: <BusinessIcon />, path: '/companies' },
     { text: 'Barcode Scanner', icon: <QrCodeScannerIcon />, path: '/scanner' },
