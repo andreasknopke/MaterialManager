@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -28,7 +28,7 @@ import {
 } from '@mui/icons-material';
 import { barcodeAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/library';
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
@@ -39,66 +39,61 @@ const BarcodeScanner: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [notFound, setNotFound] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
 
   useEffect(() => {
-    let html5QrcodeScanner: Html5QrcodeScanner | null = null;
+    if (cameraOpen && videoRef.current) {
+      // ZXing Scanner mit GS1-128 Support initialisieren
+      const codeReader = new BrowserMultiFormatReader();
+      codeReaderRef.current = codeReader;
 
-    if (cameraOpen) {
-      // Kurze Verzögerung, damit das DOM-Element verfügbar ist
-      setTimeout(() => {
-        try {
-          html5QrcodeScanner = new Html5QrcodeScanner(
-            'qr-reader',
-            { 
-              fps: 10,
-              qrbox: { width: 250, height: 250 },
-              formatsToSupport: [
-                0, // QR_CODE
-                8, // CODE_128
-                9, // CODE_39
-                13, // EAN_13
-                14, // EAN_8
-              ],
-            },
-            false
-          );
+      // Alle wichtigen Barcode-Formate aktivieren
+      const hints = new Map();
+      const formats = [
+        BarcodeFormat.CODE_128,  // GS1-128 basiert auf CODE_128
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.CODE_93,
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.QR_CODE,
+      ];
 
-          html5QrcodeScanner.render(
-            (decodedText) => {
-              // Erfolgreicher Scan
-              console.log('Barcode gescannt:', decodedText);
-              setBarcode(decodedText);
-              setCameraOpen(false);
-              setError('');
-              setSuccess('Barcode erfolgreich gescannt');
-              setTimeout(() => setSuccess(''), 2000);
-              
-              // Automatisch suchen
-              setTimeout(() => {
-                barcodeAPI.search(decodedText)
-                  .then(response => setMaterial(response.data.material))
-                  .catch(() => setNotFound(true));
-              }, 100);
-            },
-            (errorMessage) => {
-              // Scan-Fehler (normal während des Suchens)
-              // Nur echte Fehler loggen, nicht "No barcode found"
-              if (!errorMessage.includes('NotFoundException')) {
-                console.log('Scanner:', errorMessage);
-              }
-            }
-          );
-        } catch (err) {
-          console.error('Fehler beim Initialisieren des Scanners:', err);
-          setError('Kamera konnte nicht gestartet werden');
+      codeReader.decodeFromVideoDevice(undefined, videoRef.current, (result, error) => {
+        if (result) {
+          const scannedCode = result.getText();
+          console.log('Barcode gescannt:', scannedCode);
+          console.log('Format:', result.getBarcodeFormat());
+          
+          setBarcode(scannedCode);
           setCameraOpen(false);
+          setError('');
+          setSuccess('Barcode erfolgreich gescannt');
+          setTimeout(() => setSuccess(''), 2000);
+          
+          // Automatisch suchen
+          setTimeout(() => {
+            barcodeAPI.search(scannedCode)
+              .then(response => setMaterial(response.data.material))
+              .catch(() => setNotFound(true));
+          }, 100);
         }
-      }, 100);
+        
+        if (error && !(error.name === 'NotFoundException')) {
+          console.error('Scanner error:', error);
+        }
+      }).catch((err) => {
+        console.error('Fehler beim Starten der Kamera:', err);
+        setError('Kamera konnte nicht gestartet werden. Bitte Berechtigungen prüfen.');
+        setCameraOpen(false);
+      });
     }
 
     return () => {
-      if (html5QrcodeScanner) {
-        html5QrcodeScanner.clear().catch(console.error);
+      if (codeReaderRef.current) {
+        codeReaderRef.current.reset();
       }
     };
   }, [cameraOpen]);
@@ -357,28 +352,26 @@ const BarcodeScanner: React.FC = () => {
             </IconButton>
           </Box>
         </DialogTitle>
-        <DialogContent sx={{ minHeight: 400 }}>
-          <Box 
-            id="qr-reader" 
-            sx={{ 
-              width: '100%',
-              minHeight: 350,
-              '& video': {
-                width: '100% !important',
-                borderRadius: 1,
-              },
-              '& #qr-shaded-region': {
-                border: '2px solid #1976d2 !important',
-              },
-              '& button': {
-                backgroundColor: '#1976d2 !important',
-                color: 'white !important',
-                borderRadius: '4px !important',
-                padding: '8px 16px !important',
-                margin: '4px !important',
-              }
-            }}
-          />
+        <DialogContent sx={{ minHeight: 400, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <Box sx={{ width: '100%', maxWidth: 600, position: 'relative' }}>
+            <video
+              ref={videoRef}
+              style={{
+                width: '100%',
+                maxHeight: '400px',
+                borderRadius: '8px',
+                backgroundColor: '#000',
+              }}
+            />
+            <Typography 
+              variant="body2" 
+              color="text.secondary" 
+              align="center" 
+              sx={{ mt: 2 }}
+            >
+              Halten Sie den Barcode vor die Kamera
+            </Typography>
+          </Box>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setCameraOpen(false)} variant="outlined" fullWidth>
