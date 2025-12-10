@@ -15,6 +15,7 @@ import {
   VisibilityOff,
 } from '@mui/icons-material';
 import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ChangePasswordDialogProps {
   open: boolean;
@@ -35,8 +36,17 @@ const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
   const [showPasswords, setShowPasswords] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { user, updateUser } = useAuth();
+  
+  // Prüfe ob Passwortänderung erzwungen wird
+  const isForced = user?.mustChangePassword || false;
 
   const handleClose = () => {
+    // Nicht schließbar wenn Passwortänderung erzwungen wird
+    if (isForced) {
+      return;
+    }
+    
     setFormData({
       currentPassword: '',
       newPassword: '',
@@ -85,6 +95,11 @@ const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
         newPassword: formData.newPassword,
       });
 
+      // Update user state um mustChangePassword zu entfernen
+      if (user && updateUser) {
+        updateUser({ ...user, mustChangePassword: false });
+      }
+
       handleClose();
       if (onSuccess) {
         onSuccess();
@@ -97,9 +112,22 @@ const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Passwort ändern</DialogTitle>
+    <Dialog 
+      open={open} 
+      onClose={handleClose} 
+      maxWidth="sm" 
+      fullWidth
+      disableEscapeKeyDown={isForced}
+    >
+      <DialogTitle>
+        {isForced ? 'Passwort muss geändert werden' : 'Passwort ändern'}
+      </DialogTitle>
       <DialogContent>
+        {isForced && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Aus Sicherheitsgründen müssen Sie Ihr Passwort ändern, bevor Sie fortfahren können.
+          </Alert>
+        )}
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -169,9 +197,11 @@ const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
-          Abbrechen
-        </Button>
+        {!isForced && (
+          <Button onClick={handleClose} disabled={loading}>
+            Abbrechen
+          </Button>
+        )}
         <Button
           onClick={handleSubmit}
           variant="contained"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
@@ -51,6 +51,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, isAdmin } = useAuth();
+
+  // Automatisch Passwort-Dialog öffnen wenn mustChangePassword true ist
+  useEffect(() => {
+    if (user?.mustChangePassword && !passwordDialogOpen) {
+      setPasswordDialogOpen(true);
+    }
+  }, [user?.mustChangePassword]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -166,7 +173,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 label="Passwort ändern!"
                 color="warning"
                 size="small"
-                sx={{ mr: 1 }}
+                sx={{ mr: 1, cursor: 'pointer' }}
+                onClick={handleChangePassword}
+                icon={<LockIcon />}
               />
             )}
             <Typography variant="body2" sx={{ mr: 1, display: { xs: 'none', md: 'block' } }}>
