@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -28,7 +28,7 @@ import {
 } from '@mui/icons-material';
 import { barcodeAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
-import BarcodeScannerComponent from 'react-qr-barcode-scanner';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
@@ -39,6 +39,56 @@ const BarcodeScanner: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [notFound, setNotFound] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+
+  useEffect(() => {
+    let html5QrcodeScanner: Html5QrcodeScanner | null = null;
+
+    if (cameraOpen) {
+      html5QrcodeScanner = new Html5QrcodeScanner(
+        'qr-reader',
+        { 
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          formatsToSupport: [
+            0, // QR_CODE
+            8, // CODE_128
+            9, // CODE_39
+            13, // EAN_13
+            14, // EAN_8
+          ],
+        },
+        false
+      );
+
+      html5QrcodeScanner.render(
+        (decodedText) => {
+          // Erfolgreicher Scan
+          setBarcode(decodedText);
+          setCameraOpen(false);
+          setError('');
+          setSuccess('Barcode erfolgreich gescannt');
+          setTimeout(() => setSuccess(''), 2000);
+          
+          // Automatisch suchen
+          setTimeout(() => {
+            barcodeAPI.search(decodedText)
+              .then(response => setMaterial(response.data.material))
+              .catch(() => setNotFound(true));
+          }, 100);
+        },
+        (errorMessage) => {
+          // Scan-Fehler (normal während des Suchens)
+          console.log(errorMessage);
+        }
+      );
+    }
+
+    return () => {
+      if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().catch(console.error);
+      }
+    };
+  }, [cameraOpen]);
 
   const handleSearch = async () => {
     setError('');
@@ -125,25 +175,6 @@ const BarcodeScanner: React.FC = () => {
       setTimeout(() => setSuccess(''), 2000);
     } catch (err) {
       setError('Fehler beim Zugriff auf die Zwischenablage. Bitte Berechtigung erteilen.');
-    }
-  };
-
-  const handleCameraScan = (err: any, result: any) => {
-    if (result) {
-      setBarcode(result.text);
-      setCameraOpen(false);
-      setError('');
-      setSuccess('Barcode erfolgreich gescannt');
-      setTimeout(() => setSuccess(''), 2000);
-      // Automatisch suchen nach Scan
-      setTimeout(() => {
-        barcodeAPI.search(result.text)
-          .then(response => setMaterial(response.data.material))
-          .catch(() => setNotFound(true));
-      }, 100);
-    }
-    if (err) {
-      console.error('Camera scan error:', err);
     }
   };
 
@@ -302,9 +333,8 @@ const BarcodeScanner: React.FC = () => {
       <Dialog 
         open={cameraOpen} 
         onClose={() => setCameraOpen(false)}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
-        fullScreen
       >
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -314,18 +344,23 @@ const BarcodeScanner: React.FC = () => {
             </IconButton>
           </Box>
         </DialogTitle>
-        <DialogContent sx={{ p: 0, position: 'relative', height: '100%' }}>
-          {cameraOpen && (
-            <BarcodeScannerComponent
-              width="100%"
-              height="100%"
-              onUpdate={handleCameraScan}
-              stopStream={!cameraOpen}
-            />
-          )}
+        <DialogContent>
+          <Box 
+            id="qr-reader" 
+            sx={{ 
+              width: '100%',
+              '& video': {
+                width: '100% !important',
+                borderRadius: 1,
+              },
+              '& #qr-shaded-region': {
+                border: '2px solid #1976d2 !important',
+              }
+            }}
+          />
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setCameraOpen(false)} variant="outlined">
+          <Button onClick={() => setCameraOpen(false)} variant="outlined" fullWidth>
             Abbrechen
           </Button>
         </DialogActions>
