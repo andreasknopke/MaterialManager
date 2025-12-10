@@ -12,6 +12,9 @@ router.use(authenticate);
 // GET /api/users - Alle Benutzer abrufen (nur Admin)
 router.get('/', requireAdmin, async (req: Request, res: Response) => {
   try {
+    console.log('=== GET USERS DEBUG ===');
+    console.log('Current User:', { id: req.user!.id, isRoot: req.user!.isRoot, departmentId: req.user!.departmentId });
+
     let query = 'SELECT * FROM v_users_overview';
     const params: any[] = [];
 
@@ -23,7 +26,15 @@ router.get('/', requireAdmin, async (req: Request, res: Response) => {
 
     query += ' ORDER BY created_at DESC';
 
+    console.log('📝 Query:', query);
+    console.log('Params:', params);
+
     const [users] = await pool.query<RowDataPacket[]>(query, params);
+    
+    console.log('📊 Users returned from v_users_overview:');
+    users.forEach((user: any) => {
+      console.log(`  User ${user.id}: username=${user.username}, department_id=${user.department_id}, department_name=${user.department_name}`);
+    });
     
     res.json(users);
   } catch (error) {
@@ -63,17 +74,23 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { username, email, password, fullName, role, departmentId } = req.body;
 
+    console.log('=== CREATE USER DEBUG ===');
+    console.log('Request Body:', { username, email, fullName, role, departmentId });
+    console.log('Current User:', { id: req.user!.id, isRoot: req.user!.isRoot, departmentId: req.user!.departmentId });
+
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Username, E-Mail und Passwort sind erforderlich' });
     }
 
     // Department Admins können nur User in ihrem eigenen Department erstellen
     if (!req.user!.isRoot && departmentId && departmentId !== req.user!.departmentId) {
+      console.log('❌ Department Admin versucht User in anderem Department zu erstellen');
       return res.status(403).json({ error: 'Sie können nur Benutzer in Ihrem eigenen Department erstellen' });
     }
 
     // Department Admins müssen Department zuweisen
     const finalDepartmentId = req.user!.isRoot ? (departmentId || null) : req.user!.departmentId;
+    console.log('Final Department ID:', finalDepartmentId, '(isRoot:', req.user!.isRoot, ', received:', departmentId, ')');
 
     // Prüfe ob Benutzer bereits existiert
     const [existing] = await pool.query<RowDataPacket[]>(
@@ -88,12 +105,29 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
     // Passwort hashen
     const passwordHash = await bcrypt.hash(password, 10);
 
+    console.log('📝 Executing INSERT with params:', {
+      username,
+      email,
+      fullName: fullName || null,
+      role: role || 'user',
+      department_id: finalDepartmentId
+    });
+
     // Benutzer erstellen
     const [result] = await pool.query<ResultSetHeader>(
       `INSERT INTO users (username, email, password_hash, full_name, role, department_id, email_verified, must_change_password)
        VALUES (?, ?, ?, ?, ?, ?, TRUE, TRUE)`,
       [username, email, passwordHash, fullName || null, role || 'user', finalDepartmentId]
     );
+
+    console.log('✅ User created with ID:', result.insertId);
+    
+    // Prüfe was tatsächlich gespeichert wurde
+    const [checkUser] = await pool.query<RowDataPacket[]>(
+      'SELECT id, username, email, role, department_id FROM users WHERE id = ?',
+      [result.insertId]
+    );
+    console.log('📊 Verification - User in DB:', checkUser[0]);
 
     // Audit-Log
     await pool.query(
@@ -116,6 +150,11 @@ router.put('/:id', async (req: Request, res: Response) => {
   try {
     const userId = parseInt(req.params.id);
     const { username, fullName, email, role, active, departmentId } = req.body;
+
+    console.log('=== UPDATE USER DEBUG ===');
+    console.log('User ID to update:', userId);
+    console.log('Request Body:', { username, fullName, email, role, active, departmentId });
+    console.log('Current User:', { id: req.user!.id, isRoot: req.user!.isRoot, departmentId: req.user!.departmentId });
 
     // Benutzer darf nur eigene Daten ändern, außer er ist Admin
     if (req.user!.id !== userId && req.user!.role !== 'admin') {
@@ -184,13 +223,19 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     // Nur Root kann Department ändern
     if (departmentId !== undefined && req.user!.isRoot) {
+      console.log('🔄 Department wird aktualisiert:', departmentId, '(type:', typeof departmentId, ')');
       updates.push('department_id = ?');
       values.push(departmentId);
+    } else if (departmentId !== undefined && !req.user!.isRoot) {
+      console.log('⚠️ Department Update verweigert - User ist kein Root');
     }
 
     if (updates.length === 0) {
       return res.status(400).json({ error: 'Keine Änderungen angegeben' });
     }
+
+    console.log('📝 Executing UPDATE with:', updates.join(', '));
+    console.log('Values:', values);
 
     values.push(userId);
 
@@ -198,6 +243,13 @@ router.put('/:id', async (req: Request, res: Response) => {
       `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
       values
     );
+
+    // Prüfe was tatsächlich gespeichert wurde
+    const [checkUser] = await pool.query<RowDataPacket[]>(
+      'SELECT id, username, email, role, department_id FROM users WHERE id = ?',
+      [userId]
+    );
+    console.log('📊 Verification - User in DB after update:', checkUser[0]);
 
     // Audit-Log
     await pool.query(
