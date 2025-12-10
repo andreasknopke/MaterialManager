@@ -5,10 +5,15 @@ import { Request } from 'express';
 /**
  * Erstellt SQL-WHERE-Clause und Parameter für Department-Filterung
  * Root sieht alles, Department Admins/Users nur ihr Department
+ * 
+ * @param req - Express Request mit user
+ * @param tableAlias - Table Alias ('m' für materials, 'cabinets' für cabinets, etc.)
+ * @param useUnitName - Wenn true, verwendet unit_name statt unit_id (für Views)
  */
 export const getDepartmentFilter = (
   req: Request,
-  tableAlias: string = 'm'
+  tableAlias: string = 'm',
+  useUnitName: boolean = false
 ): { whereClause: string; params: any[] } => {
   const user = req.user;
 
@@ -16,7 +21,8 @@ export const getDepartmentFilter = (
     userId: user?.id, 
     isRoot: user?.isRoot, 
     departmentId: user?.departmentId,
-    tableAlias 
+    tableAlias,
+    useUnitName
   });
 
   if (!user) {
@@ -34,6 +40,15 @@ export const getDepartmentFilter = (
   if (!user.departmentId) {
     console.error('❌ User has no departmentId:', user);
     throw new Error('Kein Department zugewiesen');
+  }
+
+  // Für Views mit unit_name müssen wir gegen units table joinen
+  if (useUnitName) {
+    console.log(`✅ Applying department filter via subquery for departmentId: ${user.departmentId}`);
+    return {
+      whereClause: `${tableAlias}.unit_id IN (SELECT id FROM units WHERE id = ?)`,
+      params: [user.departmentId],
+    };
   }
 
   console.log(`✅ Applying department filter: ${tableAlias}.unit_id = ${user.departmentId}`);

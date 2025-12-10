@@ -12,13 +12,18 @@ router.use(authenticate);
 // GET alle Materialien mit erweiterten Informationen
 router.get('/', async (req: Request, res: Response) => {
   try {
+    console.log('=== GET /api/materials ===');
+    console.log('User:', { id: req.user?.id, isRoot: req.user?.isRoot, departmentId: req.user?.departmentId });
+    
     const { category, cabinet, company, search, lowStock, expiring } = req.query;
     
     let query = 'SELECT * FROM v_materials_overview WHERE active = TRUE';
     const params: any[] = [];
     
-    // Department-Filter hinzufügen
-    const departmentFilter = getDepartmentFilter(req);
+    // Department-Filter hinzufügen (View hat keine Alias, nutze 'v_materials_overview')
+    const departmentFilter = getDepartmentFilter(req, 'v_materials_overview');
+    console.log('Department filter:', departmentFilter);
+    
     if (departmentFilter.whereClause) {
       query += ` AND ${departmentFilter.whereClause}`;
       params.push(...departmentFilter.params);
