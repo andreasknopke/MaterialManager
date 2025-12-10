@@ -277,7 +277,7 @@ const MaterialForm: React.FC = () => {
         Zurück
       </Button>
 
-      <Typography variant="h4" gutterBottom>
+      <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>
         {isNew ? 'Neues Material erstellen' : 'Material bearbeiten'}
       </Typography>
 
@@ -293,9 +293,9 @@ const MaterialForm: React.FC = () => {
         </Alert>
       )}
 
-      <Paper sx={{ p: 3, mt: 3 }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 }, mt: { xs: 2, sm: 3 } }}>
         <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
+          <Grid container spacing={{ xs: 2, sm: 3 }}>
             {/* GS1 Barcode Eingabe */}
             <Grid item xs={12}>
               <Typography variant="h6" gutterBottom>

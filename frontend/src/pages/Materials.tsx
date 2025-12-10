@@ -62,17 +62,17 @@ const Materials: React.FC = () => {
 
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'name', headerName: 'Bezeichnung', width: 200 },
-    { field: 'category_name', headerName: 'Kategorie', width: 150 },
-    { field: 'company_name', headerName: 'Firma', width: 150 },
-    { field: 'cabinet_name', headerName: 'Schrank', width: 120 },
-    { field: 'size', headerName: 'Größe', width: 100 },
-    { field: 'current_stock', headerName: 'Bestand', width: 100, type: 'number' },
-    { field: 'min_stock', headerName: 'Min. Bestand', width: 120, type: 'number' },
+    { field: 'name', headerName: 'Bezeichnung', minWidth: 150, flex: 1 },
+    { field: 'category_name', headerName: 'Kategorie', width: 120 },
+    { field: 'company_name', headerName: 'Firma', width: 120 },
+    { field: 'cabinet_name', headerName: 'Schrank', width: 100 },
+    { field: 'size', headerName: 'Größe', width: 80 },
+    { field: 'current_stock', headerName: 'Bestand', width: 90, type: 'number' },
+    { field: 'min_stock', headerName: 'Min.', width: 70, type: 'number' },
     {
       field: 'expiry_date',
       headerName: 'Verfallsdatum',
-      width: 130,
+      width: 110,
       valueFormatter: (params) => {
         return params.value ? new Date(params.value).toLocaleDateString('de-DE') : '-';
       },
@@ -80,13 +80,13 @@ const Materials: React.FC = () => {
     {
       field: 'stock_status',
       headerName: 'Status',
-      width: 150,
+      width: 120,
       renderCell: (params) => getStatusChip(params.value),
     },
     {
       field: 'actions',
       headerName: 'Aktionen',
-      width: 120,
+      width: 100,
       sortable: false,
       renderCell: (params) => (
         <>
@@ -115,14 +115,17 @@ const Materials: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Materialien</Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={1}>
+        <Typography variant="h4" sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>Materialien</Typography>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
+          startIcon={<AddIcon sx={{ display: { xs: 'none', sm: 'inline-block' } }} />}
           onClick={() => navigate('/materials/new')}
+          size="small"
+          sx={{ minWidth: { xs: 'auto', sm: 'unset' } }}
         >
-          Neues Material
+          <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Neues Material</Box>
+          <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Neu</Box>
         </Button>
       </Box>
 
@@ -137,7 +140,7 @@ const Materials: React.FC = () => {
         />
       </Paper>
 
-      <Paper sx={{ height: 600, width: '100%' }}>
+      <Paper sx={{ height: { xs: 400, sm: 600 }, width: '100%' }}>
         <DataGrid
           rows={filteredMaterials}
           columns={columns}
@@ -145,8 +148,28 @@ const Materials: React.FC = () => {
           pageSizeOptions={[10, 25, 50, 100]}
           initialState={{
             pagination: { paginationModel: { pageSize: 25 } },
+            columns: {
+              columnVisibilityModel: {
+                id: false,
+                category_name: false,
+                company_name: false,
+                cabinet_name: false,
+                size: false,
+                min_stock: false,
+                expiry_date: false,
+              },
+            },
           }}
           disableRowSelectionOnClick
+          sx={{
+            '& .MuiDataGrid-cell': {
+              fontSize: { xs: '0.75rem', sm: '0.875rem' },
+              padding: { xs: '4px', sm: '8px' },
+            },
+            '& .MuiDataGrid-columnHeaders': {
+              fontSize: { xs: '0.75rem', sm: '0.875rem' },
+            },
+          }}
         />
       </Paper>
     </Box>
