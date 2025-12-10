@@ -13,6 +13,7 @@ import BarcodeScanner from './pages/BarcodeScanner';
 import Reports from './pages/Reports';
 import Inventory from './pages/Inventory';
 import Admin from './pages/Admin';
+import Units from './pages/Units';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
           <Route path="/cabinets" element={<Cabinets />} />
           <Route path="/categories" element={<Categories />} />
           <Route path="/companies" element={<Companies />} />
+          <Route path="/units" element={<Units />} />
           <Route path="/scanner" element={<BarcodeScanner />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/inventory" element={<Inventory />} />

@@ -20,7 +20,7 @@ import {
   QrCodeScanner as QrCodeScannerIcon,
   Clear as ClearIcon,
 } from '@mui/icons-material';
-import { materialAPI, cabinetAPI, categoryAPI, companyAPI } from '../services/api';
+import { materialAPI, cabinetAPI, categoryAPI, companyAPI, unitAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
 
 interface MaterialFormData {
@@ -29,6 +29,7 @@ interface MaterialFormData {
   category_id: number | '';
   company_id: number | '';
   cabinet_id: number | '';
+  unit_id: number | '';
   size: string;
   unit: string;
   min_stock: number;
@@ -62,6 +63,7 @@ const MaterialForm: React.FC = () => {
   const [categories, setCategories] = useState<any[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
   const [cabinets, setCabinets] = useState<any[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
 
   // GS1-Parser Status
   const [gs1Data, setGs1Data] = useState<GS1Data | null>(null);
@@ -73,6 +75,7 @@ const MaterialForm: React.FC = () => {
     category_id: '',
     company_id: '',
     cabinet_id: '',
+    unit_id: '',
     size: '',
     unit: 'Stück',
     min_stock: 0,
@@ -152,15 +155,17 @@ const MaterialForm: React.FC = () => {
   const fetchDropdownData = async () => {
     console.log('fetchDropdownData called');
     try {
-      const [categoriesRes, companiesRes, cabinetsRes] = await Promise.all([
+      const [categoriesRes, companiesRes, cabinetsRes, unitsRes] = await Promise.all([
         categoryAPI.getAll(),
         companyAPI.getAll(),
         cabinetAPI.getAll(),
+        unitAPI.getAll({ active: true }),
       ]);
       console.log('Dropdown data loaded successfully');
       setCategories(categoriesRes.data);
       setCompanies(companiesRes.data);
       setCabinets(cabinetsRes.data);
+      setUnits(unitsRes.data);
     } catch (err) {
       console.error('Fehler beim Laden der Dropdown-Daten:', err);
       setError('Fehler beim Laden der Formulardaten');
@@ -177,6 +182,7 @@ const MaterialForm: React.FC = () => {
         category_id: material.category_id || '',
         company_id: material.company_id || '',
         cabinet_id: material.cabinet_id || '',
+        unit_id: material.unit_id || '',
         size: material.size || '',
         unit: material.unit || 'Stück',
         min_stock: material.min_stock || 0,
@@ -423,7 +429,34 @@ const MaterialForm: React.FC = () => {
               </Typography>
             </Grid>
 
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
+              <TextField
+                select
+                fullWidth
+                label="Einheit / Abteilung"
+                value={formData.unit_id}
+                onChange={handleChange('unit_id')}
+              >
+                <MenuItem value="">Keine Einheit</MenuItem>
+                {units.map((unit) => (
+                  <MenuItem key={unit.id} value={unit.id}>
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <Box
+                        sx={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: '50%',
+                          bgcolor: unit.color,
+                        }}
+                      />
+                      {unit.name}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+
+            <Grid item xs={12} md={3}>
               <TextField
                 select
                 fullWidth
@@ -440,7 +473,7 @@ const MaterialForm: React.FC = () => {
               </TextField>
             </Grid>
 
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <TextField
                 select
                 fullWidth
@@ -457,7 +490,7 @@ const MaterialForm: React.FC = () => {
               </TextField>
             </Grid>
 
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <TextField
                 select
                 fullWidth

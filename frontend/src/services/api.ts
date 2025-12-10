@@ -95,3 +95,14 @@ export const fieldConfigAPI = {
   update: (id: number, data: any) => api.put(`/field-configs/${id}`, data),
   delete: (id: number) => api.delete(`/field-configs/${id}`),
 };
+
+// Units
+export const unitAPI = {
+  getAll: (params?: any) => api.get('/units', { params }),
+  getById: (id: number) => api.get(`/units/${id}`),
+  getStats: (id: number) => api.get(`/units/${id}/stats`),
+  getTransfers: (id: number, params?: any) => api.get(`/units/${id}/transfers`, { params }),
+  create: (data: any) => api.post('/units', data),
+  update: (id: number, data: any) => api.put(`/units/${id}`, data),
+  delete: (id: number) => api.delete(`/units/${id}`),
+};
