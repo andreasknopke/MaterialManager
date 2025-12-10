@@ -83,12 +83,16 @@ const MaterialForm: React.FC = () => {
 
   useEffect(() => {
     fetchDropdownData();
-    if (!isNew) {
+    
+    // Nur Material laden, wenn es eine gültige ID ist (nicht "new" und numerisch)
+    if (!isNew && id && !isNaN(Number(id))) {
       fetchMaterial();
-    } else {
+    } else if (isNew) {
       // Prüfe ob Daten vom Scanner übergeben wurden
       const state = location.state as any;
       console.log('MaterialForm location.state:', state);
+      console.log('Current URL id:', id);
+      console.log('isNew:', isNew);
       
       if (state?.fromScanner && state?.gs1_barcode) {
         console.log('GS1 Barcode vom Scanner:', state.gs1_barcode);
