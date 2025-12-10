@@ -1,8 +1,13 @@
 import { Router, Request, Response } from 'express';
 import pool from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { authenticate } from '../middleware/auth';
+import { getDepartmentFilter } from '../utils/departmentFilter';
 
 const router = Router();
+
+// Alle Routes benötigen Authentifizierung
+router.use(authenticate);
 
 // GET alle Materialien mit erweiterten Informationen
 router.get('/', async (req: Request, res: Response) => {
@@ -11,6 +16,13 @@ router.get('/', async (req: Request, res: Response) => {
     
     let query = 'SELECT * FROM v_materials_overview WHERE active = TRUE';
     const params: any[] = [];
+    
+    // Department-Filter hinzufügen
+    const departmentFilter = getDepartmentFilter(req);
+    if (departmentFilter.whereClause) {
+      query += ` AND ${departmentFilter.whereClause}`;
+      params.push(...departmentFilter.params);
+    }
     
     if (category) {
       query += ' AND category_name = ?';
@@ -54,13 +66,20 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Material nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const [materialRows] = await pool.query<RowDataPacket[]>(
-      'SELECT * FROM v_materials_overview WHERE id = ?',
-      [req.params.id]
-    );
+    // Department-Filter
+    const departmentFilter = getDepartmentFilter(req);
+    let query = 'SELECT * FROM v_materials_overview WHERE id = ?';
+    const params: any[] = [req.params.id];
+    
+    if (departmentFilter.whereClause) {
+      query += ` AND ${departmentFilter.whereClause}`;
+      params.push(...departmentFilter.params);
+    }
+    
+    const [materialRows] = await pool.query<RowDataPacket[]>(query, params);
     
     if (materialRows.length === 0) {
-      return res.status(404).json({ error: 'Material nicht gefunden' });
+      return res.status(404).json({ error: 'Material nicht gefunden oder kein Zugriff' });
     }
     
     // Benutzerdefinierte Felder abrufen
@@ -92,6 +111,19 @@ router.get('/:id', async (req: Request, res: Response) => {
 // GET Transaktionshistorie eines Materials
 router.get('/:id/transactions', async (req: Request, res: Response) => {
   try {
+    // Department-Validierung: Material muss zugänglich sein
+    const departmentFilter = getDepartmentFilter(req);
+    if (departmentFilter.whereClause) {
+      const [materials] = await pool.query<RowDataPacket[]>(
+        `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
+        [req.params.id, ...departmentFilter.params]
+      );
+      
+      if (materials.length === 0) {
+        return res.status(403).json({ error: 'Material nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT * FROM material_transactions 
        WHERE material_id = ? 
@@ -117,6 +149,18 @@ router.post('/', async (req: Request, res: Response) => {
   
   if (!name) {
     return res.status(400).json({ error: 'Name ist erforderlich' });
+  }
+  
+  // Department-Validierung: Schrank muss im erlaubten Department sein
+  if (cabinet_id && req.user?.departmentId) {
+    const [cabinets] = await pool.query<RowDataPacket[]>(
+      'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
+      [cabinet_id, req.user.departmentId]
+    );
+    
+    if (cabinets.length === 0) {
+      return res.status(403).json({ error: 'Schrank gehört nicht zu Ihrem Department' });
+    }
   }
   
   const connection = await pool.getConnection();
@@ -194,6 +238,31 @@ router.put('/:id', async (req: Request, res: Response) => {
   } = req.body;
   
   try {
+    // Department-Validierung: Material muss im erlaubten Department sein
+    const departmentFilter = getDepartmentFilter(req);
+    if (departmentFilter.whereClause) {
+      const [materials] = await pool.query<RowDataPacket[]>(
+        `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
+        [req.params.id, ...departmentFilter.params]
+      );
+      
+      if (materials.length === 0) {
+        return res.status(403).json({ error: 'Material nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
+    // Department-Validierung: Neuer Schrank muss im erlaubten Department sein
+    if (cabinet_id && req.user?.departmentId) {
+      const [cabinets] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
+        [cabinet_id, req.user.departmentId]
+      );
+      
+      if (cabinets.length === 0) {
+        return res.status(403).json({ error: 'Schrank gehört nicht zu Ihrem Department' });
+      }
+    }
+    
     // active sollte standardmäßig true sein, wenn nicht explizit gesetzt
     const isActive = active !== undefined ? active : true;
     
@@ -234,6 +303,21 @@ router.post('/:id/stock-in', async (req: Request, res: Response) => {
   
   try {
     await connection.beginTransaction();
+    
+    // Department-Validierung
+    const departmentFilter = getDepartmentFilter(req);
+    if (departmentFilter.whereClause) {
+      const [materials] = await connection.query<RowDataPacket[]>(
+        `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
+        [req.params.id, ...departmentFilter.params]
+      );
+      
+      if (materials.length === 0) {
+        await connection.rollback();
+        connection.release();
+        return res.status(403).json({ error: 'Material nicht gefunden oder kein Zugriff' });
+      }
+    }
     
     // Aktuellen Bestand abrufen
     const [materials] = await connection.query<RowDataPacket[]>(
@@ -291,6 +375,21 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
   try {
     await connection.beginTransaction();
     
+    // Department-Validierung
+    const departmentFilter = getDepartmentFilter(req);
+    if (departmentFilter.whereClause) {
+      const [materials] = await connection.query<RowDataPacket[]>(
+        `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
+        [req.params.id, ...departmentFilter.params]
+      );
+      
+      if (materials.length === 0) {
+        await connection.rollback();
+        connection.release();
+        return res.status(403).json({ error: 'Material nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
     const [materials] = await connection.query<RowDataPacket[]>(
       'SELECT current_stock FROM materials WHERE id = ?',
       [req.params.id]
@@ -342,6 +441,19 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
 // DELETE Material (soft delete)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    // Department-Validierung
+    const departmentFilter = getDepartmentFilter(req);
+    if (departmentFilter.whereClause) {
+      const [materials] = await pool.query<RowDataPacket[]>(
+        `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
+        [req.params.id, ...departmentFilter.params]
+      );
+      
+      if (materials.length === 0) {
+        return res.status(403).json({ error: 'Material nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
     const [result] = await pool.query<ResultSetHeader>(
       'UPDATE materials SET active = FALSE WHERE id = ?',
       [req.params.id]
@@ -361,6 +473,19 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // POST Material reaktivieren
 router.post('/:id/reactivate', async (req: Request, res: Response) => {
   try {
+    // Department-Validierung
+    const departmentFilter = getDepartmentFilter(req);
+    if (departmentFilter.whereClause) {
+      const [materials] = await pool.query<RowDataPacket[]>(
+        `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
+        [req.params.id, ...departmentFilter.params]
+      );
+      
+      if (materials.length === 0) {
+        return res.status(403).json({ error: 'Material nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
     const [result] = await pool.query<ResultSetHeader>(
       'UPDATE materials SET active = TRUE WHERE id = ?',
       [req.params.id]
@@ -380,9 +505,16 @@ router.post('/:id/reactivate', async (req: Request, res: Response) => {
 // GET ablaufende Materialien
 router.get('/reports/expiring', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT * FROM v_expiring_materials'
-    );
+    const departmentFilter = getDepartmentFilter(req);
+    let query = 'SELECT * FROM v_expiring_materials';
+    const params: any[] = [];
+    
+    if (departmentFilter.whereClause) {
+      query += ` WHERE ${departmentFilter.whereClause}`;
+      params.push(...departmentFilter.params);
+    }
+    
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen ablaufender Materialien:', error);
@@ -393,9 +525,16 @@ router.get('/reports/expiring', async (req: Request, res: Response) => {
 // GET Materialien mit niedrigem Bestand
 router.get('/reports/low-stock', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT * FROM v_low_stock_materials'
-    );
+    const departmentFilter = getDepartmentFilter(req);
+    let query = 'SELECT * FROM v_low_stock_materials';
+    const params: any[] = [];
+    
+    if (departmentFilter.whereClause) {
+      query += ` WHERE ${departmentFilter.whereClause}`;
+      params.push(...departmentFilter.params);
+    }
+    
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der Materialien mit niedrigem Bestand:', error);
