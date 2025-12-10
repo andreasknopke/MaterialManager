@@ -10,8 +10,11 @@ import {
   CardContent,
   Grid,
   Alert,
+  IconButton,
+  Tooltip,
+  InputAdornment,
 } from '@mui/material';
-import { QrCodeScanner as ScannerIcon, Remove as RemoveIcon, Add as AddIcon } from '@mui/icons-material';
+import { QrCodeScanner as ScannerIcon, Remove as RemoveIcon, Add as AddIcon, ContentPaste as PasteIcon } from '@mui/icons-material';
 import { barcodeAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
 
@@ -88,6 +91,18 @@ const BarcodeScanner: React.FC = () => {
     }
   };
 
+  const handlePasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setBarcode(text.trim());
+      setError('');
+      setSuccess('Barcode aus Zwischenablage eingefügt');
+      setTimeout(() => setSuccess(''), 2000);
+    } catch (err) {
+      setError('Fehler beim Zugriff auf die Zwischenablage. Bitte Berechtigung erteilen.');
+    }
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
@@ -114,6 +129,20 @@ const BarcodeScanner: React.FC = () => {
               placeholder="Barcode scannen oder eingeben"
               margin="normal"
               autoFocus
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Tooltip title="Aus Zwischenablage einfügen">
+                      <IconButton
+                        onClick={handlePasteFromClipboard}
+                        edge="end"
+                      >
+                        <PasteIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </InputAdornment>
+                ),
+              }}
             />
 
             <Button
