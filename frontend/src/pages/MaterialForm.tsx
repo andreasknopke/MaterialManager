@@ -186,7 +186,6 @@ const MaterialForm: React.FC = () => {
         location_in_cabinet: material.location_in_cabinet || '',
         notes: material.notes || '',
         gs1_barcode: '',
-        shipping_container_code: '',
       });
     } catch (err) {
       console.error('Fehler beim Laden des Materials:', err);
