@@ -7,6 +7,7 @@ COPY package*.json ./
 
 RUN npm install --legacy-peer-deps
 
+# Copy source files
 COPY . .
 
 RUN npm run build
