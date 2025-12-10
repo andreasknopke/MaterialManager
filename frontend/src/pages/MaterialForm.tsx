@@ -43,13 +43,16 @@ interface MaterialFormData {
 }
 
 const MaterialForm: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const isNew = id === 'new';
+  
+  // Prüfe ob wir auf /materials/new sind (id ist undefined) oder eine echte ID haben
+  const isNew = !id || id === 'new';
 
   console.log('MaterialForm rendered');
   console.log('id from URL:', id);
+  console.log('location.pathname:', location.pathname);
   console.log('isNew:', isNew);
 
   const [loading, setLoading] = useState(!isNew);

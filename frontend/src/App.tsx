@@ -19,8 +19,8 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/materials" element={<Materials />} />
-          <Route path="/materials/new" element={<MaterialForm />} />
-          <Route path="/materials/:id/edit" element={<MaterialForm />} />
+          <Route path="/materials/new" element={<MaterialForm key="new" />} />
+          <Route path="/materials/:id/edit" element={<MaterialForm key="edit" />} />
           <Route path="/materials/:id" element={<MaterialDetail />} />
           <Route path="/cabinets" element={<Cabinets />} />
           <Route path="/categories" element={<Categories />} />
