@@ -497,4 +497,35 @@ router.post('/run-department-migration', async (req: Request, res: Response) => 
   }
 });
 
+// POST /api/admin/update-root-password - Aktualisiert Root-User Passwort (für Railway Setup)
+router.post('/update-root-password', async (req: Request, res: Response) => {
+  const bcrypt = require('bcrypt');
+  
+  try {
+    // Generiere korrekten bcrypt Hash für Passwort "root"
+    const passwordHash = await bcrypt.hash('root', 10);
+    
+    // Update Root-User mit korrektem Hash
+    const [result] = await pool.query(
+      'UPDATE users SET password_hash = ? WHERE username = ? AND is_root = TRUE',
+      [passwordHash, 'root']
+    );
+    
+    console.log('✅ Root user password updated successfully');
+    
+    res.json({ 
+      success: true, 
+      message: 'Root user password updated. You can now login with username: root, password: root',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Failed to update root password:', error);
+    res.status(500).json({ 
+      error: 'Failed to update root password',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;
