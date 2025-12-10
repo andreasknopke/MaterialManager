@@ -45,16 +45,19 @@ export const getDepartmentFilter = (
   // Für Views mit unit_name müssen wir gegen units table joinen
   if (useUnitName) {
     console.log(`✅ Applying department filter via subquery for departmentId: ${user.departmentId}`);
+    const prefix = tableAlias ? `${tableAlias}.` : '';
     return {
-      whereClause: `${tableAlias}.unit_id IN (SELECT id FROM units WHERE id = ?)`,
+      whereClause: `${prefix}unit_id IN (SELECT id FROM units WHERE id = ?)`,
       params: [user.departmentId],
     };
   }
 
-  console.log(`✅ Applying department filter: ${tableAlias}.unit_id = ${user.departmentId}`);
+  // Bestimme Prefix basierend auf tableAlias (leer = kein Prefix)
+  const prefix = tableAlias ? `${tableAlias}.` : '';
+  console.log(`✅ Applying department filter: ${prefix}unit_id = ${user.departmentId}`);
   
   return {
-    whereClause: `${tableAlias}.unit_id = ?`,
+    whereClause: `${prefix}unit_id = ?`,
     params: [user.departmentId],
   };
 };
