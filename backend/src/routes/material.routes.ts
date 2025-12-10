@@ -189,22 +189,25 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   const {
     category_id, company_id, cabinet_id, name, description,
-    size, unit, min_stock, current_stock, expiry_date,
+    size, unit, min_stock, expiry_date,
     lot_number, article_number, location_in_cabinet, shipping_container_code, notes, active
   } = req.body;
   
   try {
+    // active sollte standardmäßig true sein, wenn nicht explizit gesetzt
+    const isActive = active !== undefined ? active : true;
+    
     const [result] = await pool.query<ResultSetHeader>(
       `UPDATE materials 
        SET category_id = ?, company_id = ?, cabinet_id = ?, name = ?,
            description = ?, size = ?, unit = ?, min_stock = ?,
-           current_stock = ?, expiry_date = ?, lot_number = ?,
+           expiry_date = ?, lot_number = ?,
            article_number = ?, location_in_cabinet = ?, shipping_container_code = ?, notes = ?, active = ?
        WHERE id = ?`,
       [
         category_id, company_id, cabinet_id, name, description, size, unit,
-        min_stock, current_stock, expiry_date, lot_number, article_number,
-        location_in_cabinet, shipping_container_code, notes, active, req.params.id
+        min_stock, expiry_date, lot_number, article_number,
+        location_in_cabinet, shipping_container_code, notes, isActive, req.params.id
       ]
     );
     

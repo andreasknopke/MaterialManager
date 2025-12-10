@@ -281,7 +281,9 @@ const MaterialForm: React.FC = () => {
         setSuccess('Material erfolgreich erstellt!');
         setTimeout(() => navigate(`/materials/${response.data.id}`), 1500);
       } else {
-        await materialAPI.update(parseInt(id!), dataToSend);
+        // Bei Update: current_stock nicht senden (wird über Lagerbewegungen verwaltet)
+        const { current_stock, ...updateData } = dataToSend;
+        await materialAPI.update(parseInt(id!), updateData);
         setSuccess('Material erfolgreich aktualisiert!');
         setTimeout(() => navigate('/materials'), 1500);
       }
