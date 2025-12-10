@@ -85,6 +85,7 @@ const MaterialForm: React.FC = () => {
     if (!isNew) {
       fetchMaterial();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isNew]);
 
   const fetchDropdownData = async () => {

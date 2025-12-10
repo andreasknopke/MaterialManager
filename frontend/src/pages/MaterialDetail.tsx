@@ -42,6 +42,7 @@ const MaterialDetail: React.FC = () => {
     } else {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchMaterial = async () => {
