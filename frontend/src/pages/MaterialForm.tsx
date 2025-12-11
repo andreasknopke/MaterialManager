@@ -131,6 +131,7 @@ const MaterialForm: React.FC = () => {
       if (state?.fromScanner && state?.gs1_barcode) {
         console.log('GS1 Barcode vom Scanner:', state.gs1_barcode);
         console.log('GS1 Data vom Scanner:', state.gs1Data);
+        console.log('Master Data vom Scanner:', state.masterData);
         
         // GS1-Daten zusammenstellen
         const updates: Partial<MaterialFormData> = {
@@ -150,10 +151,25 @@ const MaterialForm: React.FC = () => {
           
           setGs1Data(state.gs1Data);
         }
+        
+        // Wenn Stammdaten vom Scanner mitgeschickt wurden (GTIN bekannt)
+        if (state.masterData) {
+          console.log('Applying master data from scanner:', state.masterData);
+          updates.name = state.masterData.name || '';
+          updates.description = state.masterData.description || '';
+          updates.category_id = state.masterData.category_id || '';
+          updates.company_id = state.masterData.company_id || '';
+          updates.unit = state.masterData.unit || 'Stück';
+          updates.size = state.masterData.size || '1';
+          setGtinKnown(true);
+          setSuccess('Stammdaten aus Datenbank übernommen!');
+        } else {
+          setSuccess('GS1-Barcode vom Scanner übernommen!');
+        }
+        
         console.log('Applying updates:', updates);
         // Alle Updates auf einmal anwenden
         setFormData(prev => ({ ...prev, ...updates }));
-        setSuccess('GS1-Barcode vom Scanner übernommen!');
         setTimeout(() => setSuccess(null), 3000);
       }
     } else {
@@ -312,9 +328,21 @@ const MaterialForm: React.FC = () => {
     setSaving(true);
     setError(null);
 
-    // Validierung: Kategorie ist Pflichtfeld
+    // Validierung: Pflichtfelder prüfen
+    if (!formData.name?.trim()) {
+      setError('Bitte geben Sie eine Bezeichnung ein.');
+      setSaving(false);
+      return;
+    }
+    
     if (!formData.category_id) {
       setError('Bitte wählen Sie eine Kategorie aus.');
+      setSaving(false);
+      return;
+    }
+    
+    if (!formData.company_id) {
+      setError('Bitte wählen Sie eine Firma aus.');
       setSaving(false);
       return;
     }
@@ -464,8 +492,9 @@ const MaterialForm: React.FC = () => {
                 label="Bezeichnung"
                 value={formData.name}
                 onChange={handleChange('name')}
+                error={!formData.name?.trim()}
                 disabled={gtinKnown && !!formData.name}
-                helperText={gtinKnown ? 'Aus Stammdaten übernommen' : ''}
+                helperText={gtinKnown ? 'Aus Stammdaten' : (!formData.name?.trim() ? 'Pflichtfeld' : '')}
               />
             </Grid>
 
@@ -536,7 +565,7 @@ const MaterialForm: React.FC = () => {
                 value={formData.category_id}
                 onChange={handleChange('category_id')}
                 error={!formData.category_id}
-                helperText={!formData.category_id ? 'Pflichtfeld' : ''}
+                helperText={gtinKnown ? 'Aus Stammdaten' : (!formData.category_id ? 'Pflichtfeld' : '')}
                 disabled={gtinKnown && !!formData.category_id}
               >
                 <MenuItem value="">-- Bitte wählen --</MenuItem>
@@ -551,13 +580,16 @@ const MaterialForm: React.FC = () => {
             <Grid item xs={12} md={3}>
               <TextField
                 select
+                required
                 fullWidth
                 label="Firma"
                 value={formData.company_id}
                 onChange={handleChange('company_id')}
+                error={!formData.company_id}
+                helperText={gtinKnown ? 'Aus Stammdaten' : (!formData.company_id ? 'Pflichtfeld' : '')}
                 disabled={gtinKnown && !!formData.company_id}
               >
-                <MenuItem value="">Keine Firma</MenuItem>
+                <MenuItem value="">-- Bitte wählen --</MenuItem>
                 {companies.map((comp) => (
                   <MenuItem key={comp.id} value={comp.id}>
                     {comp.name}
