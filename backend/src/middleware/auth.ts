@@ -104,16 +104,24 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       return res.status(401).json({ error: 'Benutzer nicht gefunden oder deaktiviert' });
     }
 
+    // Stelle sicher, dass isRoot ein Boolean ist (MySQL gibt 0/1 oder Buffer zurück)
+    const isRootValue = users[0].is_root;
+    const isRoot = isRootValue === 1 || isRootValue === true || 
+                   (Buffer.isBuffer(isRootValue) && isRootValue[0] === 1) ||
+                   isRootValue === '1';
+    
+    console.log('isRoot raw value:', isRootValue, 'type:', typeof isRootValue, 'converted:', isRoot);
+
     req.user = {
       id: users[0].id,
       username: users[0].username,
       email: users[0].email,
       role: users[0].role,
-      isRoot: users[0].is_root,
+      isRoot: isRoot,
       departmentId: users[0].department_id,
     };
 
-    console.log('✅ Authentication successful for:', req.user.username);
+    console.log('✅ Authentication successful for:', req.user.username, 'isRoot:', req.user.isRoot);
     next();
   } catch (error) {
     console.error('❌ Authentifizierungsfehler:', error);
