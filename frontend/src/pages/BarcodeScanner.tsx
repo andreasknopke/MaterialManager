@@ -320,11 +320,41 @@ const BarcodeScanner: React.FC = () => {
     });
   };
 
-  // Aus Dialog: Material für Entnahme auswählen
-  const handleSelectForRemoval = (materialItem: any) => {
-    setActionDialogOpen(false);
-    setMaterial(materialItem);
-    setQuantity(1);
+  // Aus Dialog: Material direkt entnehmen
+  const handleSelectForRemoval = async (materialItem: any) => {
+    setError('');
+    setSuccess('');
+    
+    try {
+      // Verwende material_ids (aggregiert) oder id (einzeln)
+      const materialIdToUse = materialItem.material_ids || materialItem.id;
+      
+      // Direkte Entnahme über Material-ID(s)
+      const response = await barcodeAPI.removeMaterial(materialIdToUse, {
+        quantity: 1,
+        user_name: 'System',
+        notes: 'GTIN-Scan Entnahme',
+      });
+      
+      const data = response.data;
+      setActionDialogOpen(false);
+      
+      if (data.deactivated) {
+        setSuccess(`1 Einheit von "${materialItem.name}" entnommen. Material vollständig entnommen.`);
+      } else {
+        setSuccess(`1 Einheit von "${materialItem.name}" entnommen. Neuer Bestand: ${data.new_stock}`);
+      }
+      
+      // Material für Anzeige setzen (aktualisiert)
+      setMaterial({
+        ...materialItem,
+        current_stock: data.new_stock,
+        active: data.new_stock > 0
+      });
+    } catch (err: any) {
+      setActionDialogOpen(false);
+      setError(err.response?.data?.error || 'Fehler beim Entnehmen');
+    }
   };
 
   const handleAddNewMaterial = () => {

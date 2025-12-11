@@ -49,16 +49,27 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
 });
 
 // GET alle Materialien mit einer bestimmten GTIN (für Entnahme-Auswahl)
+// Aggregiert nach Schrank und Charge (gleiche Charge im gleichen Schrank = 1 Eintrag)
 router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
   try {
-    // Alle aktiven Materialien mit dieser GTIN, gruppiert nach Schrank und Charge
+    // Materialien mit gleicher GTIN, Schrank und Charge zusammenfassen
     const [materials] = await pool.query<RowDataPacket[]>(
-      `SELECT m.id, m.name, m.current_stock, m.lot_number as batch_number, m.expiry_date,
-              m.cabinet_id, c.name as cabinet_name, m.article_number
+      `SELECT 
+         GROUP_CONCAT(m.id) as material_ids,
+         MIN(m.id) as id,
+         m.name,
+         SUM(m.current_stock) as current_stock,
+         m.lot_number as batch_number,
+         MIN(m.expiry_date) as expiry_date,
+         m.cabinet_id,
+         c.name as cabinet_name,
+         m.article_number,
+         COUNT(*) as item_count
        FROM materials m
        LEFT JOIN cabinets c ON m.cabinet_id = c.id
        WHERE m.article_number = ? AND m.active = TRUE AND m.current_stock > 0
-       ORDER BY m.expiry_date ASC, m.created_at ASC`,
+       GROUP BY m.cabinet_id, m.lot_number, m.name, m.article_number, c.name
+       ORDER BY MIN(m.expiry_date) ASC, MIN(m.created_at) ASC`,
       [req.params.gtin]
     );
     
@@ -211,13 +222,21 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // POST Barcode scannen und Material-Ausgang buchen
-// POST Entnahme direkt über Material-ID (für GTIN-Workflow)
+// POST Entnahme direkt über Material-ID(s) (für GTIN-Workflow)
+// Unterstützt sowohl einzelne ID als auch komma-separierte IDs (für aggregierte Materialien)
 router.post('/material/:materialId/remove', async (req: Request, res: Response) => {
-  const materialId = parseInt(req.params.materialId);
+  const materialIdParam = req.params.materialId;
   const { quantity, user_name, notes } = req.body;
   
   if (!quantity || quantity < 1) {
     return res.status(400).json({ error: 'Gültige Menge ist erforderlich' });
+  }
+  
+  // Unterstütze komma-separierte IDs (z.B. "4,5,6")
+  const materialIds = materialIdParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+  
+  if (materialIds.length === 0) {
+    return res.status(400).json({ error: 'Keine gültige Material-ID angegeben' });
   }
   
   const connection = await pool.getConnection();
@@ -225,46 +244,66 @@ router.post('/material/:materialId/remove', async (req: Request, res: Response) 
   try {
     await connection.beginTransaction();
     
-    // Bestand prüfen
+    let remainingQuantity = quantity;
+    let totalPreviousStock = 0;
+    let totalNewStock = 0;
+    let materialName = '';
+    let processedMaterials: number[] = [];
+    
+    // Alle Materialien mit Bestand laden (älteste zuerst nach Verfallsdatum)
     const [materials] = await connection.query<RowDataPacket[]>(
-      'SELECT current_stock, name FROM materials WHERE id = ? AND active = TRUE',
-      [materialId]
+      `SELECT id, current_stock, name, expiry_date FROM materials 
+       WHERE id IN (?) AND active = TRUE AND current_stock > 0
+       ORDER BY expiry_date ASC, created_at ASC`,
+      [materialIds]
     );
     
     if (materials.length === 0) {
-      throw new Error('Material nicht gefunden oder bereits deaktiviert');
+      throw new Error('Keine aktiven Materialien mit Bestand gefunden');
     }
     
-    const previousStock = materials[0].current_stock;
-    const newStock = previousStock - quantity;
-    
-    if (newStock < 0) {
-      throw new Error(`Nicht genügend Bestand verfügbar (aktuell: ${previousStock})`);
+    // Entnehme aus den Materialien (FIFO nach Verfallsdatum)
+    for (const mat of materials) {
+      if (remainingQuantity <= 0) break;
+      
+      materialName = mat.name;
+      const takeFromThis = Math.min(remainingQuantity, mat.current_stock);
+      const newStock = mat.current_stock - takeFromThis;
+      
+      totalPreviousStock += mat.current_stock;
+      totalNewStock += newStock;
+      remainingQuantity -= takeFromThis;
+      processedMaterials.push(mat.id);
+      
+      // Bestand aktualisieren
+      await connection.query(
+        'UPDATE materials SET current_stock = ?, active = ? WHERE id = ?',
+        [newStock, newStock > 0, mat.id]
+      );
+      
+      // Transaktion aufzeichnen
+      await connection.query(
+        `INSERT INTO material_transactions 
+         (material_id, transaction_type, quantity, previous_stock, new_stock, notes, user_name)
+         VALUES (?, 'out', ?, ?, ?, ?, ?)`,
+        [mat.id, takeFromThis, mat.current_stock, newStock, notes || 'GTIN-Scan Entnahme', user_name || 'System']
+      );
     }
     
-    // Bestand aktualisieren
-    await connection.query(
-      'UPDATE materials SET current_stock = ?, active = ? WHERE id = ?',
-      [newStock, newStock > 0, materialId]
-    );
-    
-    // Transaktion aufzeichnen
-    await connection.query(
-      `INSERT INTO material_transactions 
-       (material_id, transaction_type, quantity, previous_stock, new_stock, notes, user_name)
-       VALUES (?, 'out', ?, ?, ?, ?, ?)`,
-      [materialId, quantity, previousStock, newStock, notes || 'GTIN-Scan Entnahme', user_name || 'System']
-    );
+    if (remainingQuantity > 0) {
+      throw new Error(`Nicht genügend Bestand verfügbar. Fehlend: ${remainingQuantity}`);
+    }
     
     await connection.commit();
     
     res.json({
-      message: newStock === 0 ? 'Material vollständig entnommen und deaktiviert' : 'Entnahme erfolgreich',
-      material_id: materialId,
-      material_name: materials[0].name,
-      previous_stock: previousStock,
-      new_stock: newStock,
-      deactivated: newStock === 0
+      message: totalNewStock === 0 ? 'Material vollständig entnommen und deaktiviert' : 'Entnahme erfolgreich',
+      material_ids: processedMaterials,
+      material_name: materialName,
+      previous_stock: totalPreviousStock,
+      new_stock: totalNewStock,
+      quantity_removed: quantity,
+      deactivated: totalNewStock === 0
     });
   } catch (error) {
     await connection.rollback();
