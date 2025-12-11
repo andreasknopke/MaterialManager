@@ -30,6 +30,7 @@ const Admin: React.FC = () => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [migrationLoading, setMigrationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -70,6 +71,24 @@ const Admin: React.FC = () => {
     setError(null);
   };
 
+  const handleCabinetMigration = async () => {
+    setMigrationLoading(true);
+    setError(null);
+
+    try {
+      const response = await axios.post('/api/admin/run-cabinet-department-migration');
+      setSuccess(response.data.message);
+      
+      // Erfolg-Nachricht nach 5 Sekunden ausblenden
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err: any) {
+      console.error('Fehler bei der Cabinet Migration:', err);
+      setError(err.response?.data?.error || 'Fehler bei der Migration');
+    } finally {
+      setMigrationLoading(false);
+    }
+  };
+
   return (
     <Box>
       <Box display="flex" alignItems="center" gap={2} mb={3}>
@@ -80,7 +99,46 @@ const Admin: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <AleCabinet Department Migration - Nur für Root */}
+        {isRoot && (
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                  <SettingsIcon color="primary" />
+                  <Typography variant="h6">
+                    Cabinet Department Migration
+                  </Typography>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Diese Migration fügt die <code>department_id</code> Spalte zur Cabinets-Tabelle hinzu.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Dadurch können:
+                  <ul style={{ marginTop: 8, paddingLeft: 20 }}>
+                    <li>Schränke Departments zugeordnet werden</li>
+                    <li>Department Admins ihre eigenen Schränke verwalten</li>
+                    <li>Root alle Schränke mit Department-Zuordnung sehen</li>
+                  </ul>
+                </Typography>
+              </CardContent>
+              <CardActions>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleCabinetMigration}
+                  disabled={migrationLoading}
+                  fullWidth
+                >
+                  {migrationLoading ? 'Migration läuft...' : 'Migration ausführen'}
+                </Button>
+              </CardActions>
+            </Card>
+          </Grid>
+        )}
+
+        {/* rt severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
         </Alert>
       )}

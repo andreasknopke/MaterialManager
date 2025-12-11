@@ -136,8 +136,9 @@ const Cabinets: React.FC = () => {
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
     { field: 'name', headerName: 'Name', width: 200 },
-    { field: 'location', headerName: 'Standort', width: 250 },
-    { field: 'description', headerName: 'Beschreibung', width: 300 },
+    { field: 'department_name', headerName: 'Department', width: 180 },
+    { field: 'location', headerName: 'Standort', width: 200 },
+    { field: 'description', headerName: 'Beschreibung', width: 250 },
     { field: 'capacity', headerName: 'Kapazität', width: 120, type: 'number' },
     {
       field: 'actions',

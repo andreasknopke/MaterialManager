@@ -577,4 +577,72 @@ router.post('/run-category-migration', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/admin/run-cabinet-department-migration
+router.post('/run-cabinet-department-migration', async (req: Request, res: Response) => {
+  try {
+    console.log('Starting cabinet department_id migration...');
+    
+    // Prüfen ob Spalte bereits existiert
+    const [cols] = await pool.query<any[]>(`
+      SELECT COUNT(*) as count
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'cabinets' 
+        AND COLUMN_NAME = 'department_id'
+    `);
+    
+    if (cols[0].count > 0) {
+      console.log('ℹ department_id column already exists');
+      return res.json({ 
+        message: 'Migration already completed - department_id column exists',
+        status: 'already_done'
+      });
+    }
+    
+    // Spalte hinzufügen
+    await pool.query(`
+      ALTER TABLE cabinets 
+      ADD COLUMN department_id INT AFTER id
+    `);
+    console.log('✓ Added department_id column');
+    
+    // Foreign Key hinzufügen
+    await pool.query(`
+      ALTER TABLE cabinets
+      ADD FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE RESTRICT
+    `);
+    console.log('✓ Added foreign key constraint');
+    
+    // Bestehende Schränke den Departments zuordnen
+    await pool.query(`
+      UPDATE cabinets 
+      SET department_id = CASE 
+        WHEN location = 'Angiographie' THEN 1
+        WHEN location = 'Katheterlabor' THEN 3
+        ELSE 1
+      END
+      WHERE department_id IS NULL
+    `);
+    console.log('✓ Updated existing cabinets with department_id');
+    
+    // Index hinzufügen
+    await pool.query(`
+      CREATE INDEX idx_department ON cabinets(department_id)
+    `);
+    console.log('✓ Added index on department_id');
+    
+    res.json({ 
+      message: 'Cabinet department migration completed successfully',
+      status: 'success'
+    });
+    
+  } catch (error) {
+    console.error('❌ Cabinet department migration failed:', error);
+    res.status(500).json({ 
+      error: 'Migration failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;
