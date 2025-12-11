@@ -32,14 +32,19 @@ router.get('/', async (req: Request, res: Response) => {
     
     query += ' ORDER BY name';
     
-    console.log('Query:', query);
-    console.log('Params:', params);
+    console.log('Final query:', query);
+    console.log('Query params:', params);
     
+    console.log('Executing query...');
     const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    console.log('Query executed successfully');
     console.log('Rows returned:', rows.length);
+    console.log('Rows data:', JSON.stringify(rows));
+    
     res.json(rows);
   } catch (error) {
     console.error('❌ Fehler beim Abrufen der Schränke:', error);
+    console.error('Error details:', JSON.stringify(error));
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
     res.status(500).json({ error: 'Datenbankfehler' });
   }
