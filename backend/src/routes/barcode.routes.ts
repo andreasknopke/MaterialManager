@@ -9,7 +9,7 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
   try {
     // Suche nach Material mit dieser GTIN (article_number)
     const [materials] = await pool.query<RowDataPacket[]>(
-      `SELECT DISTINCT m.name, m.description, m.category_id, m.company_id, m.unit, m.size,
+      `SELECT m.name, m.description, m.category_id, m.company_id, m.unit, m.size,
               c.name as category_name, co.name as company_name
        FROM materials m
        LEFT JOIN categories c ON m.category_id = c.id
