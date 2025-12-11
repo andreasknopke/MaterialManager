@@ -245,7 +245,7 @@ const BarcodeScanner: React.FC = () => {
       } catch (err) {
         // GTIN nicht bekannt - direkt zum Hinzufügen
         console.log('GTIN nicht bekannt, direkt zum Hinzufügen');
-        handleAddNewMaterialWithGS1(gs1Data);
+        handleAddNewMaterialWithGS1(scannedCode, gs1Data);
       }
     } else {
       // Kein GTIN im Barcode - normale Suche
@@ -269,10 +269,11 @@ const BarcodeScanner: React.FC = () => {
   };
 
   // Hinzufügen mit vorausgefüllten GS1-Daten
-  const handleAddNewMaterialWithGS1 = (gs1Data: GS1Data) => {
+  const handleAddNewMaterialWithGS1 = (scannedCode: string, gs1Data: GS1Data) => {
+    console.log('handleAddNewMaterialWithGS1 called with:', { scannedCode, gs1Data });
     navigate('/materials/new', {
       state: {
-        gs1_barcode: barcode,
+        gs1_barcode: scannedCode,
         gs1Data: gs1Data,
         masterData: gtinMasterData,
         fromScanner: true,
