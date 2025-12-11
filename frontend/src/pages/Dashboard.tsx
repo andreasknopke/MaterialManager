@@ -259,7 +259,6 @@ const Dashboard: React.FC = () => {
           </Grid>
         </Grid>
       )}
-      </Grid>
 
       <Grid container spacing={3} sx={{ mt: 2 }}>
         <Grid item xs={12}>
