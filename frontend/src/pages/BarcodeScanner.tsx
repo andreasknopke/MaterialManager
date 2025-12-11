@@ -17,6 +17,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Divider,
 } from '@mui/material';
 import { 
   QrCodeScanner as ScannerIcon, 
@@ -26,9 +27,10 @@ import {
   CameraAlt as CameraIcon,
   Close as CloseIcon,
   PowerSettingsNew as ReactivateIcon,
+  Inventory as InventoryIcon,
 } from '@mui/icons-material';
 import { barcodeAPI, materialAPI } from '../services/api';
-import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
+import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
 import { BrowserMultiFormatReader } from '@zxing/library';
 
 const BarcodeScanner: React.FC = () => {
@@ -43,6 +45,12 @@ const BarcodeScanner: React.FC = () => {
   const [cameraOpen, setCameraOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  
+  // Neuer State für GTIN-Auswahl-Dialog
+  const [actionDialogOpen, setActionDialogOpen] = useState(false);
+  const [scannedGS1Data, setScannedGS1Data] = useState<GS1Data | null>(null);
+  const [gtinMasterData, setGtinMasterData] = useState<any>(null);
+  const [existingMaterials, setExistingMaterials] = useState<any[]>([]);
 
   // Auto-open camera if navigated from dashboard or scanning cabinet
   useEffect(() => {
@@ -140,12 +148,8 @@ const BarcodeScanner: React.FC = () => {
                     setSuccess('Barcode erfolgreich gescannt');
                     setTimeout(() => setSuccess(''), 2000);
                     
-                    // Automatisch suchen
-                    setTimeout(() => {
-                      barcodeAPI.search(scannedCode)
-                        .then(response => setMaterial(response.data.material))
-                        .catch(() => setNotFound(true));
-                    }, 100);
+                    // NEUER WORKFLOW: GTIN prüfen und Aktion anbieten
+                    handleScannedBarcode(scannedCode);
                     
                     break; // Schleife beenden nach erfolgreichem Scan
                   }
@@ -193,25 +197,107 @@ const BarcodeScanner: React.FC = () => {
     };
   }, [cameraOpen]);
 
+  // NEUER WORKFLOW: Nach Scan GTIN prüfen und entsprechende Aktion anbieten
+  const handleScannedBarcode = async (scannedCode: string) => {
+    setError('');
+    setMaterial(null);
+    setNotFound(false);
+    setExistingMaterials([]);
+    setGtinMasterData(null);
+    
+    // GS1-Barcode parsen
+    let gs1Data: GS1Data | null = null;
+    if (isValidGS1Barcode(scannedCode)) {
+      gs1Data = parseGS1Barcode(scannedCode);
+      console.log('GS1 barcode parsed:', gs1Data);
+      setScannedGS1Data(gs1Data);
+    } else {
+      console.log('Kein GS1-Barcode, behandle als einfachen Barcode');
+      // Kein GS1-Barcode - direkt zur Material-Suche per Barcode
+      try {
+        const response = await barcodeAPI.search(scannedCode);
+        setMaterial(response.data.material);
+        if (!response.data.material.active) {
+          setError('⚠️ Dieses Material ist deaktiviert (Bestand 0). Sie können es unten reaktivieren.');
+        }
+      } catch (err) {
+        setNotFound(true);
+      }
+      return;
+    }
+    
+    // GTIN aus GS1-Daten extrahieren
+    if (gs1Data?.gtin) {
+      try {
+        // Prüfe ob GTIN bekannt ist
+        const gtinResponse = await barcodeAPI.searchGTIN(gs1Data.gtin);
+        console.log('GTIN gefunden:', gtinResponse.data);
+        setGtinMasterData(gtinResponse.data.masterData);
+        
+        // Hole alle Materialien mit dieser GTIN (für Entnahme)
+        const materialsResponse = await barcodeAPI.searchMaterialsByGTIN(gs1Data.gtin);
+        if (materialsResponse.data.materials && materialsResponse.data.materials.length > 0) {
+          setExistingMaterials(materialsResponse.data.materials);
+        }
+        
+        // Dialog öffnen: Entnahme oder Hinzufügen?
+        setActionDialogOpen(true);
+      } catch (err) {
+        // GTIN nicht bekannt - direkt zum Hinzufügen
+        console.log('GTIN nicht bekannt, direkt zum Hinzufügen');
+        handleAddNewMaterialWithGS1(gs1Data);
+      }
+    } else {
+      // Kein GTIN im Barcode - normale Suche
+      setNotFound(true);
+    }
+  };
+
   const handleSearch = async () => {
     setError('');
     setSuccess('');
     setMaterial(null);
     setNotFound(false);
 
-    try {
-      const response = await barcodeAPI.search(barcode);
-      const foundMaterial = response.data.material;
-      setMaterial(foundMaterial);
-      
-      // Warnung wenn Material deaktiviert ist
-      if (!foundMaterial.active) {
-        setError('⚠️ Dieses Material ist deaktiviert (Bestand 0). Sie können es unten reaktivieren.');
-      }
-    } catch (err) {
-      setError('Barcode nicht gefunden');
-      setNotFound(true);
+    if (!barcode.trim()) {
+      setError('Bitte Barcode eingeben');
+      return;
     }
+    
+    // Neuen Workflow verwenden
+    handleScannedBarcode(barcode);
+  };
+
+  // Hinzufügen mit vorausgefüllten GS1-Daten
+  const handleAddNewMaterialWithGS1 = (gs1Data: GS1Data) => {
+    navigate('/materials/new', {
+      state: {
+        gs1_barcode: barcode,
+        gs1Data: gs1Data,
+        masterData: gtinMasterData,
+        fromScanner: true,
+      }
+    });
+  };
+
+  // Aus Dialog: Neues Material hinzufügen (bei bekannter GTIN)
+  const handleAddFromDialog = () => {
+    setActionDialogOpen(false);
+    navigate('/materials/new', {
+      state: {
+        gs1_barcode: barcode,
+        gs1Data: scannedGS1Data,
+        masterData: gtinMasterData,
+        fromScanner: true,
+      }
+    });
+  };
+
+  // Aus Dialog: Material für Entnahme auswählen
+  const handleSelectForRemoval = (materialItem: any) => {
+    setActionDialogOpen(false);
+    setMaterial(materialItem);
+    setQuantity(1);
   };
 
   const handleAddNewMaterial = () => {
@@ -515,6 +601,97 @@ const BarcodeScanner: React.FC = () => {
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setCameraOpen(false)} variant="outlined" fullWidth>
+            Abbrechen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* GTIN Aktions-Auswahl Dialog */}
+      <Dialog 
+        open={actionDialogOpen} 
+        onClose={() => setActionDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <InventoryIcon color="primary" />
+            <Typography variant="h6">Artikel erkannt</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {gtinMasterData && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="body2" color="text.secondary">Artikelname</Typography>
+              <Typography variant="h6" gutterBottom>{gtinMasterData.name}</Typography>
+              
+              {gtinMasterData.category_name && (
+                <>
+                  <Typography variant="body2" color="text.secondary">Kategorie</Typography>
+                  <Typography variant="body1" gutterBottom>{gtinMasterData.category_name}</Typography>
+                </>
+              )}
+              
+              {scannedGS1Data?.gtin && (
+                <>
+                  <Typography variant="body2" color="text.secondary">GTIN</Typography>
+                  <Typography variant="body1" fontFamily="monospace">{scannedGS1Data.gtin}</Typography>
+                </>
+              )}
+            </Box>
+          )}
+
+          <Typography variant="body1" gutterBottom sx={{ fontWeight: 500 }}>
+            Was möchten Sie tun?
+          </Typography>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+            {/* Entnahme - nur wenn Materialien vorhanden */}
+            {existingMaterials.length > 0 && (
+              <>
+                <Typography variant="body2" color="text.secondary">
+                  Entnahme aus vorhandenem Bestand:
+                </Typography>
+                {existingMaterials.map((mat) => (
+                  <Button
+                    key={mat.id}
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<RemoveIcon />}
+                    onClick={() => handleSelectForRemoval(mat)}
+                    sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
+                  >
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <Typography variant="body2">
+                        {mat.cabinet_name || 'Ohne Schrank'} - Bestand: {mat.current_stock}
+                      </Typography>
+                      {mat.batch_number && (
+                        <Typography variant="caption" color="text.secondary">
+                          Charge: {mat.batch_number}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Button>
+                ))}
+                <Divider sx={{ my: 1 }} />
+              </>
+            )}
+
+            {/* Hinzufügen - immer möglich */}
+            <Button
+              variant="contained"
+              color="success"
+              size="large"
+              startIcon={<AddIcon />}
+              onClick={handleAddFromDialog}
+              fullWidth
+            >
+              Neues Material hinzufügen (Wareneingang)
+            </Button>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setActionDialogOpen(false)} variant="outlined" fullWidth>
             Abbrechen
           </Button>
         </DialogActions>

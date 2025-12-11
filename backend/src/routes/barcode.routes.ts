@@ -44,6 +44,30 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
   }
 });
 
+// GET alle Materialien mit einer bestimmten GTIN (für Entnahme-Auswahl)
+router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
+  try {
+    // Alle aktiven Materialien mit dieser GTIN, gruppiert nach Schrank und Charge
+    const [materials] = await pool.query<RowDataPacket[]>(
+      `SELECT m.id, m.name, m.current_stock, m.batch_number, m.expiry_date,
+              m.cabinet_id, c.name as cabinet_name, m.article_number
+       FROM materials m
+       LEFT JOIN cabinets c ON m.cabinet_id = c.id
+       WHERE m.article_number = ? AND m.active = TRUE AND m.current_stock > 0
+       ORDER BY m.expiry_date ASC, m.created_at ASC`,
+      [req.params.gtin]
+    );
+    
+    res.json({
+      materials: materials,
+      count: materials.length
+    });
+  } catch (error) {
+    console.error('Fehler bei der GTIN-Material-Suche:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 // GET Barcode suchen
 router.get('/search/:barcode', async (req: Request, res: Response) => {
   try {

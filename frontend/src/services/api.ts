@@ -85,6 +85,7 @@ export const companyAPI = {
 export const barcodeAPI = {
   search: (barcode: string) => api.get(`/barcodes/search/${barcode}`),
   searchGTIN: (gtin: string) => api.get(`/barcodes/gtin/${gtin}`),
+  searchMaterialsByGTIN: (gtin: string) => api.get(`/barcodes/gtin/${gtin}/materials`),
   getByMaterial: (materialId: number) => api.get(`/barcodes/material/${materialId}`),
   create: (data: any) => api.post('/barcodes', data),
   update: (id: number, data: any) => api.put(`/barcodes/${id}`, data),
