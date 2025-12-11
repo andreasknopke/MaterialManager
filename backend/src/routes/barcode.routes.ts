@@ -4,6 +4,46 @@ import { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 const router = Router();
 
+// GET Stammdaten nach GTIN (Artikelnummer) suchen - für Vorbelegung bei bekannter GTIN
+router.get('/gtin/:gtin', async (req: Request, res: Response) => {
+  try {
+    // Suche nach Material mit dieser GTIN (article_number)
+    const [materials] = await pool.query<RowDataPacket[]>(
+      `SELECT DISTINCT m.name, m.description, m.category_id, m.company_id, m.unit, m.size,
+              c.name as category_name, co.name as company_name
+       FROM materials m
+       LEFT JOIN categories c ON m.category_id = c.id
+       LEFT JOIN companies co ON m.company_id = co.id
+       WHERE m.article_number = ? AND m.active = TRUE
+       ORDER BY m.created_at DESC
+       LIMIT 1`,
+      [req.params.gtin]
+    );
+    
+    if (materials.length === 0) {
+      return res.status(404).json({ found: false, message: 'GTIN nicht bekannt' });
+    }
+    
+    // Stammdaten gefunden
+    res.json({
+      found: true,
+      masterData: {
+        name: materials[0].name,
+        description: materials[0].description,
+        category_id: materials[0].category_id,
+        company_id: materials[0].company_id,
+        unit: materials[0].unit,
+        size: materials[0].size,
+        category_name: materials[0].category_name,
+        company_name: materials[0].company_name,
+      }
+    });
+  } catch (error) {
+    console.error('Fehler bei der GTIN-Suche:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 // GET Barcode suchen
 router.get('/search/:barcode', async (req: Request, res: Response) => {
   try {
