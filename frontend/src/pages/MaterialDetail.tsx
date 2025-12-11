@@ -90,7 +90,6 @@ const MaterialDetail: React.FC = () => {
       <Paper sx={{ mt: 3 }}>
         <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
           <Tab label="Grunddaten" />
-          <Tab label="Bestand" />
           <Tab label="Barcodes" />
           <Tab label="Historie" />
         </Tabs>
@@ -155,11 +154,6 @@ const MaterialDetail: React.FC = () => {
                 disabled
               />
             </Grid>
-          </Grid>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={1}>
-          <Grid container spacing={3}>
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
@@ -167,35 +161,19 @@ const MaterialDetail: React.FC = () => {
                 value={material?.current_stock || 0}
                 type="number"
                 disabled
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Mindestbestand"
-                value={material?.min_stock || 0}
-                type="number"
-                disabled
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Status"
-                value={material?.stock_status || 'OK'}
-                disabled
+                helperText="Erhöht sich bei Wareneingang, verringert sich bei Entnahme"
               />
             </Grid>
           </Grid>
         </TabPanel>
 
-        <TabPanel value={tabValue} index={2}>
+        <TabPanel value={tabValue} index={1}>
           <Typography variant="body1">
             Barcode-Verwaltung wird hier angezeigt
           </Typography>
         </TabPanel>
 
-        <TabPanel value={tabValue} index={3}>
+        <TabPanel value={tabValue} index={2}>
           <Typography variant="body1">
             Transaktionshistorie wird hier angezeigt
           </Typography>
