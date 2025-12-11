@@ -20,8 +20,8 @@ router.get('/', async (req: Request, res: Response) => {
     let query = 'SELECT * FROM v_materials_overview WHERE active = TRUE';
     const params: any[] = [];
     
-    // Department-Filter hinzufügen (View hat keine Alias, nutze 'v_materials_overview')
-    const departmentFilter = getDepartmentFilter(req, 'v_materials_overview');
+    // Department-Filter hinzufügen (View braucht keinen Prefix)
+    const departmentFilter = getDepartmentFilter(req, '');
     console.log('Department filter:', departmentFilter);
     
     if (departmentFilter.whereClause) {
@@ -71,8 +71,8 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Material nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    // Department-Filter
-    const departmentFilter = getDepartmentFilter(req);
+    // Department-Filter (View braucht keinen Prefix)
+    const departmentFilter = getDepartmentFilter(req, '');
     let query = 'SELECT * FROM v_materials_overview WHERE id = ?';
     const params: any[] = [req.params.id];
     
@@ -117,7 +117,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.get('/:id/transactions', async (req: Request, res: Response) => {
   try {
     // Department-Validierung: Material muss zugänglich sein
-    const departmentFilter = getDepartmentFilter(req);
+    const departmentFilter = getDepartmentFilter(req, '');
     if (departmentFilter.whereClause) {
       const [materials] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -180,6 +180,8 @@ router.post('/', async (req: Request, res: Response) => {
     await connection.beginTransaction();
     
     // Material einfügen (inkl. unit_id!)
+    // current_stock startet bei 1 (ein Material wird aufgenommen)
+    // min_stock ist nicht mehr relevant für einzelne Materialien (nur Kategorien)
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO materials 
        (category_id, company_id, cabinet_id, unit_id, name, description, size, unit,
@@ -188,7 +190,7 @@ router.post('/', async (req: Request, res: Response) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         category_id, company_id, cabinet_id, materialUnitId, name, description, size, unit,
-        min_stock || 0, current_stock || 0, expiry_date, lot_number,
+        0, current_stock || 1, expiry_date, lot_number,
         article_number, location_in_cabinet, shipping_container_code, notes
       ]
     );
@@ -250,7 +252,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   
   try {
     // Department-Validierung: Material muss im erlaubten Department sein
-    const departmentFilter = getDepartmentFilter(req);
+    const departmentFilter = getDepartmentFilter(req, '');
     if (departmentFilter.whereClause) {
       const [materials] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -322,7 +324,7 @@ router.post('/:id/stock-in', async (req: Request, res: Response) => {
     await connection.beginTransaction();
     
     // Department-Validierung
-    const departmentFilter = getDepartmentFilter(req);
+    const departmentFilter = getDepartmentFilter(req, '');
     if (departmentFilter.whereClause) {
       const [materials] = await connection.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -393,7 +395,7 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
     await connection.beginTransaction();
     
     // Department-Validierung
-    const departmentFilter = getDepartmentFilter(req);
+    const departmentFilter = getDepartmentFilter(req, '');
     if (departmentFilter.whereClause) {
       const [materials] = await connection.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -459,7 +461,7 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     // Department-Validierung
-    const departmentFilter = getDepartmentFilter(req);
+    const departmentFilter = getDepartmentFilter(req, '');
     if (departmentFilter.whereClause) {
       const [materials] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -491,7 +493,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.post('/:id/reactivate', async (req: Request, res: Response) => {
   try {
     // Department-Validierung
-    const departmentFilter = getDepartmentFilter(req);
+    const departmentFilter = getDepartmentFilter(req, '');
     if (departmentFilter.whereClause) {
       const [materials] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,

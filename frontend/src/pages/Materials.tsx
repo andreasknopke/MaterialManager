@@ -68,7 +68,6 @@ const Materials: React.FC = () => {
     { field: 'cabinet_name', headerName: 'Schrank', width: 120 },
     { field: 'size', headerName: 'Größe', width: 100 },
     { field: 'current_stock', headerName: 'Bestand', width: 100, type: 'number' },
-    { field: 'min_stock', headerName: 'Min. Bestand', width: 120, type: 'number' },
     {
       field: 'expiry_date',
       headerName: 'Verfallsdatum',
