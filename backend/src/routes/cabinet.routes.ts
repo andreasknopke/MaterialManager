@@ -14,23 +14,30 @@ router.get('/', async (req: Request, res: Response) => {
     console.log('=== GET /api/cabinets ===');
     console.log('User:', { id: req.user?.id, isRoot: req.user?.isRoot, departmentId: req.user?.departmentId });
     
-    let query = 'SELECT c.*, d.name as department_name FROM cabinets c LEFT JOIN departments d ON c.department_id = d.id WHERE c.active = TRUE';
+    let query = 'SELECT c.*, d.name as department_name FROM cabinets c LEFT JOIN departments d ON c.department_id = d.id';
     const params: any[] = [];
+    const conditions: string[] = [];
     
-    // Root sieht alle Schränke, andere nur ihre Department-Schränke
+    // Root sieht alle Schränke (auch inaktive), andere nur ihre Department-Schränke (nur aktive)
     if (!req.user?.isRoot && req.user?.departmentId) {
-      query += ' AND c.department_id = ?';
+      conditions.push('c.active = TRUE');
+      conditions.push('c.department_id = ?');
       params.push(req.user.departmentId);
       console.log('Department Filter applied: department_id =', req.user.departmentId);
     } else if (!req.user?.isRoot && !req.user?.departmentId) {
       // User ohne Department sieht nichts
-      query += ' AND 1 = 0';
+      conditions.push('1 = 0');
       console.log('User has no department - returning empty result');
     } else {
-      console.log('Root user - no filter applied');
+      // Root sieht alles, auch inaktive Schränke
+      console.log('Root user - no filter applied, showing all cabinets');
     }
     
-    query += ' ORDER BY name';
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    
+    query += ' ORDER BY c.name';
     
     console.log('Final query:', query);
     console.log('Query params:', params);

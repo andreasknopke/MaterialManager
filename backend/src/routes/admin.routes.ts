@@ -677,4 +677,39 @@ router.post('/fix-cabinet-departments', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/admin/debug-cabinets - Debug endpoint für Cabinet-Daten
+router.get('/debug-cabinets', async (req: Request, res: Response) => {
+  try {
+    // Alle Schränke mit allen Spalten
+    const [cabinets] = await pool.query<any[]>(
+      'SELECT * FROM cabinets'
+    );
+    
+    // Alle Departments
+    const [departments] = await pool.query<any[]>(
+      'SELECT * FROM departments'
+    );
+    
+    // Join Query wie in cabinet.routes.ts
+    const [joined] = await pool.query<any[]>(
+      'SELECT c.*, d.name as department_name FROM cabinets c LEFT JOIN departments d ON c.department_id = d.id'
+    );
+    
+    res.json({
+      cabinets: cabinets,
+      departments: departments,
+      joined: joined,
+      cabinetCount: cabinets.length,
+      departmentCount: departments.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Debug query failed:', error);
+    res.status(500).json({ 
+      error: 'Debug failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;
