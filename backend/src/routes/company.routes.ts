@@ -1,15 +1,35 @@
 import { Router, Request, Response } from 'express';
 import pool from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
-// GET alle Firmen
+// Alle Routes benötigen Authentifizierung
+router.use(authenticate);
+
+// GET alle Firmen (gefiltert nach Department)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT * FROM companies ORDER BY name'
-    );
+    let query = 'SELECT c.*, u.name as department_name FROM companies c LEFT JOIN units u ON c.department_id = u.id';
+    const params: any[] = [];
+    const conditions: string[] = [];
+    
+    // Root sieht alle, andere nur ihr Department
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      conditions.push('c.department_id = ?');
+      params.push(req.user.departmentId);
+    } else if (!req.user?.isRoot && !req.user?.departmentId) {
+      conditions.push('1 = 0');
+    }
+    
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    
+    query += ' ORDER BY c.name';
+    
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der Firmen:', error);
@@ -20,10 +40,16 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Firma nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT * FROM companies WHERE id = ?',
-      [req.params.id]
-    );
+    let query = 'SELECT c.*, u.name as department_name FROM companies c LEFT JOIN units u ON c.department_id = u.id WHERE c.id = ?';
+    const params: any[] = [req.params.id];
+    
+    // Non-Root nur eigenes Department
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      query += ' AND c.department_id = ?';
+      params.push(req.user.departmentId);
+    }
+    
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
     
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Firma nicht gefunden' });
@@ -44,10 +70,17 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Name ist erforderlich' });
   }
   
+  // Root kann Department wählen, andere bekommen automatisch ihr Department
+  const department_id = req.user?.isRoot && req.body.department_id ? req.body.department_id : req.user?.departmentId;
+  
+  if (!department_id) {
+    return res.status(400).json({ error: 'Department ID ist erforderlich' });
+  }
+  
   try {
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO companies (name, contact_person, email, phone, address) VALUES (?, ?, ?, ?, ?)',
-      [name, contact_person, email, phone, address]
+      'INSERT INTO companies (name, contact_person, email, phone, address, department_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, contact_person, email, phone, address, department_id]
     );
     
     res.status(201).json({
@@ -65,13 +98,33 @@ router.post('/', async (req: Request, res: Response) => {
 
 // PUT Firma aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
-  const { name, contact_person, email, phone, address } = req.body;
+  const { name, contact_person, email, phone, address, department_id } = req.body;
   
   try {
-    const [result] = await pool.query<ResultSetHeader>(
-      'UPDATE companies SET name = ?, contact_person = ?, email = ?, phone = ?, address = ? WHERE id = ?',
-      [name, contact_person, email, phone, address, req.params.id]
-    );
+    // Non-Root können nur eigene Firmen bearbeiten
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      const [check] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM companies WHERE id = ? AND department_id = ?',
+        [req.params.id, req.user.departmentId]
+      );
+      if (check.length === 0) {
+        return res.status(403).json({ error: 'Firma nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
+    // Root kann Department ändern
+    let query: string;
+    let params: any[];
+    
+    if (req.user?.isRoot && department_id) {
+      query = 'UPDATE companies SET name = ?, contact_person = ?, email = ?, phone = ?, address = ?, department_id = ? WHERE id = ?';
+      params = [name, contact_person, email, phone, address, department_id, req.params.id];
+    } else {
+      query = 'UPDATE companies SET name = ?, contact_person = ?, email = ?, phone = ?, address = ? WHERE id = ?';
+      params = [name, contact_person, email, phone, address, req.params.id];
+    }
+    
+    const [result] = await pool.query<ResultSetHeader>(query, params);
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Firma nicht gefunden' });
@@ -87,6 +140,17 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE Firma
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    // Non-Root können nur eigene Firmen löschen
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      const [check] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM companies WHERE id = ? AND department_id = ?',
+        [req.params.id, req.user.departmentId]
+      );
+      if (check.length === 0) {
+        return res.status(403).json({ error: 'Firma nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
     const [result] = await pool.query<ResultSetHeader>(
       'DELETE FROM companies WHERE id = ?',
       [req.params.id]

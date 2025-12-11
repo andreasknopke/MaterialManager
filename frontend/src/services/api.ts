@@ -1,16 +1,7 @@
 import axios from 'axios';
 
-// Bestimme API-URL basierend auf Umgebung
-const getApiBaseUrl = () => {
-  // Prüfe ob wir auf Railway Production sind
-  if (window.location.hostname.includes('railway.app')) {
-    return 'https://materialmanager-production.up.railway.app/api';
-  }
-  // Lokal: nutze relativen Pfad (Vite Proxy)
-  return '/api';
-};
-
-const API_BASE_URL = getApiBaseUrl();
+// Use relative URL for API calls - nginx will proxy to backend
+const API_BASE_URL = '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -19,13 +10,10 @@ const api = axios.create({
   },
 });
 
-// Request Interceptor - fügt Auth-Token zu allen Requests hinzu
+// Request Interceptor
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // Hier könnte ein Token hinzugefügt werden
     return config;
   },
   (error) => {
@@ -64,7 +52,6 @@ export const materialAPI = {
   create: (data: any) => api.post('/materials', data),
   update: (id: number, data: any) => api.put(`/materials/${id}`, data),
   delete: (id: number) => api.delete(`/materials/${id}`),
-  reactivate: (id: number) => api.post(`/materials/${id}/reactivate`),
   stockIn: (id: number, data: any) => api.post(`/materials/${id}/stock-in`, data),
   stockOut: (id: number, data: any) => api.post(`/materials/${id}/stock-out`, data),
   getExpiring: () => api.get('/materials/reports/expiring'),
@@ -75,7 +62,6 @@ export const materialAPI = {
 export const categoryAPI = {
   getAll: () => api.get('/categories'),
   getById: (id: number) => api.get(`/categories/${id}`),
-  getInventoryStats: () => api.get('/categories/stats/inventory'),
   create: (data: any) => api.post('/categories', data),
   update: (id: number, data: any) => api.put(`/categories/${id}`, data),
   delete: (id: number) => api.delete(`/categories/${id}`),
@@ -109,12 +95,10 @@ export const fieldConfigAPI = {
   delete: (id: number) => api.delete(`/field-configs/${id}`),
 };
 
-// Units
+// Units (Departments)
 export const unitAPI = {
-  getAll: (params?: any) => api.get('/units', { params }),
+  getAll: () => api.get('/units'),
   getById: (id: number) => api.get(`/units/${id}`),
-  getStats: (id: number) => api.get(`/units/${id}/stats`),
-  getTransfers: (id: number, params?: any) => api.get(`/units/${id}/transfers`, { params }),
   create: (data: any) => api.post('/units', data),
   update: (id: number, data: any) => api.put(`/units/${id}`, data),
   delete: (id: number) => api.delete(`/units/${id}`),

@@ -11,13 +11,21 @@ import {
   DialogActions,
   TextField,
   Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { companyAPI } from '../services/api';
+import { companyAPI, unitAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const Companies: React.FC = () => {
+  const { user } = useAuth();
   const [companies, setCompanies] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<any>(null);
@@ -27,11 +35,15 @@ const Companies: React.FC = () => {
     email: '',
     phone: '',
     address: '',
+    department_id: null as number | null,
   });
 
   useEffect(() => {
     fetchCompanies();
-  }, []);
+    if (user?.isRoot) {
+      fetchDepartments();
+    }
+  }, [user?.isRoot]);
 
   const fetchCompanies = async () => {
     try {
@@ -46,19 +58,37 @@ const Companies: React.FC = () => {
     }
   };
 
+  const fetchDepartments = async () => {
+    try {
+      const response = await unitAPI.getAll();
+      const data = Array.isArray(response.data) ? response.data : [];
+      setDepartments(data);
+    } catch (error) {
+      console.error('Fehler beim Laden der Departments:', error);
+    }
+  };
+
   const handleOpen = (company?: any) => {
     if (company) {
       setEditingCompany(company);
       setFormData({
-        name: company.name,
-        contact_person: company.contact_person,
-        email: company.email,
-        phone: company.phone,
-        address: company.address,
+        name: company.name || '',
+        contact_person: company.contact_person || '',
+        email: company.email || '',
+        phone: company.phone || '',
+        address: company.address || '',
+        department_id: company.department_id || null,
       });
     } else {
       setEditingCompany(null);
-      setFormData({ name: '', contact_person: '', email: '', phone: '', address: '' });
+      setFormData({ 
+        name: '', 
+        contact_person: '', 
+        email: '', 
+        phone: '', 
+        address: '',
+        department_id: user?.departmentId || null
+      });
     }
     setOpen(true);
   };
@@ -95,10 +125,16 @@ const Companies: React.FC = () => {
 
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'name', headerName: 'Name', width: 200 },
-    { field: 'contact_person', headerName: 'Ansprechpartner', width: 180 },
-    { field: 'email', headerName: 'E-Mail', width: 200 },
-    { field: 'phone', headerName: 'Telefon', width: 150 },
+    { field: 'name', headerName: 'Name', width: 180 },
+    { 
+      field: 'department_name', 
+      headerName: 'Department', 
+      width: 150,
+      renderCell: (params) => params.value ? <Chip label={params.value} size="small" color="primary" /> : '-'
+    },
+    { field: 'contact_person', headerName: 'Ansprechpartner', width: 150 },
+    { field: 'email', headerName: 'E-Mail', width: 180 },
+    { field: 'phone', headerName: 'Telefon', width: 130 },
     {
       field: 'actions',
       headerName: 'Aktionen',
@@ -187,6 +223,27 @@ const Companies: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
               />
             </Grid>
+            {user?.isRoot && (
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Department</InputLabel>
+                  <Select
+                    value={formData.department_id || ''}
+                    onChange={(e) => setFormData({ ...formData, department_id: e.target.value as number })}
+                    label="Department"
+                  >
+                    <MenuItem value="">
+                      <em>Kein Department</em>
+                    </MenuItem>
+                    {departments.map((dept) => (
+                      <MenuItem key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>
