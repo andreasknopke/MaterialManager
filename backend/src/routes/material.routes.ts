@@ -149,15 +149,21 @@ router.post('/', async (req: Request, res: Response) => {
     category_id, company_id, cabinet_id, name, description,
     size, unit, min_stock, current_stock, expiry_date,
     lot_number, article_number, location_in_cabinet, shipping_container_code, notes,
-    custom_fields, barcodes
+    custom_fields, barcodes, unit_id
   } = req.body;
   
   if (!name) {
     return res.status(400).json({ error: 'Name ist erforderlich' });
   }
   
+  // Department (unit_id) bestimmen: Entweder vom Request oder vom User
+  let materialUnitId = unit_id;
+  if (!materialUnitId && req.user?.departmentId) {
+    materialUnitId = req.user.departmentId;
+  }
+  
   // Department-Validierung: Schrank muss im erlaubten Department sein
-  if (cabinet_id && req.user?.departmentId) {
+  if (cabinet_id && req.user?.departmentId && !req.user?.isRoot) {
     const [cabinets] = await pool.query<RowDataPacket[]>(
       'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
       [cabinet_id, req.user.departmentId]
@@ -173,15 +179,15 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     await connection.beginTransaction();
     
-    // Material einfügen
+    // Material einfügen (inkl. unit_id!)
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO materials 
-       (category_id, company_id, cabinet_id, name, description, size, unit,
+       (category_id, company_id, cabinet_id, unit_id, name, description, size, unit,
         min_stock, current_stock, expiry_date, lot_number, article_number,
         location_in_cabinet, shipping_container_code, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        category_id, company_id, cabinet_id, name, description, size, unit,
+        category_id, company_id, cabinet_id, materialUnitId, name, description, size, unit,
         min_stock || 0, current_stock || 0, expiry_date, lot_number,
         article_number, location_in_cabinet, shipping_container_code, notes
       ]
