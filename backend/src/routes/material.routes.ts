@@ -243,7 +243,7 @@ router.post('/', async (req: Request, res: Response) => {
 // PUT Material aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
   const {
-    category_id, company_id, cabinet_id, name, description,
+    category_id, company_id, cabinet_id, unit_id, name, description,
     size, unit, min_stock, expiry_date,
     lot_number, article_number, location_in_cabinet, shipping_container_code, notes, active
   } = req.body;
@@ -262,8 +262,8 @@ router.put('/:id', async (req: Request, res: Response) => {
       }
     }
     
-    // Department-Validierung: Neuer Schrank muss im erlaubten Department sein
-    if (cabinet_id && req.user?.departmentId) {
+    // Department-Validierung: Neuer Schrank muss im erlaubten Department sein (nur für nicht-Root)
+    if (cabinet_id && req.user?.departmentId && !req.user?.isRoot) {
       const [cabinets] = await pool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [cabinet_id, req.user.departmentId]
@@ -277,15 +277,21 @@ router.put('/:id', async (req: Request, res: Response) => {
     // active sollte standardmäßig true sein, wenn nicht explizit gesetzt
     const isActive = active !== undefined ? active : true;
     
+    // unit_id bestimmen: Vom Request oder vom User (für nicht-Root)
+    let materialUnitId = unit_id;
+    if (!materialUnitId && req.user?.departmentId && !req.user?.isRoot) {
+      materialUnitId = req.user.departmentId;
+    }
+    
     const [result] = await pool.query<ResultSetHeader>(
       `UPDATE materials 
-       SET category_id = ?, company_id = ?, cabinet_id = ?, name = ?,
+       SET category_id = ?, company_id = ?, cabinet_id = ?, unit_id = ?, name = ?,
            description = ?, size = ?, unit = ?, min_stock = ?,
            expiry_date = ?, lot_number = ?,
            article_number = ?, location_in_cabinet = ?, shipping_container_code = ?, notes = ?, active = ?
        WHERE id = ?`,
       [
-        category_id, company_id, cabinet_id, name, description, size, unit,
+        category_id, company_id, cabinet_id, materialUnitId, name, description, size, unit,
         min_stock, expiry_date, lot_number, article_number,
         location_in_cabinet, shipping_container_code, notes, isActive, req.params.id
       ]
