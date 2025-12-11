@@ -645,4 +645,36 @@ router.post('/run-cabinet-department-migration', async (req: Request, res: Respo
   }
 });
 
+// POST /api/admin/fix-cabinet-departments - Setzt department_id für alle Schränke auf Radiologie
+router.post('/fix-cabinet-departments', async (req: Request, res: Response) => {
+  try {
+    console.log('Fixing cabinet department IDs...');
+    
+    // Alle Schränke ohne department_id auf Radiologie (ID 3) setzen
+    const [result] = await pool.query<any>(
+      'UPDATE cabinets SET department_id = 3 WHERE department_id IS NULL OR department_id = 0'
+    );
+    
+    console.log('✓ Updated cabinets:', result.affectedRows);
+    
+    // Alle Schränke abrufen zur Bestätigung
+    const [cabinets] = await pool.query<any[]>(
+      'SELECT id, name, location, department_id FROM cabinets'
+    );
+    
+    res.json({ 
+      message: `${result.affectedRows} Schränke wurden Radiologie (ID 3) zugeordnet`,
+      status: 'success',
+      cabinets: cabinets
+    });
+    
+  } catch (error) {
+    console.error('❌ Failed to fix cabinet departments:', error);
+    res.status(500).json({ 
+      error: 'Fix failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

@@ -89,6 +89,24 @@ const Admin: React.FC = () => {
     }
   };
 
+  const handleFixCabinetDepartments = async () => {
+    setMigrationLoading(true);
+    setError(null);
+
+    try {
+      const response = await axios.post('/api/admin/fix-cabinet-departments');
+      setSuccess(response.data.message);
+      
+      // Erfolg-Nachricht nach 5 Sekunden ausblenden
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err: any) {
+      console.error('Fehler beim Fixen der Cabinet Departments:', err);
+      setError(err.response?.data?.error || 'Fehler beim Fixen');
+    } finally {
+      setMigrationLoading(false);
+    }
+  };
+
   return (
     <Box>
       <Box display="flex" alignItems="center" gap={2} mb={3}>
@@ -156,24 +174,40 @@ const Admin: React.FC = () => {
           </Grid>
         )}
 
-        {/* rt severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
+        {/* Fix Cabinet Departments - Nur für Root */}
+        {isRoot && (
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                  <SettingsIcon color="secondary" />
+                  <Typography variant="h6">
+                    Cabinet Department ID setzen
+                  </Typography>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Setzt die <code>department_id</code> für alle Schränke auf Radiologie (ID 3).
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Nutzen Sie dies, wenn Schränke keine Department-Zuordnung haben.
+                </Typography>
+              </CardContent>
+              <CardActions>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleFixCabinetDepartments}
+                  disabled={migrationLoading}
+                  fullWidth
+                >
+                  {migrationLoading ? 'Setze Department...' : 'Department setzen (Radiologie)'}
+                </Button>
+              </CardActions>
+            </Card>
+          </Grid>
+        )}
 
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
-
-      {!isRoot && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          Einige Admin-Funktionen sind nur für den Root-Benutzer verfügbar.
-        </Alert>
-      )}
-
-      <Grid container spacing={3}>
         {/* Datenbank-Management - Nur für Root */}
         {isRoot && (
           <Grid item xs={12} md={6}>
