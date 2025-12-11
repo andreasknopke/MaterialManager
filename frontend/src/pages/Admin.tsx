@@ -98,52 +98,6 @@ const Admin: React.FC = () => {
       )}
 
       <Grid container spacing={3}>
-        {/* Category Migration */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={1} mb={2}>
-                <SettingsIcon color="primary" />
-                <Typography variant="h6">
-                  Kategorie-Mindestmengen Migration
-                </Typography>
-              </Box>
-              <Divider sx={{ mb: 2 }} />
-              <Typography variant="body2" color="text.secondary" paragraph>
-                Fügt das Mindestmengen-Feld zu Kategorien hinzu.
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Mindestmengen gelten jetzt für die Gesamtmenge aller Materialien einer Kategorie.
-              </Typography>
-              <Alert severity="info" sx={{ mt: 2 }}>
-                Diese Migration kann sicher mehrfach ausgeführt werden.
-              </Alert>
-            </CardContent>
-            <CardActions>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={async () => {
-                  try {
-                    setLoading(true);
-                    await axios.post('/api/admin/run-category-migration');
-                    setSuccess('Kategorie-Migration erfolgreich ausgeführt!');
-                    setTimeout(() => setSuccess(null), 3000);
-                  } catch (err: any) {
-                    setError(err.response?.data?.error || 'Migration fehlgeschlagen');
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
-                fullWidth
-                disabled={loading}
-              >
-                {loading ? 'Migration läuft...' : 'Kategorie-Migration ausführen'}
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-
         {/* Datenbank-Management - Nur für Root */}
         {isRoot && (
           <Grid item xs={12} md={6}>
