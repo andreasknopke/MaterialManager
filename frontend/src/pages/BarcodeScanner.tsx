@@ -199,6 +199,9 @@ const BarcodeScanner: React.FC = () => {
 
   // NEUER WORKFLOW: Nach Scan GTIN prüfen und entsprechende Aktion anbieten
   const handleScannedBarcode = async (scannedCode: string) => {
+    console.log('=== handleScannedBarcode START ===');
+    console.log('scannedCode:', scannedCode);
+    
     setError('');
     setMaterial(null);
     setNotFound(false);
@@ -207,7 +210,10 @@ const BarcodeScanner: React.FC = () => {
     
     // GS1-Barcode parsen
     let gs1Data: GS1Data | null = null;
-    if (isValidGS1Barcode(scannedCode)) {
+    const isGS1 = isValidGS1Barcode(scannedCode);
+    console.log('isValidGS1Barcode:', isGS1);
+    
+    if (isGS1) {
       gs1Data = parseGS1Barcode(scannedCode);
       console.log('GS1 barcode parsed:', gs1Data);
       setScannedGS1Data(gs1Data);
@@ -228,29 +234,37 @@ const BarcodeScanner: React.FC = () => {
     
     // GTIN aus GS1-Daten extrahieren
     if (gs1Data?.gtin) {
+      console.log('GTIN gefunden im Barcode:', gs1Data.gtin);
       try {
         // Prüfe ob GTIN bekannt ist
+        console.log('Rufe searchGTIN API auf...');
         const gtinResponse = await barcodeAPI.searchGTIN(gs1Data.gtin);
-        console.log('GTIN gefunden:', gtinResponse.data);
+        console.log('GTIN API Response:', gtinResponse.data);
         setGtinMasterData(gtinResponse.data.masterData);
         
         // Hole alle Materialien mit dieser GTIN (für Entnahme)
+        console.log('Rufe searchMaterialsByGTIN API auf...');
         const materialsResponse = await barcodeAPI.searchMaterialsByGTIN(gs1Data.gtin);
+        console.log('Materials API Response:', materialsResponse.data);
         if (materialsResponse.data.materials && materialsResponse.data.materials.length > 0) {
           setExistingMaterials(materialsResponse.data.materials);
         }
         
         // Dialog öffnen: Entnahme oder Hinzufügen?
+        console.log('Öffne Action Dialog...');
         setActionDialogOpen(true);
-      } catch (err) {
+      } catch (err: any) {
         // GTIN nicht bekannt - direkt zum Hinzufügen
+        console.log('GTIN API Fehler:', err.response?.status, err.message);
         console.log('GTIN nicht bekannt, direkt zum Hinzufügen');
         handleAddNewMaterialWithGS1(scannedCode, gs1Data);
       }
     } else {
+      console.log('Kein GTIN im geparsten Barcode');
       // Kein GTIN im Barcode - normale Suche
       setNotFound(true);
     }
+    console.log('=== handleScannedBarcode END ===');
   };
 
   const handleSearch = async () => {
