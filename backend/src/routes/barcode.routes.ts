@@ -10,10 +10,12 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
     // Suche nach Material mit dieser GTIN (article_number)
     const [materials] = await pool.query<RowDataPacket[]>(
       `SELECT m.name, m.description, m.category_id, m.company_id, m.unit, m.size,
+              m.cabinet_id, cab.name as cabinet_name,
               c.name as category_name, co.name as company_name
        FROM materials m
        LEFT JOIN categories c ON m.category_id = c.id
        LEFT JOIN companies co ON m.company_id = co.id
+       LEFT JOIN cabinets cab ON m.cabinet_id = cab.id
        WHERE m.article_number = ? AND m.active = TRUE
        ORDER BY m.created_at DESC
        LIMIT 1`,
@@ -34,6 +36,8 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
         company_id: materials[0].company_id,
         unit: materials[0].unit,
         size: materials[0].size,
+        cabinet_id: materials[0].cabinet_id,
+        cabinet_name: materials[0].cabinet_name,
         category_name: materials[0].category_name,
         company_name: materials[0].company_name,
       }
@@ -207,6 +211,70 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // POST Barcode scannen und Material-Ausgang buchen
+// POST Entnahme direkt über Material-ID (für GTIN-Workflow)
+router.post('/material/:materialId/remove', async (req: Request, res: Response) => {
+  const materialId = parseInt(req.params.materialId);
+  const { quantity, user_name, notes } = req.body;
+  
+  if (!quantity || quantity < 1) {
+    return res.status(400).json({ error: 'Gültige Menge ist erforderlich' });
+  }
+  
+  const connection = await pool.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    // Bestand prüfen
+    const [materials] = await connection.query<RowDataPacket[]>(
+      'SELECT current_stock, name FROM materials WHERE id = ? AND active = TRUE',
+      [materialId]
+    );
+    
+    if (materials.length === 0) {
+      throw new Error('Material nicht gefunden oder bereits deaktiviert');
+    }
+    
+    const previousStock = materials[0].current_stock;
+    const newStock = previousStock - quantity;
+    
+    if (newStock < 0) {
+      throw new Error(`Nicht genügend Bestand verfügbar (aktuell: ${previousStock})`);
+    }
+    
+    // Bestand aktualisieren
+    await connection.query(
+      'UPDATE materials SET current_stock = ?, active = ? WHERE id = ?',
+      [newStock, newStock > 0, materialId]
+    );
+    
+    // Transaktion aufzeichnen
+    await connection.query(
+      `INSERT INTO material_transactions 
+       (material_id, transaction_type, quantity, previous_stock, new_stock, notes, user_name)
+       VALUES (?, 'out', ?, ?, ?, ?, ?)`,
+      [materialId, quantity, previousStock, newStock, notes || 'GTIN-Scan Entnahme', user_name || 'System']
+    );
+    
+    await connection.commit();
+    
+    res.json({
+      message: newStock === 0 ? 'Material vollständig entnommen und deaktiviert' : 'Entnahme erfolgreich',
+      material_id: materialId,
+      material_name: materials[0].name,
+      previous_stock: previousStock,
+      new_stock: newStock,
+      deactivated: newStock === 0
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Fehler bei der Material-Entnahme:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Datenbankfehler' });
+  } finally {
+    connection.release();
+  }
+});
+
 router.post('/scan-out', async (req: Request, res: Response) => {
   const { barcode, quantity, user_name, notes } = req.body;
   

@@ -387,17 +387,26 @@ const BarcodeScanner: React.FC = () => {
     }
 
     try {
-      await barcodeAPI.scanOut({
-        barcode,
+      // Direkte Entnahme über Material-ID (für GTIN-Workflow)
+      const response = await barcodeAPI.removeMaterial(material.id, {
         quantity,
         user_name: 'System',
-        notes: 'Barcode-Scan Ausgang',
+        notes: 'Barcode-Scan Entnahme',
       });
-      setSuccess(`${quantity} Einheit(en) erfolgreich ausgebucht`);
       
-      // Material-Daten aktualisieren
-      const response = await barcodeAPI.search(barcode);
-      setMaterial(response.data.material);
+      const data = response.data;
+      if (data.deactivated) {
+        setSuccess(`${quantity} Einheit(en) entnommen. Material vollständig entnommen und deaktiviert.`);
+        setMaterial(null);
+        setNotFound(false);
+      } else {
+        setSuccess(`${quantity} Einheit(en) erfolgreich entnommen. Neuer Bestand: ${data.new_stock}`);
+        // Material-Daten aktualisieren
+        setMaterial({
+          ...material,
+          current_stock: data.new_stock
+        });
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Fehler beim Ausbuchen');
     }

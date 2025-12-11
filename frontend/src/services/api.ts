@@ -91,6 +91,7 @@ export const barcodeAPI = {
   update: (id: number, data: any) => api.put(`/barcodes/${id}`, data),
   delete: (id: number) => api.delete(`/barcodes/${id}`),
   scanOut: (data: any) => api.post('/barcodes/scan-out', data),
+  removeMaterial: (materialId: number, data: any) => api.post(`/barcodes/material/${materialId}/remove`, data),
 };
 
 // Field Configurations

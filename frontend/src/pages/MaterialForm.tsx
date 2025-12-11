@@ -159,10 +159,11 @@ const MaterialForm: React.FC = () => {
           updates.description = state.masterData.description || '';
           updates.category_id = state.masterData.category_id || '';
           updates.company_id = state.masterData.company_id || '';
+          updates.cabinet_id = state.masterData.cabinet_id || '';
           updates.unit = state.masterData.unit || 'Stück';
           updates.size = state.masterData.size || '1';
           setGtinKnown(true);
-          setSuccess('Stammdaten aus Datenbank übernommen!');
+          setSuccess('Stammdaten aus Datenbank übernommen (Schrank änderbar)!');
         } else {
           setSuccess('GS1-Barcode vom Scanner übernommen!');
         }
@@ -243,10 +244,11 @@ const MaterialForm: React.FC = () => {
           description: master.description || prev.description,
           category_id: master.category_id || prev.category_id,
           company_id: master.company_id || prev.company_id,
+          cabinet_id: master.cabinet_id || prev.cabinet_id,
           unit: master.unit || prev.unit,
           size: master.size || prev.size,
         }));
-        setSuccess(`Stammdaten für GTIN ${gtin} gefunden und übernommen!`);
+        setSuccess(`Stammdaten für GTIN ${gtin} gefunden und übernommen (Schrank änderbar)!`);
         setTimeout(() => setSuccess(null), 3000);
       } else {
         setGtinKnown(false);
