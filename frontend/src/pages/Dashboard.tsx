@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Grid,
   Paper,
@@ -17,6 +18,7 @@ import {
   Warning as WarningIcon,
   EventBusy as EventBusyIcon,
   Storage as StorageIcon,
+  QrCodeScanner as QrCodeScannerIcon,
 } from '@mui/icons-material';
 import { materialAPI, cabinetAPI } from '../services/api';
 
@@ -36,6 +38,7 @@ interface LowStockCategory {
 }
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<Stats>({
     totalMaterials: 0,
     lowStockCount: 0,
@@ -130,6 +133,23 @@ const Dashboard: React.FC = () => {
       </Typography>
 
       <Grid container spacing={3}>
+        {/* Barcode Scanner - Icon */}
+        <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+          <QrCodeScannerIcon 
+            sx={{ 
+              fontSize: 120,
+              color: '#000',
+              cursor: 'pointer',
+              transition: 'transform 0.2s',
+              '&:hover': {
+                transform: 'scale(1.1)',
+              }
+            }}
+            onClick={() => navigate('/scanner', { state: { autoOpenCamera: true } })}
+          />
+        </Grid>
+
+        {/* Statistik-Karten */}
         {statCards.map((card, index) => (
           <Grid item xs={12} sm={6} md={3} key={index}>
             <Card sx={{ height: '100%' }}>
@@ -149,10 +169,10 @@ const Dashboard: React.FC = () => {
         ))}
       </Grid>
 
-      <Grid container spacing={3} sx={{ mt: 2 }}>
-        {/* Kategorien unter Mindestbestand */}
-        {lowStockCategories.length > 0 && (
-          <Grid item xs={12} md={6}>
+      {/* Kategorien unter Mindestbestand */}
+      {lowStockCategories.length > 0 && (
+        <Grid container spacing={3} sx={{ mt: 2 }}>
+          <Grid item xs={12}>
             <Paper sx={{ p: 3 }}>
               <Typography variant="h6" gutterBottom sx={{ color: '#ff9800' }}>
                 <WarningIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
@@ -175,33 +195,8 @@ const Dashboard: React.FC = () => {
               </List>
             </Paper>
           </Grid>
-        )}
-
-        <Grid item xs={12} md={lowStockCategories.length > 0 ? 6 : 12}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Willkommen im Material Manager
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Verwalten Sie Ihre medizinischen Materialien effizient und übersichtlich.
-              Nutzen Sie die Navigation links, um auf die verschiedenen Funktionen zuzugreifen.
-            </Typography>
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" component="div">
-                <strong>Funktionen:</strong>
-                <ul>
-                  <li>Materialverwaltung mit Barcode-Unterstützung</li>
-                  <li>Schrankorganisation</li>
-                  <li>Ein- und Ausgangsbuchungen</li>
-                  <li>Bestandsüberwachung und Warnungen</li>
-                  <li>Verfallsdatum-Tracking</li>
-                  <li>Berichte und Auswertungen</li>
-                </ul>
-              </Typography>
-            </Box>
-          </Paper>
         </Grid>
-      </Grid>
+      )}
     </Box>
   );
 };
