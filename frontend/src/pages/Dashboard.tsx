@@ -22,7 +22,7 @@ import {
   Warning as WarningIcon,
   EventBusy as EventBusyIcon,
   Storage as StorageIcon,
-  QrCodeScannerIcon,
+  QrCodeScanner as QrCodeScannerIcon,
   Category as CategoryIcon,
 } from '@mui/icons-material';
 import { materialAPI, cabinetAPI, categoryAPI } from '../services/api';
