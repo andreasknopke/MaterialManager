@@ -685,22 +685,9 @@ router.get('/debug-cabinets', async (req: Request, res: Response) => {
       'SELECT * FROM cabinets'
     );
     
-    // Alle Departments
-    const [departments] = await pool.query<any[]>(
-      'SELECT * FROM departments'
-    );
-    
-    // Join Query wie in cabinet.routes.ts
-    const [joined] = await pool.query<any[]>(
-      'SELECT c.*, d.name as department_name FROM cabinets c LEFT JOIN departments d ON c.department_id = d.id'
-    );
-    
     res.json({
       cabinets: cabinets,
-      departments: departments,
-      joined: joined,
-      cabinetCount: cabinets.length,
-      departmentCount: departments.length
+      cabinetCount: cabinets.length
     });
     
   } catch (error) {

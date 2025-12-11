@@ -14,14 +14,14 @@ router.get('/', async (req: Request, res: Response) => {
     console.log('=== GET /api/cabinets ===');
     console.log('User:', { id: req.user?.id, isRoot: req.user?.isRoot, departmentId: req.user?.departmentId });
     
-    let query = 'SELECT c.*, d.name as department_name FROM cabinets c LEFT JOIN departments d ON c.department_id = d.id';
+    let query = 'SELECT * FROM cabinets';
     const params: any[] = [];
     const conditions: string[] = [];
     
     // Root sieht alle Schränke (auch inaktive), andere nur ihre Department-Schränke (nur aktive)
     if (!req.user?.isRoot && req.user?.departmentId) {
-      conditions.push('c.active = TRUE');
-      conditions.push('c.department_id = ?');
+      conditions.push('active = TRUE');
+      conditions.push('department_id = ?');
       params.push(req.user.departmentId);
       console.log('Department Filter applied: department_id =', req.user.departmentId);
     } else if (!req.user?.isRoot && !req.user?.departmentId) {
@@ -37,7 +37,7 @@ router.get('/', async (req: Request, res: Response) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
     
-    query += ' ORDER BY c.name';
+    query += ' ORDER BY name';
     
     console.log('Final query:', query);
     console.log('Query params:', params);
@@ -60,12 +60,12 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Schrank nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    let query = 'SELECT c.*, d.name as department_name FROM cabinets c LEFT JOIN departments d ON c.department_id = d.id WHERE c.id = ?';
+    let query = 'SELECT * FROM cabinets WHERE id = ?';
     const params: any[] = [req.params.id];
     
     // Non-Root User können nur Schränke ihres Departments sehen
     if (!req.user?.isRoot && req.user?.departmentId) {
-      query += ' AND c.department_id = ?';
+      query += ' AND department_id = ?';
       params.push(req.user.departmentId);
     }
     
