@@ -240,21 +240,33 @@ const BarcodeScanner: React.FC = () => {
         console.log('Rufe searchGTIN API auf...');
         const gtinResponse = await barcodeAPI.searchGTIN(gs1Data.gtin);
         console.log('GTIN API Response:', gtinResponse.data);
-        setGtinMasterData(gtinResponse.data.masterData);
         
-        // Hole alle Materialien mit dieser GTIN (für Entnahme)
-        console.log('Rufe searchMaterialsByGTIN API auf...');
-        const materialsResponse = await barcodeAPI.searchMaterialsByGTIN(gs1Data.gtin);
-        console.log('Materials API Response:', materialsResponse.data);
-        if (materialsResponse.data.materials && materialsResponse.data.materials.length > 0) {
-          setExistingMaterials(materialsResponse.data.materials);
+        if (gtinResponse.data.found) {
+          setGtinMasterData(gtinResponse.data.masterData);
+          
+          // Hole alle Materialien mit dieser GTIN (für Entnahme) - separat behandeln
+          try {
+            console.log('Rufe searchMaterialsByGTIN API auf...');
+            const materialsResponse = await barcodeAPI.searchMaterialsByGTIN(gs1Data.gtin);
+            console.log('Materials API Response:', materialsResponse.data);
+            if (materialsResponse.data.materials && materialsResponse.data.materials.length > 0) {
+              setExistingMaterials(materialsResponse.data.materials);
+            }
+          } catch (matErr: any) {
+            console.log('Materials API Fehler (ignoriert):', matErr.message);
+            // Fehler bei Materials-API ignorieren, Dialog trotzdem öffnen
+          }
+          
+          // Dialog öffnen: Entnahme oder Hinzufügen?
+          console.log('Öffne Action Dialog...');
+          setActionDialogOpen(true);
+        } else {
+          // GTIN API erfolgreich aber nicht gefunden
+          console.log('GTIN nicht in Datenbank gefunden');
+          handleAddNewMaterialWithGS1(scannedCode, gs1Data);
         }
-        
-        // Dialog öffnen: Entnahme oder Hinzufügen?
-        console.log('Öffne Action Dialog...');
-        setActionDialogOpen(true);
       } catch (err: any) {
-        // GTIN nicht bekannt - direkt zum Hinzufügen
+        // GTIN nicht bekannt (404) - direkt zum Hinzufügen
         console.log('GTIN API Fehler:', err.response?.status, err.message);
         console.log('GTIN nicht bekannt, direkt zum Hinzufügen');
         handleAddNewMaterialWithGS1(scannedCode, gs1Data);
