@@ -159,7 +159,7 @@ const MaterialForm: React.FC = () => {
         categoryAPI.getAll(),
         companyAPI.getAll(),
         cabinetAPI.getAll(),
-        unitAPI.getAll({ active: true }),
+        unitAPI.getAll(),
       ]);
       console.log('Dropdown data loaded successfully');
       setCategories(categoriesRes.data);
