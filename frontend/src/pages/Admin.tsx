@@ -99,7 +99,25 @@ const Admin: React.FC = () => {
       </Box>
 
       {error && (
-        <AleCabinet Department Migration - Nur für Root */}
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
+          {success}
+        </Alert>
+      )}
+
+      {!isRoot && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Einige Admin-Funktionen sind nur für den Root-Benutzer verfügbar.
+        </Alert>
+      )}
+
+      <Grid container spacing={3}>
+        {/* Cabinet Department Migration - Nur für Root */}
         {isRoot && (
           <Grid item xs={12} md={6}>
             <Card>
