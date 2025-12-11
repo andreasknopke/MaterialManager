@@ -321,18 +321,12 @@ const MaterialForm: React.FC = () => {
         size: formData.unit === 'Stück' ? '1' : formData.size,
       };
 
-      // GS1 Barcode als zusätzlichen Barcode hinzufügen, falls vorhanden
-      const barcodes = [];
-      if (formData.gs1_barcode && gs1Data) {
-        barcodes.push({
-          barcode: formData.gs1_barcode,
-          barcode_type: 'GS1-128',
-          is_primary: true,
-        });
-      }
+      // HINWEIS: GS1-Barcode wird NICHT in die barcodes-Tabelle geschrieben!
+      // Die GTIN ist bereits in article_number gespeichert und kann mehrfach vorkommen.
+      // Nur echte physische Etiketten-Barcodes sollten in die barcodes-Tabelle.
 
       if (isNew) {
-        const response = await materialAPI.create({ ...dataToSend, barcodes });
+        const response = await materialAPI.create(dataToSend);
         setSuccess('Material erfolgreich erstellt!');
         setTimeout(() => navigate(`/materials/${response.data.id}`), 1500);
       } else {
