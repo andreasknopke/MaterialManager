@@ -7,6 +7,10 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  List,
+  ListItem,
+  ListItemText,
+  Chip,
 } from '@mui/material';
 import {
   Inventory as InventoryIcon,
@@ -23,6 +27,14 @@ interface Stats {
   totalCabinets: number;
 }
 
+interface LowStockCategory {
+  category_id: number;
+  category_name: string;
+  min_quantity: number;
+  total_stock: number;
+  stock_status: string;
+}
+
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<Stats>({
     totalMaterials: 0,
@@ -30,6 +42,7 @@ const Dashboard: React.FC = () => {
     expiringCount: 0,
     totalCabinets: 0,
   });
+  const [lowStockCategories, setLowStockCategories] = useState<LowStockCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,6 +68,7 @@ const Dashboard: React.FC = () => {
           expiringCount: expiringData.length,
           totalCabinets: cabinetsData.length,
         });
+        setLowStockCategories(lowStockData);
       } catch (error) {
         console.error('Fehler beim Laden der Statistiken:', error);
         setStats({
@@ -79,7 +93,7 @@ const Dashboard: React.FC = () => {
       color: '#1976d2',
     },
     {
-      title: 'Niedriger Bestand',
+      title: 'Kategorien unter Mindestbestand',
       value: stats.lowStockCount,
       icon: <WarningIcon sx={{ fontSize: 40 }} />,
       color: '#ff9800',
@@ -136,7 +150,34 @@ const Dashboard: React.FC = () => {
       </Grid>
 
       <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid item xs={12}>
+        {/* Kategorien unter Mindestbestand */}
+        {lowStockCategories.length > 0 && (
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ color: '#ff9800' }}>
+                <WarningIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                Kategorien unter Mindestbestand
+              </Typography>
+              <List dense>
+                {lowStockCategories.map((cat) => (
+                  <ListItem key={cat.category_id} divider>
+                    <ListItemText
+                      primary={cat.category_name}
+                      secondary={`Bestand: ${cat.total_stock} / Mindest: ${cat.min_quantity}`}
+                    />
+                    <Chip 
+                      label={`${cat.total_stock}/${cat.min_quantity}`}
+                      color="warning"
+                      size="small"
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Paper>
+          </Grid>
+        )}
+
+        <Grid item xs={12} md={lowStockCategories.length > 0 ? 6 : 12}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
               Willkommen im Material Manager

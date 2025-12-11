@@ -530,25 +530,24 @@ router.get('/reports/expiring', async (req: Request, res: Response) => {
   }
 });
 
-// GET Materialien mit niedrigem Bestand
+// GET Kategorien mit niedrigem Bestand (basierend auf category.min_quantity)
 router.get('/reports/low-stock', async (req: Request, res: Response) => {
   try {
-    // Views verwenden direkt die Spalten ohne Alias, daher '' statt 'm'
-    const departmentFilter = getDepartmentFilter(req, '');
-    let query = 'SELECT * FROM v_low_stock_materials';
+    let query = 'SELECT * FROM v_low_stock_categories';
     const params: any[] = [];
     
-    if (departmentFilter.whereClause) {
-      query += ` WHERE ${departmentFilter.whereClause}`;
-      params.push(...departmentFilter.params);
+    // Department-Filter für Non-Root
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      query += ' WHERE department_id = ?';
+      params.push(req.user.departmentId);
     }
     
-    console.log('[REPORTS] Low stock query:', query, 'params:', params);
+    console.log('[REPORTS] Low stock categories query:', query, 'params:', params);
     const [rows] = await pool.query<RowDataPacket[]>(query, params);
-    console.log('[REPORTS] Low stock materials found:', rows.length);
+    console.log('[REPORTS] Low stock categories found:', rows.length);
     res.json(rows);
   } catch (error) {
-    console.error('Fehler beim Abrufen der Materialien mit niedrigem Bestand:', error);
+    console.error('Fehler beim Abrufen der Kategorien mit niedrigem Bestand:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
   }
 });

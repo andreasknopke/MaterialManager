@@ -32,7 +32,8 @@ const Categories: React.FC = () => {
   const [formData, setFormData] = useState({ 
     name: '', 
     description: '',
-    department_id: null as number | null 
+    department_id: null as number | null,
+    min_quantity: 0
   });
 
   useEffect(() => {
@@ -71,11 +72,12 @@ const Categories: React.FC = () => {
       setFormData({ 
         name: category.name || '', 
         description: category.description || '',
-        department_id: category.department_id || null
+        department_id: category.department_id || null,
+        min_quantity: category.min_quantity || 0
       });
     } else {
       setEditingCategory(null);
-      setFormData({ name: '', description: '', department_id: user?.departmentId || null });
+      setFormData({ name: '', description: '', department_id: user?.departmentId || null, min_quantity: 0 });
     }
     setOpen(true);
   };
@@ -120,6 +122,19 @@ const Categories: React.FC = () => {
       renderCell: (params) => params.value ? <Chip label={params.value} size="small" color="primary" /> : '-'
     },
     { field: 'description', headerName: 'Beschreibung', flex: 1 },
+    { 
+      field: 'min_quantity', 
+      headerName: 'Mindestmenge', 
+      width: 120,
+      type: 'number',
+      renderCell: (params) => (
+        <Chip 
+          label={params.value || 0} 
+          size="small" 
+          color={params.value > 0 ? 'warning' : 'default'}
+        />
+      )
+    },
     {
       field: 'actions',
       headerName: 'Aktionen',
@@ -183,8 +198,19 @@ const Categories: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
             </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Mindestmenge"
+                value={formData.min_quantity}
+                onChange={(e) => setFormData({ ...formData, min_quantity: parseInt(e.target.value) || 0 })}
+                helperText="Warngrenze für niedrigen Bestand dieser Kategorie"
+                InputProps={{ inputProps: { min: 0 } }}
+              />
+            </Grid>
             {user?.isRoot && (
-              <Grid item xs={12}>
+              <Grid item xs={12} md={6}>
                 <FormControl fullWidth>
                   <InputLabel>Department</InputLabel>
                   <Select
