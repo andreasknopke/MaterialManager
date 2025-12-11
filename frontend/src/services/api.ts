@@ -10,10 +10,13 @@ const api = axios.create({
   },
 });
 
-// Request Interceptor
+// Request Interceptor - Token automatisch hinzufügen
 api.interceptors.request.use(
   (config) => {
-    // Hier könnte ein Token hinzugefügt werden
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {
