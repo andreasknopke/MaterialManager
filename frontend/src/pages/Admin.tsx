@@ -23,8 +23,10 @@ import {
   Settings as SettingsIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
 
 const Admin: React.FC = () => {
+  const { isRoot } = useAuth();
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -89,186 +91,72 @@ const Admin: React.FC = () => {
         </Alert>
       )}
 
+      {!isRoot && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          Einige Admin-Funktionen sind nur für den Root-Benutzer verfügbar.
+        </Alert>
+      )}
+
       <Grid container spacing={3}>
-        {/* Datenbank-Management */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={1} mb={2}>
-                <DeleteForeverIcon color="error" />
-                <Typography variant="h6">
-                  Datenbank zurücksetzen
+        {/* Datenbank-Management - Nur für Root */}
+        {isRoot && (
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                  <DeleteForeverIcon color="error" />
+                  <Typography variant="h6">
+                    Datenbank zurücksetzen
+                  </Typography>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Diese Aktion löscht <strong>alle Daten</strong> aus der Datenbank:
                 </Typography>
-              </Box>
-              <Divider sx={{ mb: 2 }} />
-              <Typography variant="body2" color="text.secondary" paragraph>
-                Diese Aktion löscht <strong>alle Daten</strong> aus der Datenbank:
-              </Typography>
-              <Typography component="div" variant="body2" color="text.secondary">
-                <ul style={{ marginTop: 0, paddingLeft: 20 }}>
-                  <li>Alle Materialien</li>
-                  <li>Alle Kategorien</li>
-                  <li>Alle Firmen</li>
-                  <li>Alle Schränke</li>
-                  <li>Alle Barcodes</li>
-                  <li>Alle Transaktionen</li>
-                </ul>
-              </Typography>
-              <Alert severity="warning" sx={{ mt: 2 }}>
-                <strong>ACHTUNG:</strong> Diese Aktion kann nicht rückgängig gemacht werden!
-              </Alert>
-            </CardContent>
-            <CardActions>
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={<WarningIcon />}
-                onClick={openConfirmDialog}
-                fullWidth
-              >
-                Datenbank leeren
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
+                <Typography component="div" variant="body2" color="text.secondary">
+                  <ul style={{ marginTop: 0, paddingLeft: 20 }}>
+                    <li>Alle Materialien</li>
+                    <li>Alle Kategorien</li>
+                    <li>Alle Firmen</li>
+                    <li>Alle Schränke</li>
+                    <li>Alle Barcodes</li>
+                    <li>Alle Transaktionen</li>
+                  </ul>
+                </Typography>
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  <strong>ACHTUNG:</strong> Diese Aktion kann nicht rückgängig gemacht werden!
+                </Alert>
+              </CardContent>
+              <CardActions>
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<WarningIcon />}
+                  onClick={openConfirmDialog}
+                  fullWidth
+                >
+                  Datenbank leeren
+                </Button>
+              </CardActions>
+            </Card>
+          </Grid>
+        )}
 
-        {/* Weitere Admin-Funktionen können hier hinzugefügt werden */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={1} mb={2}>
-                <SettingsIcon color="primary" />
-                <Typography variant="h6">
-                  Datenbank-Migration (Units)
+        {/* Platzhalter für zukünftige Admin-Funktionen */}
+        {!isRoot && (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Weitere Admin-Funktionen folgen hier
                 </Typography>
-              </Box>
-              <Divider sx={{ mb: 2 }} />
-              <Typography variant="body2" color="text.secondary" paragraph>
-                Führt die Datenbank-Migration für das Units-System aus.
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Diese Aktion ist sicher und kann mehrfach ausgeführt werden.
-              </Typography>
-              <Alert severity="info" sx={{ mt: 2 }}>
-                Migration wird automatisch überprüft und nur bei Bedarf ausgeführt.
-              </Alert>
-            </CardContent>
-            <CardActions>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={async () => {
-                  try {
-                    setLoading(true);
-                    await axios.post('/api/admin/run-migration');
-                    setSuccess('Units-Migration erfolgreich ausgeführt!');
-                    setTimeout(() => setSuccess(null), 3000);
-                  } catch (err: any) {
-                    setError(err.response?.data?.error || 'Migration fehlgeschlagen');
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
-                fullWidth
-                disabled={loading}
-              >
-                {loading ? 'Migration läuft...' : 'Units-Migration ausführen'}
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-
-        {/* User Management Migration */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={1} mb={2}>
-                <SettingsIcon color="secondary" />
-                <Typography variant="h6">
-                  User Management Migration
+                <Typography variant="body2" color="text.secondary">
+                  Momentan sind keine zusätzlichen Admin-Funktionen verfügbar.
                 </Typography>
-              </Box>
-              <Divider sx={{ mb: 2 }} />
-              <Typography variant="body2" color="text.secondary" paragraph>
-                Erstellt die Tabellen für das User Management System und legt den Root-Benutzer an.
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                <strong>Root-Credentials:</strong> Username: root, Passwort: root
-              </Typography>
-              <Alert severity="warning" sx={{ mt: 2 }}>
-                Nach der Migration MUSS das Root-Passwort geändert werden!
-              </Alert>
-            </CardContent>
-            <CardActions>
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={async () => {
-                  try {
-                    setLoading(true);
-                    await axios.post('/api/admin/run-user-migration');
-                    setSuccess('User Management erfolgreich installiert! Login als "root" / "root"');
-                    setTimeout(() => setSuccess(null), 5000);
-                  } catch (err: any) {
-                    setError(err.response?.data?.error || 'User-Migration fehlgeschlagen');
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
-                fullWidth
-                disabled={loading}
-              >
-                {loading ? 'Migration läuft...' : 'User Management installieren'}
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
-
-        {/* Department Access Migration */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={1} mb={2}>
-                <SettingsIcon color="info" />
-                <Typography variant="h6">
-                  Department-Zugriffskontrolle
-                </Typography>
-              </Box>
-              <Divider sx={{ mb: 2 }} />
-              <Typography variant="body2" color="text.secondary" paragraph>
-                Erweitert User Management um Department-Zuweisungen für Admin- und User-Rollen.
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Root bleibt globaler Admin, andere Admins werden zu Department Admins.
-              </Typography>
-              <Alert severity="info" sx={{ mt: 2 }}>
-                Nach der Migration können Departments zugewiesen werden.
-              </Alert>
-            </CardContent>
-            <CardActions>
-              <Button
-                variant="contained"
-                color="info"
-                onClick={async () => {
-                  try {
-                    setLoading(true);
-                    await axios.post('/api/admin/run-department-migration');
-                    setSuccess('Department-Zugriffskontrolle erfolgreich aktiviert!');
-                    setTimeout(() => setSuccess(null), 5000);
-                  } catch (err: any) {
-                    setError(err.response?.data?.error || 'Department-Migration fehlgeschlagen');
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
-                fullWidth
-                disabled={loading}
-              >
-                {loading ? 'Migration läuft...' : 'Department-Zugriff aktivieren'}
-              </Button>
-            </CardActions>
-          </Card>
-        </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
       </Grid>
 
       {/* Bestätigungs-Dialog */}
