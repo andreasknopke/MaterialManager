@@ -9,21 +9,39 @@ import {
   CardContent,
   CircularProgress,
   Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
 } from '@mui/material';
 import {
   Inventory as InventoryIcon,
   Warning as WarningIcon,
   EventBusy as EventBusyIcon,
   Storage as StorageIcon,
-  QrCodeScanner as QrCodeScannerIcon,
+  QrCodeScannerIcon,
+  Category as CategoryIcon,
 } from '@mui/icons-material';
-import { materialAPI, cabinetAPI } from '../services/api';
+import { materialAPI, cabinetAPI, categoryAPI } from '../services/api';
 
 interface Stats {
   totalMaterials: number;
   lowStockCount: number;
   expiringCount: number;
   totalCabinets: number;
+  totalCategories: number;
+}
+
+interface CategoryStock {
+  id: number;
+  name: string;
+  min_quantity: number;
+  total_stock: number;
+  material_count: number;
+  stock_status: 'ok' | 'low' | 'empty';
 }
 
 const Dashboard: React.FC = () => {
@@ -33,49 +51,44 @@ const Dashboard: React.FC = () => {
     lowStockCount: 0,
     expiringCount: 0,
     totalCabinets: 0,
+    totalCategories: 0,
   });
+  const [categoryStocks, setCategoryStocks] = useState<CategoryStock[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [materials, lowStock, expiring, cabinets] = await Promise.all([
+        const [materials, expiring, cabinets, categoryStats] = await Promise.all([
           materialAPI.getAll(),
-          materialAPI.getLowStock(),
           materialAPI.getExpiring(),
           cabinetAPI.getAll(),
+          categoryAPI.getInventoryStats(),
         ]);
 
-        console.log('=== DASHBOARD DEBUG ===');
-        console.log('Materials response:', materials.data);
-        console.log('LowStock response:', lowStock.data);
-        console.log('Expiring response:', expiring.data);
-        console.log('Cabinets response:', cabinets.data);
-        console.log('Cabinets count:', cabinets.data?.length);
-
         const materialsData = Array.isArray(materials.data) ? materials.data : [];
-        const lowStockData = Array.isArray(lowStock.data) ? lowStock.data : [];
         const expiringData = Array.isArray(expiring.data) ? expiring.data : [];
         const cabinetsData = Array.isArray(cabinets.data) ? cabinets.data : [];
-
-        console.log('Processed arrays:');
-        console.log('  materialsData.length:', materialsData.length);
-        console.log('  lowStockData.length:', lowStockData.length);
-        console.log('  expiringData.length:', expiringData.length);
-        console.log('  cabinetsData.length:', cabinetsData.length);
+        const categoryData = Array.isArray(categoryStats.data) ? categoryStats.data : [];
 
         // Nur aktive Materialien zählen
         const activeMaterials = materialsData.filter((m: any) => m.active);
 
+        // Kategorien mit niedrigem Bestand
+        const lowStockCategories = categoryData.filter((cat: CategoryStock) => 
+          cat.stock_status === 'low' || cat.stock_status === 'empty'
+        );
+
         const newStats = {
           totalMaterials: activeMaterials.length,
-          lowStockCount: lowStockData.length,
+          lowStockCount: lowStockCategories.length,
           expiringCount: expiringData.length,
           totalCabinets: cabinetsData.length,
+          totalCategories: categoryData.length,
         };
 
-        console.log('Setting stats:', newStats);
         setStats(newStats);
+        setCategoryStocks(categoryData);
       } catch (error) {
         console.error('Fehler beim Laden der Statistiken:', error);
         setStats({
@@ -83,6 +96,7 @@ const Dashboard: React.FC = () => {
           lowStockCount: 0,
           expiringCount: 0,
           totalCabinets: 0,
+          totalCategories: 0,
         });
       } finally {
         setLoading(false);
@@ -101,11 +115,11 @@ const Dashboard: React.FC = () => {
       onClick: () => navigate('/materials'),
     },
     {
-      title: 'Niedriger Bestand',
+      title: 'Kategorien mit niedrigem Bestand',
       value: stats.lowStockCount,
       icon: <WarningIcon sx={{ fontSize: 40 }} />,
       color: '#ff9800',
-      onClick: () => navigate('/materials', { state: { filter: 'lowStock' } }),
+      onClick: () => navigate('/categories'),
     },
     {
       title: 'Ablaufende Materialien',
@@ -122,6 +136,11 @@ const Dashboard: React.FC = () => {
       onClick: () => navigate('/cabinets'),
     },
   ];
+
+  // Kategorien mit niedrigem oder leerem Bestand
+  const lowStockCategories = categoryStocks.filter(cat => 
+    cat.stock_status === 'low' || cat.stock_status === 'empty'
+  );
 
   if (loading) {
     return (
@@ -186,6 +205,60 @@ const Dashboard: React.FC = () => {
             </Card>
           </Grid>
         ))}
+      </Grid>
+
+      {/* Kategorien mit niedrigem Bestand */}
+      {lowStockCategories.length > 0 && (
+        <Grid container spacing={3} sx={{ mt: 2 }}>
+          <Grid item xs={12}>
+            <Paper sx={{ p: 3 }}>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <WarningIcon color="warning" />
+                <Typography variant="h6">
+                  Kategorien mit niedrigem Bestand
+                </Typography>
+              </Box>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Kategorie</TableCell>
+                      <TableCell align="right">Aktueller Bestand</TableCell>
+                      <TableCell align="right">Mindestmenge</TableCell>
+                      <TableCell align="right">Anzahl Materialien</TableCell>
+                      <TableCell>Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {lowStockCategories.map((category) => (
+                      <TableRow 
+                        key={category.id}
+                        hover
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => navigate('/materials', { state: { categoryFilter: category.id } })}
+                      >
+                        <TableCell>{category.name}</TableCell>
+                        <TableCell align="right">{category.total_stock}</TableCell>
+                        <TableCell align="right">{category.min_quantity}</TableCell>
+                        <TableCell align="right">{category.material_count}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={
+                              category.stock_status === 'empty' ? 'Leer' : 'Niedrig'
+                            }
+                            color={category.stock_status === 'empty' ? 'error' : 'warning'}
+                            size="small"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Grid>
+        </Grid>
+      )}
       </Grid>
 
       <Grid container spacing={3} sx={{ mt: 2 }}>

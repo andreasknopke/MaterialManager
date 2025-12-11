@@ -528,4 +528,53 @@ router.post('/update-root-password', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/admin/run-category-migration - Führt Migration für Category min_quantity aus
+router.post('/run-category-migration', async (req: Request, res: Response) => {
+  try {
+    console.log('Starting category min_quantity migration...');
+    
+    // Prüfen ob Spalte bereits existiert
+    const [columns] = await pool.query<any[]>(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'categories' 
+        AND COLUMN_NAME = 'min_quantity'
+    `);
+    
+    if (columns.length > 0) {
+      console.log('✓ min_quantity column already exists');
+      return res.json({ 
+        message: 'Migration already completed',
+        status: 'already_exists'
+      });
+    }
+    
+    // Spalte hinzufügen
+    await pool.query(`
+      ALTER TABLE categories 
+      ADD COLUMN min_quantity INT DEFAULT 0 COMMENT 'Mindestmenge für die gesamte Kategorie'
+    `);
+    console.log('✓ Added min_quantity column');
+    
+    // Index hinzufügen
+    await pool.query(`
+      CREATE INDEX idx_min_quantity ON categories(min_quantity)
+    `);
+    console.log('✓ Added index on min_quantity');
+    
+    res.json({ 
+      message: 'Category migration completed successfully',
+      status: 'success'
+    });
+    
+  } catch (error) {
+    console.error('❌ Category migration failed:', error);
+    res.status(500).json({ 
+      error: 'Migration failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

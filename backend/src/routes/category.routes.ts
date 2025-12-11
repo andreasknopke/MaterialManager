@@ -38,7 +38,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 // POST neue Kategorie
 router.post('/', async (req: Request, res: Response) => {
-  const { name, description } = req.body;
+  const { name, description, min_quantity } = req.body;
   
   if (!name) {
     return res.status(400).json({ error: 'Name ist erforderlich' });
@@ -46,8 +46,8 @@ router.post('/', async (req: Request, res: Response) => {
   
   try {
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO categories (name, description) VALUES (?, ?)',
-      [name, description]
+      'INSERT INTO categories (name, description, min_quantity) VALUES (?, ?, ?)',
+      [name, description, min_quantity || 0]
     );
     
     res.status(201).json({
@@ -65,12 +65,12 @@ router.post('/', async (req: Request, res: Response) => {
 
 // PUT Kategorie aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
-  const { name, description } = req.body;
+  const { name, description, min_quantity } = req.body;
   
   try {
     const [result] = await pool.query<ResultSetHeader>(
-      'UPDATE categories SET name = ?, description = ? WHERE id = ?',
-      [name, description, req.params.id]
+      'UPDATE categories SET name = ?, description = ?, min_quantity = ? WHERE id = ?',
+      [name, description, min_quantity || 0, req.params.id]
     );
     
     if (result.affectedRows === 0) {
@@ -80,6 +80,35 @@ router.put('/:id', async (req: Request, res: Response) => {
     res.json({ message: 'Kategorie erfolgreich aktualisiert' });
   } catch (error) {
     console.error('Fehler beim Aktualisieren der Kategorie:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// GET Kategorie-Bestände (Summe aller Materialien pro Kategorie)
+router.get('/stats/inventory', async (req: Request, res: Response) => {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT 
+        c.id,
+        c.name,
+        c.description,
+        c.min_quantity,
+        COALESCE(SUM(m.current_stock), 0) AS total_stock,
+        COUNT(m.id) AS material_count,
+        CASE 
+          WHEN COALESCE(SUM(m.current_stock), 0) < c.min_quantity THEN 'low'
+          WHEN COALESCE(SUM(m.current_stock), 0) = 0 THEN 'empty'
+          ELSE 'ok'
+        END AS stock_status
+      FROM categories c
+      LEFT JOIN materials m ON m.category_id = c.id AND m.active = TRUE
+      GROUP BY c.id, c.name, c.description, c.min_quantity
+      ORDER BY c.name
+    `);
+    
+    res.json(rows);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Kategorie-Bestände:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
   }
 });

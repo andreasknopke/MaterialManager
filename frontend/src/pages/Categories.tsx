@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  Chip,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
@@ -20,7 +21,7 @@ const Categories: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
-  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', min_quantity: 0 });
 
   useEffect(() => {
     fetchCategories();
@@ -42,10 +43,14 @@ const Categories: React.FC = () => {
   const handleOpen = (category?: any) => {
     if (category) {
       setEditingCategory(category);
-      setFormData({ name: category.name, description: category.description });
+      setFormData({ 
+        name: category.name, 
+        description: category.description,
+        min_quantity: category.min_quantity || 0
+      });
     } else {
       setEditingCategory(null);
-      setFormData({ name: '', description: '' });
+      setFormData({ name: '', description: '', min_quantity: 0 });
     }
     setOpen(true);
   };
@@ -84,6 +89,18 @@ const Categories: React.FC = () => {
     { field: 'id', headerName: 'ID', width: 70 },
     { field: 'name', headerName: 'Name', width: 250 },
     { field: 'description', headerName: 'Beschreibung', flex: 1 },
+    { 
+      field: 'min_quantity', 
+      headerName: 'Mindestmenge', 
+      width: 150,
+      renderCell: (params) => (
+        <Chip 
+          label={params.value || 0} 
+          size="small" 
+          color={params.value > 0 ? 'primary' : 'default'}
+        />
+      )
+    },
     {
       field: 'actions',
       headerName: 'Aktionen',
@@ -143,6 +160,16 @@ const Categories: React.FC = () => {
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Mindestmenge (gesamt für alle Materialien dieser Kategorie)"
+            type="number"
+            value={formData.min_quantity}
+            onChange={(e) => setFormData({ ...formData, min_quantity: parseInt(e.target.value) || 0 })}
+            margin="normal"
+            helperText="Die Gesamtmenge aller Materialien dieser Kategorie sollte mindestens diesen Wert haben"
+            InputProps={{ inputProps: { min: 0 } }}
           />
         </DialogContent>
         <DialogActions>
