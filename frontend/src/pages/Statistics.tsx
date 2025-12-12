@@ -621,10 +621,10 @@ const Statistics: React.FC = () => {
                               />
                             </TableCell>
                             <TableCell align="right">
-                              {m.cost ? `${m.cost.toFixed(2)} €` : '-'}
+                              {m.cost ? `${Number(m.cost).toFixed(2)} €` : '-'}
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 'medium' }}>
-                              {m.current_stock_value ? `${m.current_stock_value.toFixed(2)} €` : '-'}
+                              {m.current_stock_value ? `${Number(m.current_stock_value).toFixed(2)} €` : '-'}
                             </TableCell>
                             <TableCell align="right">{m.max_stock_ever || m.current_stock}</TableCell>
                             <TableCell align="right">{m.min_stock_ever || 0}</TableCell>
@@ -635,7 +635,7 @@ const Statistics: React.FC = () => {
                               -{m.total_out || 0}
                             </TableCell>
                             <TableCell align="right" sx={{ color: 'error.main' }}>
-                              {m.total_out_value ? `${m.total_out_value.toFixed(2)} €` : '-'}
+                              {m.total_out_value ? `${Number(m.total_out_value).toFixed(2)} €` : '-'}
                             </TableCell>
                             <TableCell>
                               {m.last_transaction_date ? formatDateShort(m.last_transaction_date) : '-'}
