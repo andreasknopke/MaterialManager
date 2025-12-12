@@ -130,8 +130,11 @@ const MaterialForm: React.FC = () => {
           if (state.gs1Data.gtin) {
             updates.article_number = state.gs1Data.gtin;
           }
+          // LOT: batchNumber (AI 10) oder falls nicht vorhanden serialNumber (AI 21)
           if (state.gs1Data.batchNumber) {
             updates.lot_number = state.gs1Data.batchNumber;
+          } else if (state.gs1Data.serialNumber) {
+            updates.lot_number = state.gs1Data.serialNumber;
           }
           if (state.gs1Data.expiryDate) {
             updates.expiry_date = state.gs1Data.expiryDate;
@@ -229,8 +232,11 @@ const MaterialForm: React.FC = () => {
         updates.article_number = parsed.gtin;
       }
 
+      // LOT: batchNumber (AI 10) oder falls nicht vorhanden serialNumber (AI 21)
       if (parsed.batchNumber) {
         updates.lot_number = parsed.batchNumber;
+      } else if (parsed.serialNumber) {
+        updates.lot_number = parsed.serialNumber;
       }
 
       if (parsed.expiryDate) {
@@ -378,6 +384,8 @@ const MaterialForm: React.FC = () => {
                   </Typography>
                   {gs1Data.gtin && <Typography variant="body2">• GTIN/Artikelnummer (AI 01): {gs1Data.gtin}</Typography>}
                   {gs1Data.batchNumber && <Typography variant="body2">• LOT/Chargennummer (AI 10): {gs1Data.batchNumber}</Typography>}
+                  {!gs1Data.batchNumber && gs1Data.serialNumber && <Typography variant="body2">• Seriennummer → LOT (AI 21): {gs1Data.serialNumber}</Typography>}
+                  {gs1Data.batchNumber && gs1Data.serialNumber && <Typography variant="body2">• Seriennummer (AI 21): {gs1Data.serialNumber}</Typography>}
                   {gs1Data.expiryDate && <Typography variant="body2">• Verfallsdatum (AI 17): {gs1Data.expiryDate}</Typography>}
                   {gs1Data.sscc && <Typography variant="body2">• SSCC (AI 00): {gs1Data.sscc}</Typography>}
                 </Alert>
@@ -563,16 +571,18 @@ const MaterialForm: React.FC = () => {
 
             <Grid item xs={12} md={6}>
               <TextField
+                required
                 fullWidth
                 label="Chargennummer (LOT)"
                 value={formData.lot_number}
                 onChange={handleChange('lot_number')}
-                helperText={gs1Data?.batchNumber ? `LOT-Nummer aus GS1-Barcode: ${gs1Data.batchNumber}` : 'Batch/Lot Number aus GS1 AI 10'}
+                helperText={gs1Data?.batchNumber ? `LOT-Nummer aus GS1-Barcode: ${gs1Data.batchNumber}` : (gs1Data?.serialNumber ? `Seriennummer als LOT: ${gs1Data.serialNumber}` : 'Batch/Lot Number aus GS1 AI 10 oder Seriennummer AI 21')}
               />
             </Grid>
 
             <Grid item xs={12} md={6}>
               <TextField
+                required
                 fullWidth
                 type="date"
                 label="Verfallsdatum"
