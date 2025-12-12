@@ -37,6 +37,7 @@ import { barcodeAPI, materialAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
 import Tesseract from 'tesseract.js';
+import { getScannerSettings } from './Admin';
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
@@ -54,7 +55,11 @@ const BarcodeScanner: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handscannerInputRef = useRef<HTMLInputElement>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  
+  // Scanner-Einstellungen aus Admin laden
+  const scannerSettings = getScannerSettings();
   
   // Neuer State für GTIN-Auswahl-Dialog
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
@@ -62,10 +67,10 @@ const BarcodeScanner: React.FC = () => {
   const [gtinMasterData, setGtinMasterData] = useState<any>(null);
   const [existingMaterials, setExistingMaterials] = useState<any[]>([]);
 
-  // Auto-open camera if navigated from dashboard or scanning cabinet
+  // Auto-open camera if navigated from dashboard or scanning cabinet (nur wenn Kamera aktiviert)
   useEffect(() => {
     const state = location.state as { autoOpenCamera?: boolean; scanCabinet?: boolean; returnTo?: string } | null;
-    if (state?.autoOpenCamera || state?.scanCabinet) {
+    if ((state?.autoOpenCamera || state?.scanCabinet) && scannerSettings.cameraEnabled) {
       console.log('Auto-opening camera:', state);
       setCameraOpen(true);
     }
@@ -591,7 +596,7 @@ const BarcodeScanner: React.FC = () => {
       <Grid container spacing={{ xs: 2, sm: 3 }}>
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
-            {/* Handscanner-Modus Toggle */}
+            {/* Handscanner-Modus Toggle - nur wenn in Admin aktiviert */}
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
               <Box display="flex" alignItems="center">
                 <ScannerIcon sx={{ mr: 1, fontSize: 30 }} />
@@ -599,19 +604,21 @@ const BarcodeScanner: React.FC = () => {
                   {handscannerMode ? 'Handscanner-Modus' : 'Barcode eingeben'}
                 </Typography>
               </Box>
-              <Tooltip title={handscannerMode ? 'Handscanner-Modus deaktivieren' : 'Handscanner-Modus (Bluetooth/USB)'}>
-                <IconButton 
-                  onClick={() => {
-                    setHandscannerMode(!handscannerMode);
-                    if (!handscannerMode) {
-                      setTimeout(() => handscannerInputRef.current?.focus(), 100);
-                    }
-                  }}
-                  color={handscannerMode ? 'primary' : 'default'}
-                >
-                  <BluetoothIcon />
-                </IconButton>
-              </Tooltip>
+              {scannerSettings.bluetoothEnabled && (
+                <Tooltip title={handscannerMode ? 'Handscanner-Modus deaktivieren' : 'Handscanner-Modus (Bluetooth/USB)'}>
+                  <IconButton 
+                    onClick={() => {
+                      setHandscannerMode(!handscannerMode);
+                      if (!handscannerMode) {
+                        setTimeout(() => handscannerInputRef.current?.focus(), 100);
+                      }
+                    }}
+                    color={handscannerMode ? 'primary' : 'default'}
+                  >
+                    <BluetoothIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
 
             {handscannerMode ? (
@@ -645,6 +652,7 @@ const BarcodeScanner: React.FC = () => {
               <>
                 <TextField
                   fullWidth
+                  inputRef={barcodeInputRef}
                   label="Barcode"
                   value={barcode}
                   onChange={(e) => setBarcode(e.target.value)}
@@ -655,18 +663,20 @@ const BarcodeScanner: React.FC = () => {
                   InputProps={{
                     endAdornment: (
                       <InputAdornment position="end">
-                        <Tooltip title="Kamera öffnen">
-                          <IconButton
-                            onClick={() => {
-                              console.log('Kamera-Button geklickt');
-                              setCameraOpen(true);
-                            }}
-                            edge="end"
-                            sx={{ mr: 1 }}
-                          >
-                            <CameraIcon />
-                          </IconButton>
-                        </Tooltip>
+                        {scannerSettings.cameraEnabled && (
+                          <Tooltip title="Kamera öffnen">
+                            <IconButton
+                              onClick={() => {
+                                console.log('Kamera-Button geklickt');
+                                setCameraOpen(true);
+                              }}
+                              edge="end"
+                              sx={{ mr: 1 }}
+                            >
+                              <CameraIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         <Tooltip title="Aus Zwischenablage einfügen">
                           <IconButton
                             onClick={handlePasteFromClipboard}

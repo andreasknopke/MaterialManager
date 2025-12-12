@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -16,14 +16,28 @@ import {
   Grid,
   Divider,
   TextField,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import {
   Warning as WarningIcon,
   DeleteForever as DeleteForeverIcon,
   Settings as SettingsIcon,
+  CameraAlt as CameraIcon,
+  BluetoothConnected as BluetoothIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+
+// Scanner-Einstellungen aus localStorage laden/speichern
+export const getScannerSettings = () => {
+  const settings = localStorage.getItem('scannerSettings');
+  return settings ? JSON.parse(settings) : { cameraEnabled: false, bluetoothEnabled: false };
+};
+
+export const saveScannerSettings = (settings: { cameraEnabled: boolean; bluetoothEnabled: boolean }) => {
+  localStorage.setItem('scannerSettings', JSON.stringify(settings));
+};
 
 const Admin: React.FC = () => {
   const { isRoot } = useAuth();
@@ -33,6 +47,17 @@ const Admin: React.FC = () => {
   const [migrationLoading, setMigrationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Scanner-Einstellungen
+  const [scannerSettings, setScannerSettings] = useState(getScannerSettings());
+  
+  const handleScannerSettingChange = (setting: 'cameraEnabled' | 'bluetoothEnabled') => {
+    const newSettings = { ...scannerSettings, [setting]: !scannerSettings[setting] };
+    setScannerSettings(newSettings);
+    saveScannerSettings(newSettings);
+    setSuccess(`Scanner-Einstellung wurde gespeichert`);
+    setTimeout(() => setSuccess(null), 2000);
+  };
 
   const handleResetDatabase = async () => {
     if (confirmText !== 'DATENBANK LÖSCHEN') {
@@ -252,21 +277,66 @@ const Admin: React.FC = () => {
           </Grid>
         )}
 
-        {/* Platzhalter für zukünftige Admin-Funktionen */}
-        {!isRoot && (
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Weitere Admin-Funktionen folgen hier
+        {/* Scanner-Einstellungen - Für alle Admins */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <CameraIcon color="primary" />
+                <Typography variant="h6">
+                  Scanner-Einstellungen
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Momentan sind keine zusätzlichen Admin-Funktionen verfügbar.
+              </Box>
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Aktivieren Sie hier zusätzliche Scanner-Optionen für den Barcode-Scanner.
+                Standardmäßig wird nur die Tastatur-Eingabe verwendet.
+              </Typography>
+              
+              <Box sx={{ mt: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={scannerSettings.cameraEnabled}
+                      onChange={() => handleScannerSettingChange('cameraEnabled')}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <CameraIcon fontSize="small" />
+                      <span>Kamera-Scanner aktivieren</span>
+                    </Box>
+                  }
+                />
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 6, mt: -1 }}>
+                  Ermöglicht das Scannen mit der Gerätekamera (ZXing + OCR)
                 </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
+              </Box>
+              
+              <Box sx={{ mt: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={scannerSettings.bluetoothEnabled}
+                      onChange={() => handleScannerSettingChange('bluetoothEnabled')}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <BluetoothIcon fontSize="small" />
+                      <span>Handscanner-Modus aktivieren</span>
+                    </Box>
+                  }
+                />
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 6, mt: -1 }}>
+                  Zeigt den Handscanner-Modus für Bluetooth/USB-Scanner an
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
 
       {/* Bestätigungs-Dialog */}
