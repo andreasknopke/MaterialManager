@@ -125,6 +125,21 @@ export function parseGS1Barcode(barcode: string): GS1Data {
   
   // FNC1-Zeichen als Feldtrennzeichen markieren (Group Separator)
   // GS1 verwendet FNC1 (\x1D, ASCII 29) oder ~ als Trennzeichen zwischen variablen Feldern
+  
+  // Manche Scanner geben FNC1 als literale Zeichenkette "x1d" oder "\x1d" aus
+  // z.B. "x1d0108714729158608..." statt dem echten ASCII 29 Zeichen
+  // Entferne "x1d" am Anfang (GS1-Präfix) und ersetze innerhalb durch GS-Zeichen
+  if (normalized.toLowerCase().startsWith('x1d')) {
+    normalized = normalized.substring(3);
+  }
+  // Auch \x1d als literale Zeichenkette (4 Zeichen) behandeln
+  if (normalized.toLowerCase().startsWith('\\x1d')) {
+    normalized = normalized.substring(4);
+  }
+  // x1d innerhalb des Strings durch echtes GS-Zeichen ersetzen (case-insensitive)
+  normalized = normalized.replace(/x1d/gi, '\x1D');
+  normalized = normalized.replace(/\\x1d/gi, '\x1D');
+  
   // eslint-disable-next-line no-control-regex
   normalized = normalized.replace(/\x1D/g, '\x1D'); // Behalte GS-Zeichen
   
@@ -257,8 +272,16 @@ export function isValidGS1Barcode(barcode: string): boolean {
   // Normalisieren (Klammern entfernen falls vorhanden)
   let normalized = normalizeGS1WithParentheses(barcode);
   
+  // x1d Präfix entfernen (manche Scanner geben FNC1 so aus)
+  if (normalized.toLowerCase().startsWith('x1d')) {
+    normalized = normalized.substring(3);
+  }
+  if (normalized.toLowerCase().startsWith('\\x1d')) {
+    normalized = normalized.substring(4);
+  }
+  
   // eslint-disable-next-line no-control-regex
-  normalized = normalized.replace(/\]C1|~|\x1D/g, '');
+  normalized = normalized.replace(/\]C1|~|\x1D|x1d/gi, '');
   if (normalized.startsWith(']')) {
     normalized = normalized.substring(3);
   }
