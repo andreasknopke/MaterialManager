@@ -18,6 +18,7 @@ import {
   DialogContent,
   DialogActions,
   Divider,
+  LinearProgress,
 } from '@mui/material';
 import { 
   QrCodeScanner as ScannerIcon, 
@@ -28,10 +29,14 @@ import {
   Close as CloseIcon,
   PowerSettingsNew as ReactivateIcon,
   Inventory as InventoryIcon,
+  DocumentScanner as OcrIcon,
+  BluetoothConnected as BluetoothIcon,
+  TextFields as TextFieldsIcon,
 } from '@mui/icons-material';
 import { barcodeAPI, materialAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
+import Tesseract from 'tesseract.js';
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
@@ -43,7 +48,12 @@ const BarcodeScanner: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [notFound, setNotFound] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [handscannerMode, setHandscannerMode] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const handscannerInputRef = useRef<HTMLInputElement>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
   
   // Neuer State für GTIN-Auswahl-Dialog
@@ -208,6 +218,103 @@ const BarcodeScanner: React.FC = () => {
       }
     };
   }, [cameraOpen]);
+
+  // OCR-Funktion: Texterkennung unter dem Barcode
+  const performOCR = async () => {
+    if (!videoRef.current) {
+      setError('Kein Video-Stream verfügbar');
+      return;
+    }
+    
+    setOcrLoading(true);
+    setOcrProgress(0);
+    setError('');
+    
+    try {
+      // Canvas erstellen und aktuelles Video-Frame erfassen
+      const canvas = canvasRef.current || document.createElement('canvas');
+      const video = videoRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        throw new Error('Canvas-Context nicht verfügbar');
+      }
+      
+      ctx.drawImage(video, 0, 0);
+      
+      // OCR mit Tesseract durchführen
+      const result = await Tesseract.recognize(
+        canvas,
+        'eng', // Englisch für Zahlen/Buchstaben
+        {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              setOcrProgress(Math.round(m.progress * 100));
+            }
+          },
+        }
+      );
+      
+      console.log('OCR Ergebnis:', result.data.text);
+      
+      // GS1-ähnliche Muster extrahieren (01)XXXXXX(17)XXXXXX(10)XXXXXX
+      const text = result.data.text.replace(/\s/g, ''); // Leerzeichen entfernen
+      
+      // Suche nach GS1-Pattern: (01)...(17)...(10)...
+      const gs1Pattern = /\(?01\)?(\d{14})\(?17\)?(\d{6})\(?10\)?([A-Za-z0-9]+)/;
+      const gs1Match = text.match(gs1Pattern);
+      
+      if (gs1Match) {
+        const extractedBarcode = `01${gs1Match[1]}17${gs1Match[2]}10${gs1Match[3]}`;
+        console.log('GS1-Barcode extrahiert:', extractedBarcode);
+        setBarcode(extractedBarcode);
+        setCameraOpen(false);
+        setSuccess('Barcode per OCR erkannt!');
+        
+        // Automatisch verarbeiten
+        setTimeout(() => handleScannedBarcode(extractedBarcode), 500);
+      } else {
+        // Versuche nur Zahlenfolge zu finden
+        const numbersOnly = text.replace(/[^0-9]/g, '');
+        if (numbersOnly.length >= 20) {
+          console.log('Zahlenfolge gefunden:', numbersOnly);
+          setBarcode(numbersOnly);
+          setCameraOpen(false);
+          setSuccess('Zahlenfolge erkannt - bitte prüfen');
+        } else {
+          setError('Kein Barcode-Text erkannt. Versuchen Sie es mit besserer Beleuchtung.');
+        }
+      }
+    } catch (err: any) {
+      console.error('OCR Fehler:', err);
+      setError('OCR-Erkennung fehlgeschlagen: ' + err.message);
+    } finally {
+      setOcrLoading(false);
+      setOcrProgress(0);
+    }
+  };
+
+  // Handscanner-Eingabe verarbeiten
+  const handleHandscannerInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setBarcode(value);
+  };
+
+  // Handscanner: Bei Enter automatisch suchen
+  const handleHandscannerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && barcode.trim()) {
+      e.preventDefault();
+      console.log('Handscanner Eingabe:', barcode);
+      handleScannedBarcode(barcode);
+      // Input leeren für nächsten Scan
+      if (handscannerInputRef.current) {
+        handscannerInputRef.current.value = '';
+      }
+      setBarcode('');
+    }
+  };
 
   // NEUER WORKFLOW: Nach Scan GTIN prüfen und entsprechende Aktion anbieten
   const handleScannedBarcode = async (scannedCode: string) => {
@@ -484,56 +591,105 @@ const BarcodeScanner: React.FC = () => {
       <Grid container spacing={{ xs: 2, sm: 3 }}>
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 3 }}>
-            <Box display="flex" alignItems="center" mb={2}>
-              <ScannerIcon sx={{ mr: 1, fontSize: 30 }} />
-              <Typography variant="h6">Barcode eingeben</Typography>
+            {/* Handscanner-Modus Toggle */}
+            <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+              <Box display="flex" alignItems="center">
+                <ScannerIcon sx={{ mr: 1, fontSize: 30 }} />
+                <Typography variant="h6">
+                  {handscannerMode ? 'Handscanner-Modus' : 'Barcode eingeben'}
+                </Typography>
+              </Box>
+              <Tooltip title={handscannerMode ? 'Handscanner-Modus deaktivieren' : 'Handscanner-Modus (Bluetooth/USB)'}>
+                <IconButton 
+                  onClick={() => {
+                    setHandscannerMode(!handscannerMode);
+                    if (!handscannerMode) {
+                      setTimeout(() => handscannerInputRef.current?.focus(), 100);
+                    }
+                  }}
+                  color={handscannerMode ? 'primary' : 'default'}
+                >
+                  <BluetoothIcon />
+                </IconButton>
+              </Tooltip>
             </Box>
 
-            <TextField
-              fullWidth
-              label="Barcode"
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Barcode scannen oder eingeben"
-              margin="normal"
-              autoFocus
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <Tooltip title="Kamera öffnen">
-                      <IconButton
-                        onClick={() => {
-                          console.log('Kamera-Button geklickt');
-                          setCameraOpen(true);
-                        }}
-                        edge="end"
-                        sx={{ mr: 1 }}
-                      >
-                        <CameraIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Aus Zwischenablage einfügen">
-                      <IconButton
-                        onClick={handlePasteFromClipboard}
-                        edge="end"
-                      >
-                        <PasteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </InputAdornment>
-                ),
-              }}
-            />
+            {handscannerMode ? (
+              /* Handscanner-Modus: Großes Eingabefeld, Auto-Submit bei Enter */
+              <Box>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <strong>Handscanner-Modus aktiv</strong><br />
+                  Scannen Sie mit Ihrem Bluetooth/USB-Scanner. Der Barcode wird automatisch verarbeitet.
+                </Alert>
+                <TextField
+                  fullWidth
+                  inputRef={handscannerInputRef}
+                  label="Warte auf Scan..."
+                  placeholder="Scanner-Eingabe wird hier angezeigt"
+                  onChange={handleHandscannerInput}
+                  onKeyDown={handleHandscannerKeyDown}
+                  autoFocus
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      fontSize: '1.5rem',
+                      fontFamily: 'monospace',
+                    }
+                  }}
+                />
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  Der Scanner sendet automatisch Enter nach dem Scan
+                </Typography>
+              </Box>
+            ) : (
+              /* Normaler Modus: Manuelles Eingabefeld */
+              <>
+                <TextField
+                  fullWidth
+                  label="Barcode"
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Barcode scannen oder eingeben"
+                  margin="normal"
+                  autoFocus
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Tooltip title="Kamera öffnen">
+                          <IconButton
+                            onClick={() => {
+                              console.log('Kamera-Button geklickt');
+                              setCameraOpen(true);
+                            }}
+                            edge="end"
+                            sx={{ mr: 1 }}
+                          >
+                            <CameraIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Aus Zwischenablage einfügen">
+                          <IconButton
+                            onClick={handlePasteFromClipboard}
+                            edge="end"
+                          >
+                            <PasteIcon />
+                          </IconButton>
+                        </Tooltip>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
 
-            <Button
-              fullWidth
-              variant="contained"
-              onClick={handleSearch}
-              sx={{ mt: 2 }}
-            >
-              Suchen
-            </Button>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={handleSearch}
+                  sx={{ mt: 2 }}
+                >
+                  Suchen
+                </Button>
+              </>
+            )}
 
             {/* Hinzufügen-Button wenn nicht gefunden */}
             {notFound && (
@@ -667,6 +823,9 @@ const BarcodeScanner: React.FC = () => {
                 backgroundColor: '#000',
               }}
             />
+            {/* Hidden canvas for OCR frame capture */}
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
+            
             <Typography 
               variant="body2" 
               color="text.secondary" 
@@ -675,9 +834,29 @@ const BarcodeScanner: React.FC = () => {
             >
               Halten Sie den Barcode vor die Kamera
             </Typography>
+            
+            {/* OCR Progress Indicator */}
+            {ocrLoading && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" align="center" color="primary">
+                  OCR-Erkennung läuft... {Math.round(ocrProgress * 100)}%
+                </Typography>
+                <LinearProgress variant="determinate" value={ocrProgress * 100} sx={{ mt: 1 }} />
+              </Box>
+            )}
           </Box>
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
+        <DialogActions sx={{ p: 2, flexDirection: 'column', gap: 1 }}>
+          <Button 
+            onClick={performOCR} 
+            variant="contained" 
+            color="secondary"
+            fullWidth
+            disabled={ocrLoading}
+            startIcon={<TextFieldsIcon />}
+          >
+            {ocrLoading ? 'OCR läuft...' : 'OCR versuchen (Zahlen unter Barcode)'}
+          </Button>
           <Button onClick={() => setCameraOpen(false)} variant="outlined" fullWidth>
             Abbrechen
           </Button>
