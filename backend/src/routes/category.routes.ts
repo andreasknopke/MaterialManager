@@ -38,7 +38,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 // POST neue Kategorie
 router.post('/', async (req: Request, res: Response) => {
-  const { name, description, min_quantity } = req.body;
+  const { name, description, min_quantity, ops_code, zusatzentgelt } = req.body;
   
   if (!name) {
     return res.status(400).json({ error: 'Name ist erforderlich' });
@@ -46,8 +46,8 @@ router.post('/', async (req: Request, res: Response) => {
   
   try {
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO categories (name, description, min_quantity) VALUES (?, ?, ?)',
-      [name, description, min_quantity || 0]
+      'INSERT INTO categories (name, description, min_quantity, ops_code, zusatzentgelt) VALUES (?, ?, ?, ?, ?)',
+      [name, description, min_quantity || 0, ops_code || null, zusatzentgelt || null]
     );
     
     res.status(201).json({
@@ -65,12 +65,12 @@ router.post('/', async (req: Request, res: Response) => {
 
 // PUT Kategorie aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
-  const { name, description, min_quantity } = req.body;
+  const { name, description, min_quantity, ops_code, zusatzentgelt } = req.body;
   
   try {
     const [result] = await pool.query<ResultSetHeader>(
-      'UPDATE categories SET name = ?, description = ?, min_quantity = ? WHERE id = ?',
-      [name, description, min_quantity || 0, req.params.id]
+      'UPDATE categories SET name = ?, description = ?, min_quantity = ?, ops_code = ?, zusatzentgelt = ? WHERE id = ?',
+      [name, description, min_quantity || 0, ops_code || null, zusatzentgelt || null, req.params.id]
     );
     
     if (result.affectedRows === 0) {

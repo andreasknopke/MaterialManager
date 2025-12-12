@@ -21,7 +21,7 @@ const Categories: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
-  const [formData, setFormData] = useState({ name: '', description: '', min_quantity: 0 });
+  const [formData, setFormData] = useState({ name: '', description: '', min_quantity: 0, ops_code: '', zusatzentgelt: '' });
 
   useEffect(() => {
     fetchCategories();
@@ -45,12 +45,14 @@ const Categories: React.FC = () => {
       setEditingCategory(category);
       setFormData({ 
         name: category.name, 
-        description: category.description,
-        min_quantity: category.min_quantity || 0
+        description: category.description || '',
+        min_quantity: category.min_quantity || 0,
+        ops_code: category.ops_code || '',
+        zusatzentgelt: category.zusatzentgelt || ''
       });
     } else {
       setEditingCategory(null);
-      setFormData({ name: '', description: '', min_quantity: 0 });
+      setFormData({ name: '', description: '', min_quantity: 0, ops_code: '', zusatzentgelt: '' });
     }
     setOpen(true);
   };
@@ -87,12 +89,14 @@ const Categories: React.FC = () => {
 
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'name', headerName: 'Name', width: 250 },
+    { field: 'name', headerName: 'Name', width: 200 },
     { field: 'description', headerName: 'Beschreibung', flex: 1 },
+    { field: 'ops_code', headerName: 'OPS-Code', width: 120 },
+    { field: 'zusatzentgelt', headerName: 'Zusatzentgelt (ZE)', width: 140 },
     { 
       field: 'min_quantity', 
       headerName: 'Mindestmenge', 
-      width: 150,
+      width: 130,
       renderCell: (params) => (
         <Chip 
           label={params.value || 0} 
@@ -170,6 +174,24 @@ const Categories: React.FC = () => {
             margin="normal"
             helperText="Die Gesamtmenge aller Materialien dieser Kategorie sollte mindestens diesen Wert haben"
             InputProps={{ inputProps: { min: 0 } }}
+          />
+          <TextField
+            fullWidth
+            label="OPS-Code"
+            value={formData.ops_code}
+            onChange={(e) => setFormData({ ...formData, ops_code: e.target.value })}
+            margin="normal"
+            helperText="Operationen- und Prozedurenschlüssel (optional)"
+            placeholder="z.B. 8-83b.c1"
+          />
+          <TextField
+            fullWidth
+            label="Zusatzentgelt (ZE)"
+            value={formData.zusatzentgelt}
+            onChange={(e) => setFormData({ ...formData, zusatzentgelt: e.target.value })}
+            margin="normal"
+            helperText="Zusatzentgelt-Code für Krankenhausabrechnung (optional)"
+            placeholder="z.B. ZE2025-123"
           />
         </DialogContent>
         <DialogActions>

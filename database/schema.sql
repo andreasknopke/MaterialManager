@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
+    ops_code VARCHAR(50) COMMENT 'OPS-Code (Operationen- und Prozedurenschlüssel)',
+    zusatzentgelt VARCHAR(50) COMMENT 'Zusatzentgelt (ZE) Code für Krankenhausabrechnung',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_name (name)
@@ -239,3 +241,7 @@ LEFT JOIN cabinets cab ON m.cabinet_id = cab.id
 WHERE m.current_stock <= m.min_stock
     AND m.active = TRUE
 ORDER BY (m.current_stock - m.min_stock) ASC;
+
+-- Migration: OPS-Code und Zusatzentgelt Felder für Kategorien hinzufügen
+-- ALTER TABLE categories ADD COLUMN IF NOT EXISTS ops_code VARCHAR(50) COMMENT 'OPS-Code (Operationen- und Prozedurenschlüssel)';
+-- ALTER TABLE categories ADD COLUMN IF NOT EXISTS zusatzentgelt VARCHAR(50) COMMENT 'Zusatzentgelt (ZE) Code für Krankenhausabrechnung';
