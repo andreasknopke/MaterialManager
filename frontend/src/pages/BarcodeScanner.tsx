@@ -31,7 +31,7 @@ import {
 } from '@mui/icons-material';
 import { barcodeAPI, materialAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
-import { BrowserMultiFormatReader } from '@zxing/library';
+import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
@@ -100,8 +100,20 @@ const BarcodeScanner: React.FC = () => {
             await videoRef.current.play();
             console.log('✓ Video-Stream gestartet');
             
-            // Jetzt ZXing Scanner starten
-            const codeReader = new BrowserMultiFormatReader();
+            // Jetzt ZXing Scanner starten mit optimierten Einstellungen für GS1-128
+            const hints = new Map();
+            // Unterstützte Formate - priorisiere Code 128 (GS1-128)
+            hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+              BarcodeFormat.CODE_128,      // GS1-128 Barcodes
+              BarcodeFormat.EAN_13,        // EAN-13
+              BarcodeFormat.EAN_8,         // EAN-8
+              BarcodeFormat.QR_CODE,       // QR Codes
+              BarcodeFormat.DATA_MATRIX,   // Data Matrix
+            ]);
+            // Versuche härter zu dekodieren
+            hints.set(DecodeHintType.TRY_HARDER, true);
+            
+            const codeReader = new BrowserMultiFormatReader(hints);
             codeReaderRef.current = codeReader;
             
             console.log('Starte Barcode-Erkennung...');
