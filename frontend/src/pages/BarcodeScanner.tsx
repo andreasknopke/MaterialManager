@@ -38,6 +38,7 @@ import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser'
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
 import Tesseract from 'tesseract.js';
 import { getScannerSettings } from './Admin';
+import { getInterventionSession, addInterventionItem } from './Dashboard';
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
@@ -61,6 +62,10 @@ const BarcodeScanner: React.FC = () => {
   // Scanner-Einstellungen aus Admin laden
   const scannerSettings = getScannerSettings();
   
+  // Interventionsmodus prüfen
+  const interventionSession = getInterventionSession();
+  const isInterventionMode = interventionSession.active;
+  
   // Neuer State für GTIN-Auswahl-Dialog
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [scannedGS1Data, setScannedGS1Data] = useState<GS1Data | null>(null);
@@ -69,7 +74,7 @@ const BarcodeScanner: React.FC = () => {
 
   // Auto-open camera if navigated from dashboard or scanning cabinet (nur wenn Kamera aktiviert)
   useEffect(() => {
-    const state = location.state as { autoOpenCamera?: boolean; scanCabinet?: boolean; returnTo?: string } | null;
+    const state = location.state as { autoOpenCamera?: boolean; scanCabinet?: boolean; returnTo?: string; removalMode?: boolean } | null;
     if ((state?.autoOpenCamera || state?.scanCabinet) && scannerSettings.cameraEnabled) {
       console.log('Auto-opening camera:', state);
       setCameraOpen(true);
@@ -463,10 +468,21 @@ const BarcodeScanner: React.FC = () => {
       const data = response.data;
       setActionDialogOpen(false);
       
+      // Im Interventionsmodus: Entnahme protokollieren
+      if (isInterventionMode) {
+        addInterventionItem({
+          materialName: materialItem.name,
+          articleNumber: materialItem.article_number || '',
+          lotNumber: materialItem.lot_number || '',
+          quantity: 1,
+          gtin: materialItem.gtin || scannedGS1Data?.gtin || '',
+        });
+      }
+      
       if (data.deactivated) {
-        setSuccess(`1 Einheit von "${materialItem.name}" entnommen. Material vollständig entnommen.`);
+        setSuccess(`1 Einheit von "${materialItem.name}" entnommen. Material vollständig entnommen.${isInterventionMode ? ' ✓ Protokolliert' : ''}`);
       } else {
-        setSuccess(`1 Einheit von "${materialItem.name}" entnommen. Neuer Bestand: ${data.new_stock}`);
+        setSuccess(`1 Einheit von "${materialItem.name}" entnommen. Neuer Bestand: ${data.new_stock}${isInterventionMode ? ' ✓ Protokolliert' : ''}`);
       }
       
       // Material für Anzeige setzen (aktualisiert)
@@ -549,12 +565,24 @@ const BarcodeScanner: React.FC = () => {
       });
       
       const data = response.data;
+      
+      // Im Interventionsmodus: Entnahme protokollieren
+      if (isInterventionMode) {
+        addInterventionItem({
+          materialName: material.name,
+          articleNumber: material.article_number || '',
+          lotNumber: material.lot_number || '',
+          quantity: quantity,
+          gtin: material.gtin || '',
+        });
+      }
+      
       if (data.deactivated) {
-        setSuccess(`${quantity} Einheit(en) entnommen. Material vollständig entnommen und deaktiviert.`);
+        setSuccess(`${quantity} Einheit(en) entnommen. Material vollständig entnommen und deaktiviert.${isInterventionMode ? ' ✓ Protokolliert' : ''}`);
         setMaterial(null);
         setNotFound(false);
       } else {
-        setSuccess(`${quantity} Einheit(en) erfolgreich entnommen. Neuer Bestand: ${data.new_stock}`);
+        setSuccess(`${quantity} Einheit(en) erfolgreich entnommen. Neuer Bestand: ${data.new_stock}${isInterventionMode ? ' ✓ Protokolliert' : ''}`);
         // Material-Daten aktualisieren
         setMaterial({
           ...material,
