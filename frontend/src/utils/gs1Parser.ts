@@ -33,8 +33,9 @@ const AI_PATTERNS: { [key: string]: { length: number | null; name: string } } = 
 
 /**
  * Entfernt Klammern um Application Identifiers und normalisiert den Barcode
- * z.B. "(01)08714729158608(17)280806(10)37152429" → "010871472915860817280806103715242"
+ * z.B. "(01)08714729158608(17)280806(10)37152429" → mit GS-Trennern wo nötig
  * Die Klammern dienen als visuelle Trennung und werden von manchen Scannern beibehalten
+ * GS-Zeichen werden nur nach variablen Feldern eingefügt, nicht nach festen Längen
  */
 function normalizeGS1WithParentheses(barcode: string): string {
   // Prüfe ob der Barcode Klammern enthält - Format: (AI)value
@@ -48,16 +49,20 @@ function normalizeGS1WithParentheses(barcode: string): string {
   let remaining = barcode;
   
   // Pattern: (AI)value wobei AI 2-4 Ziffern ist
-  const aiPattern = /^\((\d{2,4})\)(.*)$/;
+  const aiPatternRegex = /^\((\d{2,4})\)(.*)$/;
   
   while (remaining.length > 0) {
-    const match = remaining.match(aiPattern);
+    const match = remaining.match(aiPatternRegex);
     if (match) {
       const ai = match[1];
       remaining = match[2];
       
       // Füge AI ohne Klammern hinzu
       result += ai;
+      
+      // Prüfe ob dieser AI eine variable Länge hat
+      const aiDef = AI_PATTERNS[ai];
+      const isVariableLength = aiDef && aiDef.length === null;
       
       // Finde den Wert bis zur nächsten Klammer oder Ende
       const nextParenPos = remaining.indexOf('(');
@@ -67,8 +72,12 @@ function normalizeGS1WithParentheses(barcode: string): string {
         remaining = '';
       } else {
         // Wert bis zur nächsten Klammer
-        // WICHTIG: Füge GS-Zeichen als Trenner hinzu, damit der Parser weiß wo das Feld endet
-        result += remaining.substring(0, nextParenPos) + '\x1D';
+        result += remaining.substring(0, nextParenPos);
+        // NUR bei variablen Feldern GS-Zeichen einfügen
+        // Bei festen Längen (wie 01, 17) weiß der Parser durch die Länge wo das Feld endet
+        if (isVariableLength) {
+          result += '\x1D';
+        }
         remaining = remaining.substring(nextParenPos);
       }
     } else {
