@@ -140,6 +140,14 @@ const MaterialDetail: React.FC = () => {
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
+                label="Kosten pro Einheit"
+                value={material?.cost ? `${material.cost.toFixed(2)} €` : 'Nicht angegeben'}
+                disabled
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
                 label="Verfallsdatum"
                 value={material?.expiry_date ? new Date(material.expiry_date).toLocaleDateString('de-DE') : ''}
                 disabled

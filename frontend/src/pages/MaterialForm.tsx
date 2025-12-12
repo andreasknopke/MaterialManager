@@ -36,6 +36,7 @@ interface MaterialFormData {
   expiry_date: string;
   lot_number: string;
   article_number: string;
+  cost: string;
   location_in_cabinet: string;
   notes: string;
   gs1_barcode: string;
@@ -86,6 +87,7 @@ const MaterialForm: React.FC = () => {
     expiry_date: '',
     lot_number: '',
     article_number: '',
+    cost: '',
     location_in_cabinet: '',
     notes: '',
     gs1_barcode: '',
@@ -196,6 +198,7 @@ const MaterialForm: React.FC = () => {
         expiry_date: material.expiry_date ? material.expiry_date.split('T')[0] : '',
         lot_number: material.lot_number || '',
         article_number: material.article_number || '',
+        cost: material.cost ? String(material.cost) : '',
         location_in_cabinet: material.location_in_cabinet || '',
         notes: material.notes || '',
         gs1_barcode: '',
@@ -328,6 +331,7 @@ const MaterialForm: React.FC = () => {
         company_id: formData.company_id || null,
         cabinet_id: formData.cabinet_id || null,
         expiry_date: formData.expiry_date || null,
+        cost: formData.cost ? parseFloat(formData.cost) : null,
       };
 
       // GS1 Barcode als zusätzlichen Barcode hinzufügen, falls vorhanden
@@ -509,6 +513,20 @@ const MaterialForm: React.FC = () => {
                 value={formData.article_number}
                 onChange={handleChange('article_number')}
                 helperText={gs1Data?.gtin ? `GTIN aus GS1-Barcode: ${gs1Data.gtin}` : 'Global Trade Item Number (GTIN)'}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Kosten pro Einheit (€)"
+                type="number"
+                value={formData.cost}
+                onChange={handleChange('cost')}
+                InputProps={{
+                  inputProps: { min: 0, step: 0.01 }
+                }}
+                helperText="Optionale Kostenangabe pro Einheit in EUR"
               />
             </Grid>
 

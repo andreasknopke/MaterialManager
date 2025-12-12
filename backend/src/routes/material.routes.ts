@@ -148,7 +148,7 @@ router.post('/', async (req: Request, res: Response) => {
   const {
     category_id, company_id, cabinet_id, name, description,
     size, unit, min_stock, current_stock, expiry_date,
-    lot_number, article_number, location_in_cabinet, shipping_container_code, notes,
+    lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes,
     custom_fields, barcodes, unit_id
   } = req.body;
   
@@ -185,13 +185,13 @@ router.post('/', async (req: Request, res: Response) => {
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO materials 
        (category_id, company_id, cabinet_id, unit_id, name, description, size, unit,
-        min_stock, current_stock, expiry_date, lot_number, article_number,
+        min_stock, current_stock, expiry_date, lot_number, article_number, cost,
         location_in_cabinet, shipping_container_code, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         category_id, company_id, cabinet_id, materialUnitId, name, description, size, unit,
         0, current_stock || 1, expiry_date, lot_number,
-        article_number, location_in_cabinet, shipping_container_code, notes
+        article_number, cost || null, location_in_cabinet, shipping_container_code, notes
       ]
     );
     
@@ -247,7 +247,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   const {
     category_id, company_id, cabinet_id, unit_id, name, description,
     size, unit, min_stock, expiry_date,
-    lot_number, article_number, location_in_cabinet, shipping_container_code, notes, active
+    lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes, active
   } = req.body;
   
   try {
@@ -290,11 +290,11 @@ router.put('/:id', async (req: Request, res: Response) => {
        SET category_id = ?, company_id = ?, cabinet_id = ?, unit_id = ?, name = ?,
            description = ?, size = ?, unit = ?, min_stock = ?,
            expiry_date = ?, lot_number = ?,
-           article_number = ?, location_in_cabinet = ?, shipping_container_code = ?, notes = ?, active = ?
+           article_number = ?, cost = ?, location_in_cabinet = ?, shipping_container_code = ?, notes = ?, active = ?
        WHERE id = ?`,
       [
         category_id, company_id, cabinet_id, materialUnitId, name, description, size, unit,
-        min_stock, expiry_date, lot_number, article_number,
+        min_stock, expiry_date, lot_number, article_number, cost || null,
         location_in_cabinet, shipping_container_code, notes, isActive, req.params.id
       ]
     );
