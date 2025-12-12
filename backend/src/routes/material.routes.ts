@@ -20,8 +20,8 @@ router.get('/', async (req: Request, res: Response) => {
     let query = 'SELECT * FROM v_materials_overview WHERE active = TRUE';
     const params: any[] = [];
     
-    // Department-Filter hinzufügen (View braucht keinen Prefix)
-    const departmentFilter = getDepartmentFilter(req, '');
+    // Department-Filter hinzufügen (View hat keine Alias, nutze 'v_materials_overview')
+    const departmentFilter = getDepartmentFilter(req, 'v_materials_overview');
     console.log('Department filter:', departmentFilter);
     
     if (departmentFilter.whereClause) {
@@ -71,8 +71,8 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Material nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    // Department-Filter (View braucht keinen Prefix)
-    const departmentFilter = getDepartmentFilter(req, '');
+    // Department-Filter
+    const departmentFilter = getDepartmentFilter(req);
     let query = 'SELECT * FROM v_materials_overview WHERE id = ?';
     const params: any[] = [req.params.id];
     
@@ -117,7 +117,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.get('/:id/transactions', async (req: Request, res: Response) => {
   try {
     // Department-Validierung: Material muss zugänglich sein
-    const departmentFilter = getDepartmentFilter(req, '');
+    const departmentFilter = getDepartmentFilter(req);
     if (departmentFilter.whereClause) {
       const [materials] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -149,21 +149,15 @@ router.post('/', async (req: Request, res: Response) => {
     category_id, company_id, cabinet_id, name, description,
     size, unit, min_stock, current_stock, expiry_date,
     lot_number, article_number, location_in_cabinet, shipping_container_code, notes,
-    custom_fields, barcodes, unit_id
+    custom_fields, barcodes
   } = req.body;
   
   if (!name) {
     return res.status(400).json({ error: 'Name ist erforderlich' });
   }
   
-  // Department (unit_id) bestimmen: Entweder vom Request oder vom User
-  let materialUnitId = unit_id;
-  if (!materialUnitId && req.user?.departmentId) {
-    materialUnitId = req.user.departmentId;
-  }
-  
   // Department-Validierung: Schrank muss im erlaubten Department sein
-  if (cabinet_id && req.user?.departmentId && !req.user?.isRoot) {
+  if (cabinet_id && req.user?.departmentId) {
     const [cabinets] = await pool.query<RowDataPacket[]>(
       'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
       [cabinet_id, req.user.departmentId]
@@ -179,18 +173,16 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     await connection.beginTransaction();
     
-    // Material einfügen (inkl. unit_id!)
-    // current_stock startet bei 1 (ein Material wird aufgenommen)
-    // min_stock ist nicht mehr relevant für einzelne Materialien (nur Kategorien)
+    // Material einfügen
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO materials 
-       (category_id, company_id, cabinet_id, unit_id, name, description, size, unit,
+       (category_id, company_id, cabinet_id, name, description, size, unit,
         min_stock, current_stock, expiry_date, lot_number, article_number,
         location_in_cabinet, shipping_container_code, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        category_id, company_id, cabinet_id, materialUnitId, name, description, size, unit,
-        0, current_stock || 1, expiry_date, lot_number,
+        category_id, company_id, cabinet_id, name, description, size, unit,
+        min_stock || 0, current_stock || 0, expiry_date, lot_number,
         article_number, location_in_cabinet, shipping_container_code, notes
       ]
     );
@@ -245,14 +237,14 @@ router.post('/', async (req: Request, res: Response) => {
 // PUT Material aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
   const {
-    category_id, company_id, cabinet_id, unit_id, name, description,
+    category_id, company_id, cabinet_id, name, description,
     size, unit, min_stock, expiry_date,
     lot_number, article_number, location_in_cabinet, shipping_container_code, notes, active
   } = req.body;
   
   try {
     // Department-Validierung: Material muss im erlaubten Department sein
-    const departmentFilter = getDepartmentFilter(req, '');
+    const departmentFilter = getDepartmentFilter(req);
     if (departmentFilter.whereClause) {
       const [materials] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -264,8 +256,8 @@ router.put('/:id', async (req: Request, res: Response) => {
       }
     }
     
-    // Department-Validierung: Neuer Schrank muss im erlaubten Department sein (nur für nicht-Root)
-    if (cabinet_id && req.user?.departmentId && !req.user?.isRoot) {
+    // Department-Validierung: Neuer Schrank muss im erlaubten Department sein
+    if (cabinet_id && req.user?.departmentId) {
       const [cabinets] = await pool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [cabinet_id, req.user.departmentId]
@@ -279,21 +271,15 @@ router.put('/:id', async (req: Request, res: Response) => {
     // active sollte standardmäßig true sein, wenn nicht explizit gesetzt
     const isActive = active !== undefined ? active : true;
     
-    // unit_id bestimmen: Vom Request oder vom User (für nicht-Root)
-    let materialUnitId = unit_id;
-    if (!materialUnitId && req.user?.departmentId && !req.user?.isRoot) {
-      materialUnitId = req.user.departmentId;
-    }
-    
     const [result] = await pool.query<ResultSetHeader>(
       `UPDATE materials 
-       SET category_id = ?, company_id = ?, cabinet_id = ?, unit_id = ?, name = ?,
+       SET category_id = ?, company_id = ?, cabinet_id = ?, name = ?,
            description = ?, size = ?, unit = ?, min_stock = ?,
            expiry_date = ?, lot_number = ?,
            article_number = ?, location_in_cabinet = ?, shipping_container_code = ?, notes = ?, active = ?
        WHERE id = ?`,
       [
-        category_id, company_id, cabinet_id, materialUnitId, name, description, size, unit,
+        category_id, company_id, cabinet_id, name, description, size, unit,
         min_stock, expiry_date, lot_number, article_number,
         location_in_cabinet, shipping_container_code, notes, isActive, req.params.id
       ]
@@ -324,7 +310,7 @@ router.post('/:id/stock-in', async (req: Request, res: Response) => {
     await connection.beginTransaction();
     
     // Department-Validierung
-    const departmentFilter = getDepartmentFilter(req, '');
+    const departmentFilter = getDepartmentFilter(req);
     if (departmentFilter.whereClause) {
       const [materials] = await connection.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -395,7 +381,7 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
     await connection.beginTransaction();
     
     // Department-Validierung
-    const departmentFilter = getDepartmentFilter(req, '');
+    const departmentFilter = getDepartmentFilter(req);
     if (departmentFilter.whereClause) {
       const [materials] = await connection.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -461,7 +447,7 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     // Department-Validierung
-    const departmentFilter = getDepartmentFilter(req, '');
+    const departmentFilter = getDepartmentFilter(req);
     if (departmentFilter.whereClause) {
       const [materials] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -493,7 +479,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.post('/:id/reactivate', async (req: Request, res: Response) => {
   try {
     // Department-Validierung
-    const departmentFilter = getDepartmentFilter(req, '');
+    const departmentFilter = getDepartmentFilter(req);
     if (departmentFilter.whereClause) {
       const [materials] = await pool.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
@@ -544,24 +530,25 @@ router.get('/reports/expiring', async (req: Request, res: Response) => {
   }
 });
 
-// GET Kategorien mit niedrigem Bestand (basierend auf category.min_quantity)
+// GET Materialien mit niedrigem Bestand
 router.get('/reports/low-stock', async (req: Request, res: Response) => {
   try {
-    let query = 'SELECT * FROM v_low_stock_categories';
+    // Views verwenden direkt die Spalten ohne Alias, daher '' statt 'm'
+    const departmentFilter = getDepartmentFilter(req, '');
+    let query = 'SELECT * FROM v_low_stock_materials';
     const params: any[] = [];
     
-    // Department-Filter für Non-Root
-    if (!req.user?.isRoot && req.user?.departmentId) {
-      query += ' WHERE department_id = ?';
-      params.push(req.user.departmentId);
+    if (departmentFilter.whereClause) {
+      query += ` WHERE ${departmentFilter.whereClause}`;
+      params.push(...departmentFilter.params);
     }
     
-    console.log('[REPORTS] Low stock categories query:', query, 'params:', params);
+    console.log('[REPORTS] Low stock query:', query, 'params:', params);
     const [rows] = await pool.query<RowDataPacket[]>(query, params);
-    console.log('[REPORTS] Low stock categories found:', rows.length);
+    console.log('[REPORTS] Low stock materials found:', rows.length);
     res.json(rows);
   } catch (error) {
-    console.error('Fehler beim Abrufen der Kategorien mit niedrigem Bestand:', error);
+    console.error('Fehler beim Abrufen der Materialien mit niedrigem Bestand:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
   }
 });

@@ -60,14 +60,19 @@ export function parseGS1Barcode(barcode: string): GS1Data {
 
   const result: GS1Data = { raw: barcode };
   
-  // FNC1-Zeichen normalisieren (manchmal als ] oder ~ dargestellt)
+  // FNC1-Zeichen als Feldtrennzeichen markieren (Group Separator)
+  // GS1 verwendet FNC1 (\x1D, ASCII 29) oder ~ als Trennzeichen zwischen variablen Feldern
   // eslint-disable-next-line no-control-regex
-  let normalized = barcode.replace(/\]C1|~|\x1D/g, '');
+  let normalized = barcode.replace(/\x1D/g, '\x1D'); // Behalte GS-Zeichen
   
-  // Falls der Barcode mit ]C1, ]E0, ]d2 etc. beginnt (AIM Symbology Identifier)
+  // AIM Symbology Identifier entfernen (]C1, ]E0, ]d2 etc.)
   if (normalized.startsWith(']')) {
+    // Entferne ]XX am Anfang (3 Zeichen)
     normalized = normalized.substring(3);
   }
+  
+  // Alternative FNC1-Darstellungen durch echtes GS-Zeichen ersetzen
+  normalized = normalized.replace(/~|␝/g, '\x1D');
   
   let position = 0;
   
@@ -101,14 +106,32 @@ export function parseGS1Barcode(barcode: string): GS1Data {
       value = normalized.substring(position, position + pattern.length);
       position += pattern.length;
     } else {
-      // Variable Länge - bis zum nächsten AI oder Ende
+      // Variable Länge - bis zum GS-Zeichen, nächsten AI oder Ende
       let endPos = position;
       while (endPos < normalized.length) {
+        // GS-Zeichen (FNC1) beendet das variable Feld
+        if (normalized.charAt(endPos) === '\x1D') {
+          break;
+        }
         // Prüfe ob an dieser Position ein neuer AI beginnt
         let foundNextAI = false;
         for (let len = 2; len <= 4; len++) {
           const testAI = normalized.substring(endPos, endPos + len);
           if (AI_PATTERNS[testAI]) {
+            // Zusätzliche Validierung: Prüfe ob nach dem AI genug Zeichen für gültige Daten folgen
+            const aiPattern = AI_PATTERNS[testAI];
+            const remainingAfterAI = normalized.length - endPos - len;
+            
+            // Für AIs mit fester Länge: muss genug Zeichen haben
+            if (aiPattern.length !== null && remainingAfterAI < aiPattern.length) {
+              // Nicht genug Zeichen für diesen AI - ignorieren
+              continue;
+            }
+            // Für AIs mit variabler Länge: mindestens 1 Zeichen
+            if (aiPattern.length === null && remainingAfterAI < 1) {
+              continue;
+            }
+            
             foundNextAI = true;
             break;
           }
@@ -118,6 +141,10 @@ export function parseGS1Barcode(barcode: string): GS1Data {
       }
       value = normalized.substring(position, endPos);
       position = endPos;
+      // GS-Zeichen überspringen falls vorhanden
+      if (position < normalized.length && normalized.charAt(position) === '\x1D') {
+        position++;
+      }
     }
     
     // Daten zuweisen

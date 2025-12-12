@@ -1,7 +1,16 @@
 import axios from 'axios';
 
-// Use relative URL for API calls - nginx will proxy to backend
-const API_BASE_URL = '/api';
+// Bestimme API-URL basierend auf Umgebung
+const getApiBaseUrl = () => {
+  // Prüfe ob wir auf Railway Production sind
+  if (window.location.hostname.includes('railway.app')) {
+    return 'https://materialmanager-production.up.railway.app/api';
+  }
+  // Lokal: nutze relativen Pfad (Vite Proxy)
+  return '/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,7 +19,7 @@ const api = axios.create({
   },
 });
 
-// Request Interceptor - Token automatisch hinzufügen
+// Request Interceptor - fügt Auth-Token zu allen Requests hinzu
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -55,7 +64,7 @@ export const materialAPI = {
   create: (data: any) => api.post('/materials', data),
   update: (id: number, data: any) => api.put(`/materials/${id}`, data),
   delete: (id: number) => api.delete(`/materials/${id}`),
-  reactivate: (id: number) => api.put(`/materials/${id}/reactivate`),
+  reactivate: (id: number) => api.post(`/materials/${id}/reactivate`),
   stockIn: (id: number, data: any) => api.post(`/materials/${id}/stock-in`, data),
   stockOut: (id: number, data: any) => api.post(`/materials/${id}/stock-out`, data),
   getExpiring: () => api.get('/materials/reports/expiring'),
@@ -86,12 +95,13 @@ export const barcodeAPI = {
   search: (barcode: string) => api.get(`/barcodes/search/${barcode}`),
   searchGTIN: (gtin: string) => api.get(`/barcodes/gtin/${gtin}`),
   searchMaterialsByGTIN: (gtin: string) => api.get(`/barcodes/gtin/${gtin}/materials`),
+  getGtinMaterials: (gtin: string) => api.get(`/barcodes/gtin/${gtin}/materials`),
+  removeMaterial: (materialId: string | number, data: any) => api.post(`/barcodes/material/${materialId}/remove`, data),
   getByMaterial: (materialId: number) => api.get(`/barcodes/material/${materialId}`),
   create: (data: any) => api.post('/barcodes', data),
   update: (id: number, data: any) => api.put(`/barcodes/${id}`, data),
   delete: (id: number) => api.delete(`/barcodes/${id}`),
   scanOut: (data: any) => api.post('/barcodes/scan-out', data),
-  removeMaterial: (materialId: number, data: any) => api.post(`/barcodes/material/${materialId}/remove`, data),
 };
 
 // Field Configurations
@@ -103,10 +113,12 @@ export const fieldConfigAPI = {
   delete: (id: number) => api.delete(`/field-configs/${id}`),
 };
 
-// Units (Departments)
+// Units
 export const unitAPI = {
-  getAll: () => api.get('/units'),
+  getAll: (params?: any) => api.get('/units', { params }),
   getById: (id: number) => api.get(`/units/${id}`),
+  getStats: (id: number) => api.get(`/units/${id}/stats`),
+  getTransfers: (id: number, params?: any) => api.get(`/units/${id}/transfers`, { params }),
   create: (data: any) => api.post('/units', data),
   update: (id: number, data: any) => api.put(`/units/${id}`, data),
   delete: (id: number) => api.delete(`/units/${id}`),

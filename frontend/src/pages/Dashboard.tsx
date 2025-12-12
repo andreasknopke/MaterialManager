@@ -8,9 +8,13 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  List,
-  ListItem,
-  ListItemText,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Chip,
 } from '@mui/material';
 import {
@@ -19,22 +23,25 @@ import {
   EventBusy as EventBusyIcon,
   Storage as StorageIcon,
   QrCodeScanner as QrCodeScannerIcon,
+  Category as CategoryIcon,
 } from '@mui/icons-material';
-import { materialAPI, cabinetAPI } from '../services/api';
+import { materialAPI, cabinetAPI, categoryAPI } from '../services/api';
 
 interface Stats {
   totalMaterials: number;
   lowStockCount: number;
   expiringCount: number;
   totalCabinets: number;
+  totalCategories: number;
 }
 
-interface LowStockCategory {
-  category_id: number;
-  category_name: string;
+interface CategoryStock {
+  id: number;
+  name: string;
   min_quantity: number;
   total_stock: number;
-  stock_status: string;
+  material_count: number;
+  stock_status: 'ok' | 'low' | 'empty';
 }
 
 const Dashboard: React.FC = () => {
@@ -44,34 +51,44 @@ const Dashboard: React.FC = () => {
     lowStockCount: 0,
     expiringCount: 0,
     totalCabinets: 0,
+    totalCategories: 0,
   });
-  const [lowStockCategories, setLowStockCategories] = useState<LowStockCategory[]>([]);
+  const [categoryStocks, setCategoryStocks] = useState<CategoryStock[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [materials, lowStock, expiring, cabinets] = await Promise.all([
+        const [materials, expiring, cabinets, categoryStats] = await Promise.all([
           materialAPI.getAll(),
-          materialAPI.getLowStock(),
           materialAPI.getExpiring(),
           cabinetAPI.getAll(),
+          categoryAPI.getInventoryStats(),
         ]);
 
-        console.log('Dashboard API Responses:', { materials, lowStock, expiring, cabinets });
-
         const materialsData = Array.isArray(materials.data) ? materials.data : [];
-        const lowStockData = Array.isArray(lowStock.data) ? lowStock.data : [];
         const expiringData = Array.isArray(expiring.data) ? expiring.data : [];
         const cabinetsData = Array.isArray(cabinets.data) ? cabinets.data : [];
+        const categoryData = Array.isArray(categoryStats.data) ? categoryStats.data : [];
 
-        setStats({
-          totalMaterials: materialsData.length,
-          lowStockCount: lowStockData.length,
+        // Nur aktive Materialien zählen
+        const activeMaterials = materialsData.filter((m: any) => m.active);
+
+        // Kategorien mit niedrigem Bestand
+        const lowStockCategories = categoryData.filter((cat: CategoryStock) => 
+          cat.stock_status === 'low' || cat.stock_status === 'empty'
+        );
+
+        const newStats = {
+          totalMaterials: activeMaterials.length,
+          lowStockCount: lowStockCategories.length,
           expiringCount: expiringData.length,
           totalCabinets: cabinetsData.length,
-        });
-        setLowStockCategories(lowStockData);
+          totalCategories: categoryData.length,
+        };
+
+        setStats(newStats);
+        setCategoryStocks(categoryData);
       } catch (error) {
         console.error('Fehler beim Laden der Statistiken:', error);
         setStats({
@@ -79,6 +96,7 @@ const Dashboard: React.FC = () => {
           lowStockCount: 0,
           expiringCount: 0,
           totalCabinets: 0,
+          totalCategories: 0,
         });
       } finally {
         setLoading(false);
@@ -94,26 +112,35 @@ const Dashboard: React.FC = () => {
       value: stats.totalMaterials,
       icon: <InventoryIcon sx={{ fontSize: 40 }} />,
       color: '#1976d2',
+      onClick: () => navigate('/materials'),
     },
     {
-      title: 'Kategorien unter Mindestbestand',
+      title: 'Kategorien mit niedrigem Bestand',
       value: stats.lowStockCount,
       icon: <WarningIcon sx={{ fontSize: 40 }} />,
       color: '#ff9800',
+      onClick: () => navigate('/categories'),
     },
     {
       title: 'Ablaufende Materialien',
       value: stats.expiringCount,
       icon: <EventBusyIcon sx={{ fontSize: 40 }} />,
       color: '#f44336',
+      onClick: () => navigate('/materials', { state: { filter: 'expiring' } }),
     },
     {
       title: 'Schränke',
       value: stats.totalCabinets,
       icon: <StorageIcon sx={{ fontSize: 40 }} />,
       color: '#4caf50',
+      onClick: () => navigate('/cabinets'),
     },
   ];
+
+  // Kategorien mit niedrigem oder leerem Bestand
+  const lowStockCategories = categoryStocks.filter(cat => 
+    cat.stock_status === 'low' || cat.stock_status === 'empty'
+  );
 
   if (loading) {
     return (
@@ -152,7 +179,18 @@ const Dashboard: React.FC = () => {
         {/* Statistik-Karten */}
         {statCards.map((card, index) => (
           <Grid item xs={12} sm={6} md={3} key={index}>
-            <Card sx={{ height: '100%' }}>
+            <Card 
+              sx={{ 
+                height: '100%',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: 4,
+                }
+              }}
+              onClick={card.onClick}
+            >
               <CardContent>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
                   <Box>
@@ -169,34 +207,85 @@ const Dashboard: React.FC = () => {
         ))}
       </Grid>
 
-      {/* Kategorien unter Mindestbestand */}
+      {/* Kategorien mit niedrigem Bestand */}
       {lowStockCategories.length > 0 && (
         <Grid container spacing={3} sx={{ mt: 2 }}>
           <Grid item xs={12}>
             <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ color: '#ff9800' }}>
-                <WarningIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Kategorien unter Mindestbestand
-              </Typography>
-              <List dense>
-                {lowStockCategories.map((cat) => (
-                  <ListItem key={cat.category_id} divider>
-                    <ListItemText
-                      primary={cat.category_name}
-                      secondary={`Bestand: ${cat.total_stock} / Mindest: ${cat.min_quantity}`}
-                    />
-                    <Chip 
-                      label={`${cat.total_stock}/${cat.min_quantity}`}
-                      color="warning"
-                      size="small"
-                    />
-                  </ListItem>
-                ))}
-              </List>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <WarningIcon color="warning" />
+                <Typography variant="h6">
+                  Kategorien mit niedrigem Bestand
+                </Typography>
+              </Box>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Kategorie</TableCell>
+                      <TableCell align="right">Aktueller Bestand</TableCell>
+                      <TableCell align="right">Mindestmenge</TableCell>
+                      <TableCell align="right">Anzahl Materialien</TableCell>
+                      <TableCell>Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {lowStockCategories.map((category) => (
+                      <TableRow 
+                        key={category.id}
+                        hover
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => navigate('/materials', { state: { categoryFilter: category.id } })}
+                      >
+                        <TableCell>{category.name}</TableCell>
+                        <TableCell align="right">{category.total_stock}</TableCell>
+                        <TableCell align="right">{category.min_quantity}</TableCell>
+                        <TableCell align="right">{category.material_count}</TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={
+                              category.stock_status === 'empty' ? 'Leer' : 'Niedrig'
+                            }
+                            color={category.stock_status === 'empty' ? 'error' : 'warning'}
+                            size="small"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </Paper>
           </Grid>
         </Grid>
       )}
+
+      <Grid container spacing={3} sx={{ mt: 2 }}>
+        <Grid item xs={12}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Willkommen im Material Manager
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Verwalten Sie Ihre medizinischen Materialien effizient und übersichtlich.
+              Nutzen Sie die Navigation links, um auf die verschiedenen Funktionen zuzugreifen.
+            </Typography>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" component="div">
+                <strong>Funktionen:</strong>
+                <ul>
+                  <li>Materialverwaltung mit Barcode-Unterstützung</li>
+                  <li>Schrankorganisation</li>
+                  <li>Ein- und Ausgangsbuchungen</li>
+                  <li>Bestandsüberwachung und Warnungen</li>
+                  <li>Verfallsdatum-Tracking</li>
+                  <li>Berichte und Auswertungen</li>
+                </ul>
+              </Typography>
+            </Box>
+          </Paper>
+        </Grid>
+      </Grid>
     </Box>
   );
 };

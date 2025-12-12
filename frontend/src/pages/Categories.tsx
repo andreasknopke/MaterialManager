@@ -10,38 +10,22 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Chip,
-  Grid,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { categoryAPI, unitAPI } from '../services/api';
-import { useAuth } from '../contexts/AuthContext';
+import { categoryAPI } from '../services/api';
 
 const Categories: React.FC = () => {
-  const { user } = useAuth();
   const [categories, setCategories] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
-  const [formData, setFormData] = useState({ 
-    name: '', 
-    description: '',
-    department_id: null as number | null,
-    min_quantity: 0
-  });
+  const [formData, setFormData] = useState({ name: '', description: '', min_quantity: 0 });
 
   useEffect(() => {
     fetchCategories();
-    if (user?.isRoot) {
-      fetchDepartments();
-    }
-  }, [user?.isRoot]);
+  }, []);
 
   const fetchCategories = async () => {
     try {
@@ -56,28 +40,17 @@ const Categories: React.FC = () => {
     }
   };
 
-  const fetchDepartments = async () => {
-    try {
-      const response = await unitAPI.getAll();
-      const data = Array.isArray(response.data) ? response.data : [];
-      setDepartments(data);
-    } catch (error) {
-      console.error('Fehler beim Laden der Departments:', error);
-    }
-  };
-
   const handleOpen = (category?: any) => {
     if (category) {
       setEditingCategory(category);
       setFormData({ 
-        name: category.name || '', 
-        description: category.description || '',
-        department_id: category.department_id || null,
+        name: category.name, 
+        description: category.description,
         min_quantity: category.min_quantity || 0
       });
     } else {
       setEditingCategory(null);
-      setFormData({ name: '', description: '', department_id: user?.departmentId || null, min_quantity: 0 });
+      setFormData({ name: '', description: '', min_quantity: 0 });
     }
     setOpen(true);
   };
@@ -114,24 +87,17 @@ const Categories: React.FC = () => {
 
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'name', headerName: 'Name', width: 200 },
-    { 
-      field: 'department_name', 
-      headerName: 'Department', 
-      width: 150,
-      renderCell: (params) => params.value ? <Chip label={params.value} size="small" color="primary" /> : '-'
-    },
+    { field: 'name', headerName: 'Name', width: 250 },
     { field: 'description', headerName: 'Beschreibung', flex: 1 },
     { 
       field: 'min_quantity', 
       headerName: 'Mindestmenge', 
-      width: 120,
-      type: 'number',
+      width: 150,
       renderCell: (params) => (
         <Chip 
           label={params.value || 0} 
           size="small" 
-          color={params.value > 0 ? 'warning' : 'default'}
+          color={params.value > 0 ? 'primary' : 'default'}
         />
       )
     },
@@ -178,59 +144,33 @@ const Categories: React.FC = () => {
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
         <DialogTitle>{editingCategory ? 'Kategorie bearbeiten' : 'Neue Kategorie'}</DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Beschreibung"
-                multiline
-                rows={3}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Mindestmenge"
-                value={formData.min_quantity}
-                onChange={(e) => setFormData({ ...formData, min_quantity: parseInt(e.target.value) || 0 })}
-                helperText="Warngrenze für niedrigen Bestand dieser Kategorie"
-                InputProps={{ inputProps: { min: 0 } }}
-              />
-            </Grid>
-            {user?.isRoot && (
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Department</InputLabel>
-                  <Select
-                    value={formData.department_id || ''}
-                    onChange={(e) => setFormData({ ...formData, department_id: e.target.value as number })}
-                    label="Department"
-                  >
-                    <MenuItem value="">
-                      <em>Kein Department</em>
-                    </MenuItem>
-                    {departments.map((dept) => (
-                      <MenuItem key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            )}
-          </Grid>
+          <TextField
+            fullWidth
+            label="Name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            margin="normal"
+            required
+          />
+          <TextField
+            fullWidth
+            label="Beschreibung"
+            multiline
+            rows={3}
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            margin="normal"
+          />
+          <TextField
+            fullWidth
+            label="Mindestmenge (gesamt für alle Materialien dieser Kategorie)"
+            type="number"
+            value={formData.min_quantity}
+            onChange={(e) => setFormData({ ...formData, min_quantity: parseInt(e.target.value) || 0 })}
+            margin="normal"
+            helperText="Die Gesamtmenge aller Materialien dieser Kategorie sollte mindestens diesen Wert haben"
+            InputProps={{ inputProps: { min: 0 } }}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>Abbrechen</Button>

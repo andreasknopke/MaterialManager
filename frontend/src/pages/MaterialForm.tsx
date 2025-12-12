@@ -20,9 +20,8 @@ import {
   QrCodeScanner as QrCodeScannerIcon,
   Clear as ClearIcon,
 } from '@mui/icons-material';
-import { materialAPI, cabinetAPI, categoryAPI, companyAPI, unitAPI, barcodeAPI } from '../services/api';
+import { materialAPI, cabinetAPI, categoryAPI, companyAPI, unitAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
-import { useAuth } from '../contexts/AuthContext';
 
 interface MaterialFormData {
   name: string;
@@ -33,6 +32,7 @@ interface MaterialFormData {
   unit_id: number | '';
   size: string;
   unit: string;
+  min_stock: number;
   expiry_date: string;
   lot_number: string;
   article_number: string;
@@ -45,7 +45,6 @@ const MaterialForm: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
   
   // Prüfe ob wir auf /materials/new sind (id ist undefined) oder eine echte ID haben
   const isNew = !id || id === 'new';
@@ -69,10 +68,6 @@ const MaterialForm: React.FC = () => {
   // GS1-Parser Status
   const [gs1Data, setGs1Data] = useState<GS1Data | null>(null);
   const [gs1Warning, setGs1Warning] = useState<string | null>(null);
-  
-  // Stammdaten vorbelegt (GTIN bekannt)?
-  const [gtinKnown, setGtinKnown] = useState(false);
-  const [masterDataLoading, setMasterDataLoading] = useState(false);
 
   const [formData, setFormData] = useState<MaterialFormData>({
     name: '',
@@ -81,8 +76,9 @@ const MaterialForm: React.FC = () => {
     company_id: '',
     cabinet_id: '',
     unit_id: '',
-    size: '1',
+    size: '',
     unit: 'Stück',
+    min_stock: 0,
     expiry_date: '',
     lot_number: '',
     article_number: '',
@@ -90,13 +86,6 @@ const MaterialForm: React.FC = () => {
     notes: '',
     gs1_barcode: '',
   });
-
-  // Auto-set unit_id when user is loaded (for non-root users)
-  useEffect(() => {
-    if (isNew && user && !user.isRoot && user.departmentId) {
-      setFormData(prev => ({ ...prev, unit_id: user.departmentId as number }));
-    }
-  }, [isNew, user]);
 
   useEffect(() => {
     console.log('MaterialForm useEffect triggered');
@@ -131,7 +120,6 @@ const MaterialForm: React.FC = () => {
       if (state?.fromScanner && state?.gs1_barcode) {
         console.log('GS1 Barcode vom Scanner:', state.gs1_barcode);
         console.log('GS1 Data vom Scanner:', state.gs1Data);
-        console.log('Master Data vom Scanner:', state.masterData);
         
         // GS1-Daten zusammenstellen
         const updates: Partial<MaterialFormData> = {
@@ -151,26 +139,10 @@ const MaterialForm: React.FC = () => {
           
           setGs1Data(state.gs1Data);
         }
-        
-        // Wenn Stammdaten vom Scanner mitgeschickt wurden (GTIN bekannt)
-        if (state.masterData) {
-          console.log('Applying master data from scanner:', state.masterData);
-          updates.name = state.masterData.name || '';
-          updates.description = state.masterData.description || '';
-          updates.category_id = state.masterData.category_id || '';
-          updates.company_id = state.masterData.company_id || '';
-          updates.cabinet_id = state.masterData.cabinet_id || '';
-          updates.unit = state.masterData.unit || 'Stück';
-          updates.size = state.masterData.size || '1';
-          setGtinKnown(true);
-          setSuccess('Stammdaten aus Datenbank übernommen (Schrank änderbar)!');
-        } else {
-          setSuccess('GS1-Barcode vom Scanner übernommen!');
-        }
-        
         console.log('Applying updates:', updates);
         // Alle Updates auf einmal anwenden
         setFormData(prev => ({ ...prev, ...updates }));
+        setSuccess('GS1-Barcode vom Scanner übernommen!');
         setTimeout(() => setSuccess(null), 3000);
       }
     } else {
@@ -187,7 +159,7 @@ const MaterialForm: React.FC = () => {
         categoryAPI.getAll(),
         companyAPI.getAll(),
         cabinetAPI.getAll(),
-        unitAPI.getAll(),
+        unitAPI.getAll({ active: true }),
       ]);
       console.log('Dropdown data loaded successfully');
       setCategories(categoriesRes.data);
@@ -211,8 +183,9 @@ const MaterialForm: React.FC = () => {
         company_id: material.company_id || '',
         cabinet_id: material.cabinet_id || '',
         unit_id: material.unit_id || '',
-        size: material.size || '1',
+        size: material.size || '',
         unit: material.unit || 'Stück',
+        min_stock: material.min_stock || 0,
         expiry_date: material.expiry_date ? material.expiry_date.split('T')[0] : '',
         lot_number: material.lot_number || '',
         article_number: material.article_number || '',
@@ -228,39 +201,6 @@ const MaterialForm: React.FC = () => {
     }
   };
 
-  // Stammdaten nach GTIN laden (wenn bekannt)
-  const lookupGTIN = async (gtin: string) => {
-    if (!gtin || gtin.length < 8) return;
-    
-    setMasterDataLoading(true);
-    try {
-      const response = await barcodeAPI.searchGTIN(gtin);
-      if (response.data.found) {
-        const master = response.data.masterData;
-        setGtinKnown(true);
-        setFormData(prev => ({
-          ...prev,
-          name: master.name || prev.name,
-          description: master.description || prev.description,
-          category_id: master.category_id || prev.category_id,
-          company_id: master.company_id || prev.company_id,
-          cabinet_id: master.cabinet_id || prev.cabinet_id,
-          unit: master.unit || prev.unit,
-          size: master.size || prev.size,
-        }));
-        setSuccess(`Stammdaten für GTIN ${gtin} gefunden und übernommen (Schrank änderbar)!`);
-        setTimeout(() => setSuccess(null), 3000);
-      } else {
-        setGtinKnown(false);
-      }
-    } catch (err) {
-      // GTIN nicht bekannt - alle Felder editierbar
-      setGtinKnown(false);
-    } finally {
-      setMasterDataLoading(false);
-    }
-  };
-
   const handleChange = (field: keyof MaterialFormData) => (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -272,7 +212,6 @@ const MaterialForm: React.FC = () => {
     setFormData({ ...formData, gs1_barcode: barcode });
     setGs1Warning(null);
     setGs1Data(null);
-    setGtinKnown(false);
 
     if (!barcode) {
       return;
@@ -288,8 +227,6 @@ const MaterialForm: React.FC = () => {
 
       if (parsed.gtin) {
         updates.article_number = parsed.gtin;
-        // GTIN-Lookup für Stammdaten
-        lookupGTIN(parsed.gtin);
       }
 
       if (parsed.batchNumber) {
@@ -316,38 +253,15 @@ const MaterialForm: React.FC = () => {
       gs1_barcode: '',
       expiry_date: '',
       lot_number: '',
-      article_number: '',
-      // Bei Clear auch Stammdaten zurücksetzen wenn von GTIN
-      ...(gtinKnown ? { name: '', description: '', category_id: '', company_id: '' } : {}),
     }));
     setGs1Data(null);
     setGs1Warning(null);
-    setGtinKnown(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
-
-    // Validierung: Pflichtfelder prüfen
-    if (!formData.name?.trim()) {
-      setError('Bitte geben Sie eine Bezeichnung ein.');
-      setSaving(false);
-      return;
-    }
-    
-    if (!formData.category_id) {
-      setError('Bitte wählen Sie eine Kategorie aus.');
-      setSaving(false);
-      return;
-    }
-    
-    if (!formData.company_id) {
-      setError('Bitte wählen Sie eine Firma aus.');
-      setSaving(false);
-      return;
-    }
 
     try {
       const dataToSend = {
@@ -356,16 +270,20 @@ const MaterialForm: React.FC = () => {
         company_id: formData.company_id || null,
         cabinet_id: formData.cabinet_id || null,
         expiry_date: formData.expiry_date || null,
-        // Bei "Stück" ist Größe immer 1
-        size: formData.unit === 'Stück' ? '1' : formData.size,
       };
 
-      // HINWEIS: GS1-Barcode wird NICHT in die barcodes-Tabelle geschrieben!
-      // Die GTIN ist bereits in article_number gespeichert und kann mehrfach vorkommen.
-      // Nur echte physische Etiketten-Barcodes sollten in die barcodes-Tabelle.
+      // GS1 Barcode als zusätzlichen Barcode hinzufügen, falls vorhanden
+      const barcodes = [];
+      if (formData.gs1_barcode && gs1Data) {
+        barcodes.push({
+          barcode: formData.gs1_barcode,
+          barcode_type: 'GS1-128',
+          is_primary: true,
+        });
+      }
 
       if (isNew) {
-        const response = await materialAPI.create(dataToSend);
+        const response = await materialAPI.create({ ...dataToSend, barcodes });
         setSuccess('Material erfolgreich erstellt!');
         setTimeout(() => navigate(`/materials/${response.data.id}`), 1500);
       } else {
@@ -464,20 +382,6 @@ const MaterialForm: React.FC = () => {
                   {gs1Data.sscc && <Typography variant="body2">• SSCC (AI 00): {gs1Data.sscc}</Typography>}
                 </Alert>
               )}
-              {gtinKnown && (
-                <Alert severity="success" sx={{ mt: 1 }}>
-                  <Typography variant="body2">
-                    <strong>GTIN bekannt!</strong> Stammdaten (Bezeichnung, Kategorie, Firma) wurden vorbelegt.
-                    Schrank, LOT-Nummer und Verfallsdatum können angepasst werden.
-                  </Typography>
-                </Alert>
-              )}
-              {masterDataLoading && (
-                <Alert severity="info" sx={{ mt: 1 }}>
-                  <CircularProgress size={16} sx={{ mr: 1 }} />
-                  Suche nach Stammdaten...
-                </Alert>
-              )}
             </Grid>
 
             {/* Grunddaten */}
@@ -494,9 +398,6 @@ const MaterialForm: React.FC = () => {
                 label="Bezeichnung"
                 value={formData.name}
                 onChange={handleChange('name')}
-                error={!formData.name?.trim()}
-                disabled={gtinKnown && !!formData.name}
-                helperText={gtinKnown ? 'Aus Stammdaten' : (!formData.name?.trim() ? 'Pflichtfeld' : '')}
               />
             </Grid>
 
@@ -518,7 +419,6 @@ const MaterialForm: React.FC = () => {
                 label="Beschreibung"
                 value={formData.description}
                 onChange={handleChange('description')}
-                disabled={gtinKnown && !!formData.description}
               />
             </Grid>
 
@@ -536,8 +436,6 @@ const MaterialForm: React.FC = () => {
                 label="Einheit / Abteilung"
                 value={formData.unit_id}
                 onChange={handleChange('unit_id')}
-                disabled={!user?.isRoot}
-                helperText={!user?.isRoot ? 'Automatisch zugewiesen' : ''}
               >
                 <MenuItem value="">Keine Einheit</MenuItem>
                 {units.map((unit) => (
@@ -561,16 +459,12 @@ const MaterialForm: React.FC = () => {
             <Grid item xs={12} md={3}>
               <TextField
                 select
-                required
                 fullWidth
                 label="Kategorie"
                 value={formData.category_id}
                 onChange={handleChange('category_id')}
-                error={!formData.category_id}
-                helperText={gtinKnown ? 'Aus Stammdaten' : (!formData.category_id ? 'Pflichtfeld' : '')}
-                disabled={gtinKnown && !!formData.category_id}
               >
-                <MenuItem value="">-- Bitte wählen --</MenuItem>
+                <MenuItem value="">Keine Kategorie</MenuItem>
                 {categories.map((cat) => (
                   <MenuItem key={cat.id} value={cat.id}>
                     {cat.name}
@@ -582,16 +476,12 @@ const MaterialForm: React.FC = () => {
             <Grid item xs={12} md={3}>
               <TextField
                 select
-                required
                 fullWidth
                 label="Firma"
                 value={formData.company_id}
                 onChange={handleChange('company_id')}
-                error={!formData.company_id}
-                helperText={gtinKnown ? 'Aus Stammdaten' : (!formData.company_id ? 'Pflichtfeld' : '')}
-                disabled={gtinKnown && !!formData.company_id}
               >
-                <MenuItem value="">-- Bitte wählen --</MenuItem>
+                <MenuItem value="">Keine Firma</MenuItem>
                 {companies.map((comp) => (
                   <MenuItem key={comp.id} value={comp.id}>
                     {comp.name}
@@ -635,40 +525,32 @@ const MaterialForm: React.FC = () => {
               </Typography>
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={3}>
               <TextField
-                select
+                fullWidth
+                label="Größe"
+                value={formData.size}
+                onChange={handleChange('size')}
+                placeholder="z.B. 100ml, 5kg"
+              />
+            </Grid>
+
+            <Grid item xs={12} md={3}>
+              <TextField
                 fullWidth
                 label="Einheit"
                 value={formData.unit}
-                onChange={(e) => {
-                  const newUnit = e.target.value;
-                  setFormData({ 
-                    ...formData, 
-                    unit: newUnit,
-                    // Bei "Stück" ist Größe automatisch 1
-                    size: newUnit === 'Stück' ? '1' : formData.size
-                  });
-                }}
-              >
-                <MenuItem value="Stück">Stück (einzeln)</MenuItem>
-                <MenuItem value="Packung">Packung (mehrere Einheiten)</MenuItem>
-              </TextField>
+                onChange={handleChange('unit')}
+              />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={3}>
               <TextField
                 fullWidth
                 type="number"
-                label={formData.unit === 'Packung' ? 'Einheiten pro Packung' : 'Größe'}
-                value={formData.size}
-                onChange={handleChange('size')}
-                disabled={formData.unit === 'Stück'}
-                placeholder={formData.unit === 'Packung' ? 'z.B. 10 für eine 10er-Packung' : '1'}
-                helperText={formData.unit === 'Packung' ? 'Anzahl der Einzelteile in einer Packung' : 'Bei Stück immer 1'}
-                InputProps={{
-                  inputProps: { min: 1 }
-                }}
+                label="Mindestbestand"
+                value={formData.min_stock}
+                onChange={handleChange('min_stock')}
               />
             </Grid>
 
