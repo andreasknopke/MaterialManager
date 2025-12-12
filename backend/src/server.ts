@@ -11,6 +11,7 @@ import adminRoutes from './routes/admin.routes';
 import unitRoutes from './routes/unit.routes';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
+import statisticsRoutes from './routes/statistics.routes';
 
 dotenv.config();
 
@@ -66,6 +67,7 @@ app.use('/api/barcodes', barcodeRoutes);
 app.use('/api/field-configs', fieldConfigRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/units', unitRoutes);
+app.use('/api/statistics', statisticsRoutes);
 
 // Health Check
 app.get('/health', (req: Request, res: Response) => {

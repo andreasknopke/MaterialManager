@@ -34,6 +34,7 @@ import {
   Logout as LogoutIcon,
   Lock as LockIcon,
   People as PeopleIcon,
+  Analytics as AnalyticsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import ChangePasswordDialog from './ChangePasswordDialog';
@@ -91,6 +92,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { text: 'Firmen', icon: <BusinessIcon />, path: '/companies' },
     { text: 'Barcode Scanner', icon: <QrCodeScannerIcon />, path: '/scanner' },
     { text: 'Berichte', icon: <AssessmentIcon />, path: '/reports' },
+    { text: 'Statistiken', icon: <AnalyticsIcon />, path: '/statistics' },
   ];
 
   const adminItems = [

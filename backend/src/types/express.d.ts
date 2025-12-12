@@ -6,9 +6,12 @@ declare global {
       user?: {
         id: number;
         username: string;
+        email: string;
+        fullName?: string;
         role: 'admin' | 'user' | 'viewer';
         isRoot: boolean;
-        sessionId: number;
+        departmentId: number | null;
+        sessionId?: number;
       };
     }
   }

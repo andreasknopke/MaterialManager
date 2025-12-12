@@ -11,6 +11,7 @@ declare global {
         id: number;
         username: string;
         email: string;
+        fullName?: string;
         role: 'admin' | 'user' | 'viewer';
         isRoot: boolean;
         departmentId: number | null;
@@ -90,7 +91,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     // Lade Benutzerdaten
     console.log('Loading user from DB, ID:', decoded.id);
     const [users] = await pool.query<RowDataPacket[]>(
-      'SELECT id, username, email, role, is_root, department_id, active, must_change_password FROM users WHERE id = ?',
+      'SELECT id, username, email, full_name, role, is_root, department_id, active, must_change_password FROM users WHERE id = ?',
       [decoded.id]
     );
 
@@ -116,6 +117,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       id: users[0].id,
       username: users[0].username,
       email: users[0].email,
+      fullName: users[0].full_name,
       role: users[0].role,
       isRoot: isRoot,
       departmentId: users[0].department_id,
