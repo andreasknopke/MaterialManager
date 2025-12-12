@@ -8,16 +8,16 @@ const router = Router();
 // Alle Routes benötigen Authentifizierung
 router.use(authenticate);
 
-// GET alle Firmen (gefiltert nach Department)
+// GET alle Firmen (gefiltert nach Abteilung)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    let query = 'SELECT c.*, u.name as department_name FROM companies c LEFT JOIN units u ON c.department_id = u.id';
+    let query = 'SELECT c.*, u.name as unit_name FROM companies c LEFT JOIN units u ON c.unit_id = u.id';
     const params: any[] = [];
     const conditions: string[] = [];
     
-    // Root sieht alle, andere nur ihr Department
+    // Root sieht alle, andere nur ihre Abteilung
     if (!req.user?.isRoot && req.user?.departmentId) {
-      conditions.push('c.department_id = ?');
+      conditions.push('c.unit_id = ?');
       params.push(req.user.departmentId);
     } else if (!req.user?.isRoot && !req.user?.departmentId) {
       conditions.push('1 = 0');
@@ -40,12 +40,12 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Firma nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    let query = 'SELECT c.*, u.name as department_name FROM companies c LEFT JOIN units u ON c.department_id = u.id WHERE c.id = ?';
+    let query = 'SELECT c.*, u.name as unit_name FROM companies c LEFT JOIN units u ON c.unit_id = u.id WHERE c.id = ?';
     const params: any[] = [req.params.id];
     
-    // Non-Root nur eigenes Department
+    // Non-Root nur eigene Abteilung
     if (!req.user?.isRoot && req.user?.departmentId) {
-      query += ' AND c.department_id = ?';
+      query += ' AND c.unit_id = ?';
       params.push(req.user.departmentId);
     }
     
@@ -70,17 +70,17 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Name ist erforderlich' });
   }
   
-  // Root kann Department wählen, andere bekommen automatisch ihr Department
-  const department_id = req.user?.isRoot && req.body.department_id ? req.body.department_id : req.user?.departmentId;
+  // Root kann Abteilung wählen, andere bekommen automatisch ihre Abteilung
+  const unit_id = req.user?.isRoot && req.body.unit_id ? req.body.unit_id : req.user?.departmentId;
   
-  if (!department_id) {
-    return res.status(400).json({ error: 'Department ID ist erforderlich' });
+  if (!unit_id) {
+    return res.status(400).json({ error: 'Abteilung (unit_id) ist erforderlich' });
   }
   
   try {
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO companies (name, contact_person, email, phone, address, department_id) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, contact_person, email, phone, address, department_id]
+      'INSERT INTO companies (name, contact_person, email, phone, address, unit_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, contact_person, email, phone, address, unit_id]
     );
     
     res.status(201).json({
@@ -98,13 +98,13 @@ router.post('/', async (req: Request, res: Response) => {
 
 // PUT Firma aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
-  const { name, contact_person, email, phone, address, department_id } = req.body;
+  const { name, contact_person, email, phone, address, unit_id } = req.body;
   
   try {
     // Non-Root können nur eigene Firmen bearbeiten
     if (!req.user?.isRoot && req.user?.departmentId) {
       const [check] = await pool.query<RowDataPacket[]>(
-        'SELECT id FROM companies WHERE id = ? AND department_id = ?',
+        'SELECT id FROM companies WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
       if (check.length === 0) {
@@ -112,13 +112,13 @@ router.put('/:id', async (req: Request, res: Response) => {
       }
     }
     
-    // Root kann Department ändern
+    // Root kann Abteilung ändern
     let query: string;
     let params: any[];
     
-    if (req.user?.isRoot && department_id) {
-      query = 'UPDATE companies SET name = ?, contact_person = ?, email = ?, phone = ?, address = ?, department_id = ? WHERE id = ?';
-      params = [name, contact_person, email, phone, address, department_id, req.params.id];
+    if (req.user?.isRoot && unit_id) {
+      query = 'UPDATE companies SET name = ?, contact_person = ?, email = ?, phone = ?, address = ?, unit_id = ? WHERE id = ?';
+      params = [name, contact_person, email, phone, address, unit_id, req.params.id];
     } else {
       query = 'UPDATE companies SET name = ?, contact_person = ?, email = ?, phone = ?, address = ? WHERE id = ?';
       params = [name, contact_person, email, phone, address, req.params.id];
@@ -143,7 +143,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     // Non-Root können nur eigene Firmen löschen
     if (!req.user?.isRoot && req.user?.departmentId) {
       const [check] = await pool.query<RowDataPacket[]>(
-        'SELECT id FROM companies WHERE id = ? AND department_id = ?',
+        'SELECT id FROM companies WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
       if (check.length === 0) {

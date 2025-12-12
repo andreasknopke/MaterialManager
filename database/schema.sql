@@ -21,22 +21,27 @@ CREATE TABLE IF NOT EXISTS categories (
     FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- Tabelle für Firmen/Hersteller
+-- Tabelle für Firmen/Hersteller (pro Abteilung)
 CREATE TABLE IF NOT EXISTS companies (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(150) NOT NULL UNIQUE,
+    unit_id INT COMMENT 'Abteilungszuordnung',
+    name VARCHAR(150) NOT NULL,
     contact_person VARCHAR(100),
     email VARCHAR(100),
     phone VARCHAR(50),
     address TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_name (name)
+    INDEX idx_name (name),
+    INDEX idx_unit_id (unit_id),
+    UNIQUE INDEX idx_name_unit (name, unit_id),
+    FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- Tabelle für Schränke
+-- Tabelle für Schränke (pro Abteilung)
 CREATE TABLE IF NOT EXISTS cabinets (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    unit_id INT COMMENT 'Abteilungszuordnung',
     name VARCHAR(100) NOT NULL,
     location VARCHAR(200),
     description TEXT,
@@ -45,7 +50,9 @@ CREATE TABLE IF NOT EXISTS cabinets (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_name (name),
-    INDEX idx_location (location)
+    INDEX idx_location (location),
+    INDEX idx_unit_id (unit_id),
+    FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- Tabelle für konfigurierbare Felder
