@@ -18,12 +18,13 @@ router.get('/', async (req: Request, res: Response) => {
     const params: any[] = [];
     const conditions: string[] = [];
     
-    // Root sieht alle Schränke (auch inaktive), andere nur ihre Department-Schränke (nur aktive)
+    // Root sieht alle Schränke (auch inaktive), andere nur ihre Abteilungs-Schränke (nur aktive)
+    // Hinweis: Wir filtern nach unit_id (Abteilungszuordnung des Schranks), nicht department_id
     if (!req.user?.isRoot && req.user?.departmentId) {
       conditions.push('active = TRUE');
-      conditions.push('department_id = ?');
+      conditions.push('unit_id = ?');
       params.push(req.user.departmentId);
-      console.log('Department Filter applied: department_id =', req.user.departmentId);
+      console.log('Unit Filter applied: unit_id =', req.user.departmentId);
     } else if (!req.user?.isRoot && !req.user?.departmentId) {
       // User ohne Department sieht nichts
       conditions.push('1 = 0');
@@ -63,9 +64,9 @@ router.get('/:id', async (req: Request, res: Response) => {
     let query = 'SELECT * FROM cabinets WHERE id = ?';
     const params: any[] = [req.params.id];
     
-    // Non-Root User können nur Schränke ihres Departments sehen
+    // Non-Root User können nur Schränke ihrer Abteilung (unit_id) sehen
     if (!req.user?.isRoot && req.user?.departmentId) {
-      query += ' AND department_id = ?';
+      query += ' AND unit_id = ?';
       params.push(req.user.departmentId);
     }
     
@@ -85,11 +86,11 @@ router.get('/:id', async (req: Request, res: Response) => {
 // GET Materialien eines Schranks
 router.get('/:id/materials', async (req: Request, res: Response) => {
   try {
-    // Non-Root User können nur Materialien aus Schränken ihres Departments sehen
+    // Non-Root User können nur Materialien aus Schränken ihrer Abteilung sehen
     if (!req.user?.isRoot && req.user?.departmentId) {
-      // Prüfe ob der Schrank zum Department des Users gehört
+      // Prüfe ob der Schrank zur Abteilung (unit_id) des Users gehört
       const [cabinetCheck] = await pool.query<RowDataPacket[]>(
-        'SELECT id FROM cabinets WHERE id = ? AND department_id = ?',
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
       if (cabinetCheck.length === 0) {
@@ -121,17 +122,18 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Name ist erforderlich' });
   }
   
-  // Department Admin kann nur Schränke für sein eigenes Department erstellen
-  const department_id = req.user?.isRoot && req.body.department_id ? req.body.department_id : req.user?.departmentId;
+  // Department Admin kann nur Schränke für seine eigene Abteilung erstellen
+  // unit_id ist die Abteilungszuordnung des Schranks
+  const unit_id = req.user?.isRoot && req.body.unit_id ? req.body.unit_id : req.user?.departmentId;
   
-  if (!department_id) {
-    return res.status(400).json({ error: 'Department ID ist erforderlich' });
+  if (!unit_id) {
+    return res.status(400).json({ error: 'Abteilung (unit_id) ist erforderlich' });
   }
   
   try {
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO cabinets (name, location, description, capacity, department_id) VALUES (?, ?, ?, ?, ?)',
-      [name, location, description, capacity || 0, department_id]
+      'INSERT INTO cabinets (name, location, description, capacity, unit_id) VALUES (?, ?, ?, ?, ?)',
+      [name, location, description, capacity || 0, unit_id]
     );
     
     res.status(201).json({
@@ -149,10 +151,10 @@ router.put('/:id', async (req: Request, res: Response) => {
   const { name, location, description, capacity, active } = req.body;
   
   try {
-    // Non-Root User können nur Schränke ihres Departments bearbeiten
+    // Non-Root User können nur Schränke ihrer Abteilung bearbeiten
     if (!req.user?.isRoot && req.user?.departmentId) {
       const [cabinetCheck] = await pool.query<RowDataPacket[]>(
-        'SELECT id FROM cabinets WHERE id = ? AND department_id = ?',
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
       if (cabinetCheck.length === 0) {
@@ -181,9 +183,15 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE Schrank (soft delete)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    // Non-Root User können nur ihr eigenes Cabinet löschen
-    if (!req.user?.isRoot && req.user?.departmentId && parseInt(req.params.id) !== req.user.departmentId) {
-      return res.status(403).json({ error: 'Schrank nicht gefunden oder kein Zugriff' });
+    // Non-Root User können nur Schränke ihrer Abteilung löschen
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
+        [req.params.id, req.user.departmentId]
+      );
+      if (cabinetCheck.length === 0) {
+        return res.status(403).json({ error: 'Schrank nicht gefunden oder kein Zugriff' });
+      }
     }
     
     const [result] = await pool.query<ResultSetHeader>(
