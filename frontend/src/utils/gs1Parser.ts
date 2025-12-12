@@ -119,9 +119,12 @@ export function parseGS1Barcode(barcode: string): GS1Data {
 
   const result: GS1Data = { raw: barcode };
   
+  // Alle Leerzeichen entfernen (Scanner fügt manchmal Leerzeichen ein)
+  let normalized = barcode.replace(/\s+/g, '');
+  
   // Zuerst Klammern um AIs entfernen falls vorhanden
   // z.B. "(01)08714729158608(17)280806(10)37152429" → "0108714729158608172808061037152429"
-  let normalized = normalizeGS1WithParentheses(barcode);
+  normalized = normalizeGS1WithParentheses(normalized);
   
   // FNC1-Zeichen als Feldtrennzeichen markieren (Group Separator)
   // GS1 verwendet FNC1 (\x1D, ASCII 29) oder ~ als Trennzeichen zwischen variablen Feldern
