@@ -4,16 +4,21 @@
 CREATE DATABASE IF NOT EXISTS material_manager CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE material_manager;
 
--- Tabelle für Kategorien
+-- Tabelle für Kategorien (pro Abteilung)
 CREATE TABLE IF NOT EXISTS categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
+    unit_id INT COMMENT 'Abteilungszuordnung - jede Abteilung hat eigene Kategorien',
+    name VARCHAR(100) NOT NULL,
     description TEXT,
+    min_quantity INT DEFAULT 0 COMMENT 'Mindestmenge für alle Materialien dieser Kategorie',
     ops_code VARCHAR(50) COMMENT 'OPS-Code (Operationen- und Prozedurenschlüssel)',
     zusatzentgelt VARCHAR(50) COMMENT 'Zusatzentgelt (ZE) Code für Krankenhausabrechnung',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_name (name)
+    INDEX idx_name (name),
+    INDEX idx_unit_id (unit_id),
+    UNIQUE INDEX idx_name_unit (name, unit_id),
+    FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- Tabelle für Firmen/Hersteller
