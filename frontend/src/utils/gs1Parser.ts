@@ -67,7 +67,8 @@ function normalizeGS1WithParentheses(barcode: string): string {
         remaining = '';
       } else {
         // Wert bis zur nächsten Klammer
-        result += remaining.substring(0, nextParenPos);
+        // WICHTIG: Füge GS-Zeichen als Trenner hinzu, damit der Parser weiß wo das Feld endet
+        result += remaining.substring(0, nextParenPos) + '\x1D';
         remaining = remaining.substring(nextParenPos);
       }
     } else {
