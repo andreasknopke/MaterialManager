@@ -69,6 +69,10 @@ const MaterialForm: React.FC = () => {
   const [gs1Data, setGs1Data] = useState<GS1Data | null>(null);
   const [gs1Warning, setGs1Warning] = useState<string | null>(null);
 
+  // Kategorie-QR-Code Status
+  const [categoryQrInput, setCategoryQrInput] = useState<string>('');
+  const [categoryQrData, setCategoryQrData] = useState<any>(null);
+
   const [formData, setFormData] = useState<MaterialFormData>({
     name: '',
     description: '',
@@ -264,6 +268,54 @@ const MaterialForm: React.FC = () => {
     setGs1Warning(null);
   };
 
+  // Kategorie-QR-Code Handler
+  const handleCategoryQrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target.value;
+    setCategoryQrInput(input);
+    setCategoryQrData(null);
+
+    if (!input) return;
+
+    try {
+      // Versuche JSON zu parsen
+      const parsed = JSON.parse(input);
+      
+      // Prüfe ob es ein Kategorie-QR-Code ist
+      if (parsed.type === 'CATEGORY' && parsed.id) {
+        setCategoryQrData(parsed);
+        
+        // Formular-Updates vorbereiten
+        const updates: Partial<MaterialFormData> = {};
+        
+        // Kategorie setzen
+        if (parsed.id) {
+          updates.category_id = parsed.id;
+        }
+        
+        // Schrank setzen wenn vorhanden
+        if (parsed.cabinet?.id) {
+          updates.cabinet_id = parsed.cabinet.id;
+        }
+        
+        // Mindestbestand aus Kategorie übernehmen wenn vorhanden
+        if (parsed.min_quantity !== undefined && parsed.min_quantity > 0) {
+          updates.min_stock = parsed.min_quantity;
+        }
+        
+        setFormData(prev => ({ ...prev, ...updates }));
+        setSuccess(`Kategorie "${parsed.name}" übernommen!${parsed.cabinet ? ` Schrank: ${parsed.cabinet.name}` : ''}`);
+        setTimeout(() => setSuccess(null), 4000);
+      }
+    } catch {
+      // Kein gültiges JSON - ignorieren
+    }
+  };
+
+  const clearCategoryQrData = () => {
+    setCategoryQrInput('');
+    setCategoryQrData(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -344,6 +396,47 @@ const MaterialForm: React.FC = () => {
       <Paper sx={{ p: { xs: 2, sm: 3 }, mt: { xs: 2, sm: 3 } }}>
         <form onSubmit={handleSubmit}>
           <Grid container spacing={{ xs: 2, sm: 3 }}>
+            {/* Kategorie-QR-Code Eingabe */}
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom>
+                Kategorie-QR-Code Scanner
+              </Typography>
+              <TextField
+                fullWidth
+                label="Kategorie-QR-Code"
+                value={categoryQrInput}
+                onChange={handleCategoryQrChange}
+                placeholder="Scannen Sie einen Kategorie-QR-Code vom Schrankschild"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <QrCodeScannerIcon color="secondary" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: categoryQrInput && (
+                    <InputAdornment position="end">
+                      <Tooltip title="Kategorie-Daten löschen">
+                        <IconButton onClick={clearCategoryQrData} size="small">
+                          <ClearIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              {categoryQrData && (
+                <Alert severity="success" sx={{ mt: 1 }}>
+                  <Typography variant="body2">
+                    <strong>✅ Kategorie-Daten übernommen:</strong>
+                  </Typography>
+                  <Typography variant="body2">• Kategorie: {categoryQrData.name}</Typography>
+                  {categoryQrData.cabinet && <Typography variant="body2">• Schrank: {categoryQrData.cabinet.name}</Typography>}
+                  {categoryQrData.ops_code && <Typography variant="body2">• OPS-Code: {categoryQrData.ops_code}</Typography>}
+                  {categoryQrData.zusatzentgelt && <Typography variant="body2">• Zusatzentgelt: {categoryQrData.zusatzentgelt}</Typography>}
+                </Alert>
+              )}
+            </Grid>
+
             {/* GS1 Barcode Eingabe */}
             <Grid item xs={12}>
               <Typography variant="h6" gutterBottom>

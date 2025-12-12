@@ -138,6 +138,7 @@ const Categories: React.FC = () => {
       name: qrCategory.name,
       ops_code: qrCategory.ops_code || null,
       zusatzentgelt: qrCategory.zusatzentgelt || null,
+      min_quantity: qrCategory.min_quantity || 0,
       cabinet: selectedCabinet ? {
         id: selectedCabinet.id,
         name: selectedCabinet.name,
@@ -379,14 +380,18 @@ const Categories: React.FC = () => {
                 value={qrCabinetId}
                 onChange={(e) => setQrCabinetId(e.target.value as number | '')}
                 margin="normal"
-                helperText="Wählen Sie optional einen Schrank für das Schild"
+                helperText={cabinets.length === 0 ? 'Keine Schränke verfügbar' : 'Wählen Sie optional einen Schrank für das Schild'}
               >
                 <MenuItem value="">Kein Schrank</MenuItem>
-                {cabinets.map((cabinet) => (
-                  <MenuItem key={cabinet.id} value={cabinet.id}>
-                    {cabinet.name} {cabinet.location && `(${cabinet.location})`}
-                  </MenuItem>
-                ))}
+                {cabinets.length > 0 ? (
+                  cabinets.map((cabinet) => (
+                    <MenuItem key={cabinet.id} value={cabinet.id}>
+                      {cabinet.name} {cabinet.location && `(${cabinet.location})`}
+                    </MenuItem>
+                  ))
+                ) : (
+                  <MenuItem disabled>Keine Schränke geladen</MenuItem>
+                )}
               </TextField>
 
               <Box sx={{ my: 3, p: 2, border: '2px dashed #ccc', borderRadius: 2, bgcolor: '#fafafa' }}>
