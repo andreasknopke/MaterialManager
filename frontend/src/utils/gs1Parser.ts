@@ -32,20 +32,17 @@ const AI_PATTERNS: { [key: string]: { length: number | null; name: string } } = 
 };
 
 /**
- * Entfernt Klammern um Application Identifiers und normalisiert den Barcode
- * z.B. "(01)08714729158608(17)280806(10)37152429" → mit GS-Trennern wo nötig
- * Die Klammern dienen als visuelle Trennung und werden von manchen Scannern beibehalten
- * GS-Zeichen werden nur nach variablen Feldern eingefügt, nicht nach festen Längen
+ * Prüft ob der Barcode im Klammer-Format ist und parst ihn direkt
+ * z.B. "(01)38935221200737(17)270731(10)250210A"
+ * Bei Klammer-Format sind die Feldgrenzen exakt definiert durch die Klammern
  */
-function normalizeGS1WithParentheses(barcode: string): string {
+function parseGS1WithParentheses(barcode: string): GS1Data | null {
   // Prüfe ob der Barcode Klammern enthält - Format: (AI)value
   if (!barcode.includes('(')) {
-    return barcode;
+    return null;
   }
   
-  // Regex um (XX) oder (XXX) oder (XXXX) zu finden, gefolgt von Daten
-  // Die Klammern markieren den AI, der Wert folgt direkt danach
-  let result = '';
+  const result: GS1Data = { raw: barcode };
   let remaining = barcode;
   
   // Pattern: (AI)value wobei AI 2-4 Ziffern ist
@@ -57,32 +54,42 @@ function normalizeGS1WithParentheses(barcode: string): string {
       const ai = match[1];
       remaining = match[2];
       
-      // Füge AI ohne Klammern hinzu
-      result += ai;
-      
-      // Prüfe ob dieser AI eine variable Länge hat
-      const aiDef = AI_PATTERNS[ai];
-      const isVariableLength = aiDef && aiDef.length === null;
-      
       // Finde den Wert bis zur nächsten Klammer oder Ende
       const nextParenPos = remaining.indexOf('(');
+      let value: string;
       if (nextParenPos === -1) {
         // Keine weitere Klammer, Rest ist der Wert
-        result += remaining;
+        value = remaining;
         remaining = '';
       } else {
         // Wert bis zur nächsten Klammer
-        result += remaining.substring(0, nextParenPos);
-        // NUR bei variablen Feldern GS-Zeichen einfügen
-        // Bei festen Längen (wie 01, 17) weiß der Parser durch die Länge wo das Feld endet
-        if (isVariableLength) {
-          result += '\x1D';
-        }
+        value = remaining.substring(0, nextParenPos);
         remaining = remaining.substring(nextParenPos);
       }
+      
+      // Daten zuweisen basierend auf AI
+      switch (ai) {
+        case '00':
+          result.sscc = value;
+          break;
+        case '01':
+          result.gtin = value;
+          break;
+        case '10':
+          result.batchNumber = value;
+          break;
+        case '11':
+          result.productionDate = parseGS1Date(value) || value;
+          break;
+        case '17':
+          result.expiryDate = parseGS1Date(value) || value;
+          break;
+        case '21':
+          result.serialNumber = value;
+          break;
+      }
     } else {
-      // Kein Klammer-Pattern mehr gefunden, Rest anhängen
-      result += remaining;
+      // Kein Klammer-Pattern mehr gefunden
       break;
     }
   }
@@ -117,14 +124,21 @@ export function parseGS1Barcode(barcode: string): GS1Data {
     return { raw: barcode };
   }
 
-  const result: GS1Data = { raw: barcode };
-  
   // Alle Leerzeichen entfernen (Scanner fügt manchmal Leerzeichen ein)
-  let normalized = barcode.replace(/\s+/g, '');
+  let cleaned = barcode.replace(/\s+/g, '');
   
-  // Zuerst Klammern um AIs entfernen falls vorhanden
-  // z.B. "(01)08714729158608(17)280806(10)37152429" → "0108714729158608172808061037152429"
-  normalized = normalizeGS1WithParentheses(normalized);
+  // Wenn der Barcode Klammern enthält, parse ihn direkt mit Klammern als Feldgrenzen
+  // Dies ist die zuverlässigste Methode, da die Klammern exakte Feldgrenzen definieren
+  if (cleaned.includes('(')) {
+    const result = parseGS1WithParentheses(cleaned);
+    if (result) {
+      return result;
+    }
+  }
+  
+  // Fallback: Parse ohne Klammern (raw GS1 format)
+  const result: GS1Data = { raw: barcode };
+  let normalized = cleaned;
   
   // FNC1-Zeichen als Feldtrennzeichen markieren (Group Separator)
   // GS1 verwendet FNC1 (\x1D, ASCII 29) oder ~ als Trennzeichen zwischen variablen Feldern
@@ -260,11 +274,14 @@ export function parseGS1Barcode(barcode: string): GS1Data {
 export function isValidGS1Barcode(barcode: string): boolean {
   if (!barcode) return false;
   
+  // Leerzeichen entfernen
+  const cleaned = barcode.replace(/\s+/g, '');
+  
   // Mindestlänge prüfen (AI + Daten)
-  if (barcode.length < 4) return false;
+  if (cleaned.length < 4) return false;
   
   // Klammern-Format prüfen: (01)... oder (10)... etc.
-  const parenthesesMatch = barcode.match(/^\((\d{2,4})\)/);
+  const parenthesesMatch = cleaned.match(/^\((\d{2,4})\)/);
   if (parenthesesMatch) {
     const ai = parenthesesMatch[1];
     if (AI_PATTERNS[ai]) {
@@ -272,8 +289,8 @@ export function isValidGS1Barcode(barcode: string): boolean {
     }
   }
   
-  // Normalisieren (Klammern entfernen falls vorhanden)
-  let normalized = normalizeGS1WithParentheses(barcode);
+  // Normalisieren
+  let normalized = cleaned;
   
   // x1d Präfix entfernen (manche Scanner geben FNC1 so aus)
   if (normalized.toLowerCase().startsWith('x1d')) {
