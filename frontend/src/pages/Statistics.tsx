@@ -32,6 +32,7 @@ import {
   Person as PersonIcon,
   Inventory as InventoryIcon,
   Refresh as RefreshIcon,
+  Euro as EuroIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -91,6 +92,8 @@ interface Summary {
   total_out_count: number;
   total_in_quantity: number;
   total_out_quantity: number;
+  total_in_cost: number;
+  total_out_cost: number;
   materials_affected: number;
   active_users: number;
   total_transactions: number;
@@ -102,6 +105,7 @@ interface MaterialStats {
   article_number: string;
   current_stock: number;
   min_stock: number;
+  cost: number | null;
   unit_name: string;
   cabinet_name: string;
   category_name: string;
@@ -111,6 +115,9 @@ interface MaterialStats {
   total_out: number;
   transaction_count: number;
   last_transaction_date: string;
+  current_stock_value: number;
+  total_in_value: number;
+  total_out_value: number;
 }
 
 interface UserActivity {
@@ -299,7 +306,7 @@ const Statistics: React.FC = () => {
           <>
             {/* Summary Cards */}
             <Grid container spacing={3} sx={{ mb: 3 }}>
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid item xs={12} sm={6} md={2.4}>
                 <Card>
                   <CardContent>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -317,7 +324,7 @@ const Statistics: React.FC = () => {
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid item xs={12} sm={6} md={2.4}>
                 <Card>
                   <CardContent>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -335,7 +342,25 @@ const Statistics: React.FC = () => {
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid item xs={12} sm={6} md={2.4}>
+                <Card>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <EuroIcon color="warning" sx={{ mr: 1 }} />
+                      <Typography color="text.secondary" variant="body2">
+                        Kosten (Ausgänge)
+                      </Typography>
+                    </Box>
+                    <Typography variant="h4" color="warning.main">
+                      {(summary?.total_out_cost || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Eingänge: {(summary?.total_in_cost || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={2.4}>
                 <Card>
                   <CardContent>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -353,7 +378,7 @@ const Statistics: React.FC = () => {
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
+              <Grid item xs={12} sm={6} md={2.4}>
                 <Card>
                   <CardContent>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -556,19 +581,21 @@ const Statistics: React.FC = () => {
                       <TableRow>
                         <TableCell>Material</TableCell>
                         <TableCell>Kategorie</TableCell>
-                        <TableCell align="right">Aktueller Bestand</TableCell>
+                        <TableCell align="right">Bestand</TableCell>
+                        <TableCell align="right">Kosten/Stk</TableCell>
+                        <TableCell align="right">Bestandswert</TableCell>
                         <TableCell align="right">Höchststand</TableCell>
                         <TableCell align="right">Tiefststand</TableCell>
                         <TableCell align="right">Ges. Eingänge</TableCell>
                         <TableCell align="right">Ges. Ausgänge</TableCell>
-                        <TableCell align="right">Transaktionen</TableCell>
+                        <TableCell align="right">Ausgangswert</TableCell>
                         <TableCell>Letzte Bewegung</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {materialStats.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={9} align="center">
+                          <TableCell colSpan={11} align="center">
                             Keine Materialien vorhanden
                           </TableCell>
                         </TableRow>
@@ -593,6 +620,12 @@ const Statistics: React.FC = () => {
                                 color={m.current_stock <= (m.min_stock || 0) ? 'error' : 'default'}
                               />
                             </TableCell>
+                            <TableCell align="right">
+                              {m.cost ? `${m.cost.toFixed(2)} €` : '-'}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'medium' }}>
+                              {m.current_stock_value ? `${m.current_stock_value.toFixed(2)} €` : '-'}
+                            </TableCell>
                             <TableCell align="right">{m.max_stock_ever || m.current_stock}</TableCell>
                             <TableCell align="right">{m.min_stock_ever || 0}</TableCell>
                             <TableCell align="right" sx={{ color: 'success.main' }}>
@@ -601,7 +634,9 @@ const Statistics: React.FC = () => {
                             <TableCell align="right" sx={{ color: 'error.main' }}>
                               -{m.total_out || 0}
                             </TableCell>
-                            <TableCell align="right">{m.transaction_count || 0}</TableCell>
+                            <TableCell align="right" sx={{ color: 'error.main' }}>
+                              {m.total_out_value ? `${m.total_out_value.toFixed(2)} €` : '-'}
+                            </TableCell>
                             <TableCell>
                               {m.last_transaction_date ? formatDateShort(m.last_transaction_date) : '-'}
                             </TableCell>

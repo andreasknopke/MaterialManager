@@ -149,6 +149,8 @@ router.get('/summary', async (req: Request, res: Response) => {
         COUNT(CASE WHEN t.transaction_type = 'out' THEN 1 END) AS total_out_count,
         COALESCE(SUM(CASE WHEN t.transaction_type = 'in' THEN t.quantity ELSE 0 END), 0) AS total_in_quantity,
         COALESCE(SUM(CASE WHEN t.transaction_type = 'out' THEN t.quantity ELSE 0 END), 0) AS total_out_quantity,
+        COALESCE(SUM(CASE WHEN t.transaction_type = 'in' THEN t.quantity * COALESCE(m.cost, 0) ELSE 0 END), 0) AS total_in_cost,
+        COALESCE(SUM(CASE WHEN t.transaction_type = 'out' THEN t.quantity * COALESCE(m.cost, 0) ELSE 0 END), 0) AS total_out_cost,
         COUNT(DISTINCT t.material_id) AS materials_affected,
         COUNT(DISTINCT t.user_id) AS active_users,
         COUNT(*) AS total_transactions
@@ -186,6 +188,8 @@ router.get('/summary', async (req: Request, res: Response) => {
         total_out_count: 0,
         total_in_quantity: 0,
         total_out_quantity: 0,
+        total_in_cost: 0,
+        total_out_cost: 0,
         materials_affected: 0,
         active_users: 0,
         total_transactions: 0
@@ -314,6 +318,7 @@ router.get('/material-stats', async (req: Request, res: Response) => {
         m.article_number,
         m.current_stock,
         m.min_stock,
+        m.cost,
         m.unit_id,
         un.name AS unit_name,
         cab.name AS cabinet_name,
@@ -323,7 +328,10 @@ router.get('/material-stats', async (req: Request, res: Response) => {
         COALESCE((SELECT SUM(quantity) FROM material_transactions WHERE material_id = m.id AND transaction_type = 'in'), 0) AS total_in,
         COALESCE((SELECT SUM(quantity) FROM material_transactions WHERE material_id = m.id AND transaction_type = 'out'), 0) AS total_out,
         (SELECT COUNT(*) FROM material_transactions WHERE material_id = m.id) AS transaction_count,
-        (SELECT transaction_date FROM material_transactions WHERE material_id = m.id ORDER BY transaction_date DESC LIMIT 1) AS last_transaction_date
+        (SELECT transaction_date FROM material_transactions WHERE material_id = m.id ORDER BY transaction_date DESC LIMIT 1) AS last_transaction_date,
+        m.current_stock * COALESCE(m.cost, 0) AS current_stock_value,
+        COALESCE((SELECT SUM(quantity) FROM material_transactions WHERE material_id = m.id AND transaction_type = 'in'), 0) * COALESCE(m.cost, 0) AS total_in_value,
+        COALESCE((SELECT SUM(quantity) FROM material_transactions WHERE material_id = m.id AND transaction_type = 'out'), 0) * COALESCE(m.cost, 0) AS total_out_value
       FROM materials m
       LEFT JOIN units un ON m.unit_id = un.id
       LEFT JOIN cabinets cab ON m.cabinet_id = cab.id
