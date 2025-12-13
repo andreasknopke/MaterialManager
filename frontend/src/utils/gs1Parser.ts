@@ -98,20 +98,32 @@ function parseGS1WithParentheses(barcode: string): GS1Data | null {
 }
 
 /**
- * Konvertiert ein GS1-Datum (YYMMDD) in ISO-Format (YYYY-MM-DD)
+ * Konvertiert ein GS1-Datum (YYMMDD oder YYMM) in ISO-Format (YYYY-MM-DD)
+ * Unterstützt auch 4-stellige Daten (YYMM) ohne Tag
  */
 function parseGS1Date(gs1Date: string): string | null {
-  if (!gs1Date || gs1Date.length !== 6) return null;
+  if (!gs1Date) return null;
   
-  const yy = gs1Date.substring(0, 2);
-  const mm = gs1Date.substring(2, 4);
-  const dd = gs1Date.substring(4, 6);
+  // 6-stelliges Format: YYMMDD
+  if (gs1Date.length === 6) {
+    const yy = gs1Date.substring(0, 2);
+    const mm = gs1Date.substring(2, 4);
+    const dd = gs1Date.substring(4, 6);
+    const year = 2000 + parseInt(yy, 10);
+    // Tag "00" bedeutet: letzter Tag des Monats (GS1 Standard)
+    const day = dd === '00' ? '01' : dd;
+    return `${year}-${mm}-${day}`;
+  }
   
-  // Jahr 2000+ annehmen
-  const year = 2000 + parseInt(yy, 10);
+  // 4-stelliges Format: YYMM (ohne Tag) - setze Tag auf 01
+  if (gs1Date.length === 4) {
+    const yy = gs1Date.substring(0, 2);
+    const mm = gs1Date.substring(2, 4);
+    const year = 2000 + parseInt(yy, 10);
+    return `${year}-${mm}-01`;
+  }
   
-  // ISO-Format: YYYY-MM-DD
-  return `${year}-${mm}-${dd}`;
+  return null;
 }
 
 /**
