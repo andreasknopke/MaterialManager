@@ -210,4 +210,179 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// ==================== FÄCHER (COMPARTMENTS) ====================
+
+// GET alle Fächer eines Schranks
+router.get('/:id/compartments', async (req: Request, res: Response) => {
+  try {
+    // Prüfe Zugriff auf den Schrank
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
+        [req.params.id, req.user.departmentId]
+      );
+      if (cabinetCheck.length === 0) {
+        return res.status(403).json({ error: 'Schrank nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT c.*, 
+              (SELECT COUNT(*) FROM materials m WHERE m.compartment_id = c.id AND m.active = TRUE) AS material_count
+       FROM compartments c 
+       WHERE c.cabinet_id = ? AND c.active = TRUE 
+       ORDER BY c.position, c.name`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Fächer:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// POST neues Fach erstellen
+router.post('/:id/compartments', async (req: Request, res: Response) => {
+  const { name, description, position } = req.body;
+  
+  if (!name) {
+    return res.status(400).json({ error: 'Fachname ist erforderlich' });
+  }
+  
+  try {
+    // Prüfe Zugriff auf den Schrank
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
+        [req.params.id, req.user.departmentId]
+      );
+      if (cabinetCheck.length === 0) {
+        return res.status(403).json({ error: 'Schrank nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
+    // Prüfe ob Fachname bereits existiert
+    const [existing] = await pool.query<RowDataPacket[]>(
+      'SELECT id FROM compartments WHERE cabinet_id = ? AND name = ?',
+      [req.params.id, name]
+    );
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'Ein Fach mit diesem Namen existiert bereits in diesem Schrank' });
+    }
+    
+    // Ermittle nächste Position falls nicht angegeben
+    let pos = position;
+    if (pos === undefined || pos === null) {
+      const [maxPos] = await pool.query<RowDataPacket[]>(
+        'SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM compartments WHERE cabinet_id = ?',
+        [req.params.id]
+      );
+      pos = maxPos[0].next_pos;
+    }
+    
+    const [result] = await pool.query<ResultSetHeader>(
+      'INSERT INTO compartments (cabinet_id, name, description, position) VALUES (?, ?, ?, ?)',
+      [req.params.id, name, description || null, pos]
+    );
+    
+    res.status(201).json({
+      id: result.insertId,
+      cabinet_id: parseInt(req.params.id),
+      name,
+      description,
+      position: pos,
+      message: 'Fach erfolgreich erstellt'
+    });
+  } catch (error) {
+    console.error('Fehler beim Erstellen des Fachs:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// PUT Fach aktualisieren
+router.put('/:cabinetId/compartments/:compartmentId', async (req: Request, res: Response) => {
+  const { name, description, position } = req.body;
+  
+  if (!name) {
+    return res.status(400).json({ error: 'Fachname ist erforderlich' });
+  }
+  
+  try {
+    // Prüfe Zugriff auf den Schrank
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
+        [req.params.cabinetId, req.user.departmentId]
+      );
+      if (cabinetCheck.length === 0) {
+        return res.status(403).json({ error: 'Schrank nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
+    // Prüfe ob Fachname bereits von einem anderen Fach verwendet wird
+    const [existing] = await pool.query<RowDataPacket[]>(
+      'SELECT id FROM compartments WHERE cabinet_id = ? AND name = ? AND id != ?',
+      [req.params.cabinetId, name, req.params.compartmentId]
+    );
+    if (existing.length > 0) {
+      return res.status(400).json({ error: 'Ein anderes Fach mit diesem Namen existiert bereits' });
+    }
+    
+    const [result] = await pool.query<ResultSetHeader>(
+      'UPDATE compartments SET name = ?, description = ?, position = ? WHERE id = ? AND cabinet_id = ?',
+      [name, description || null, position || 0, req.params.compartmentId, req.params.cabinetId]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Fach nicht gefunden' });
+    }
+    
+    res.json({ message: 'Fach erfolgreich aktualisiert' });
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren des Fachs:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// DELETE Fach (soft delete)
+router.delete('/:cabinetId/compartments/:compartmentId', async (req: Request, res: Response) => {
+  try {
+    // Prüfe Zugriff auf den Schrank
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
+        [req.params.cabinetId, req.user.departmentId]
+      );
+      if (cabinetCheck.length === 0) {
+        return res.status(403).json({ error: 'Schrank nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
+    // Prüfe ob Materialien im Fach sind
+    const [materials] = await pool.query<RowDataPacket[]>(
+      'SELECT COUNT(*) AS count FROM materials WHERE compartment_id = ? AND active = TRUE',
+      [req.params.compartmentId]
+    );
+    if (materials[0].count > 0) {
+      return res.status(400).json({ 
+        error: `Fach enthält noch ${materials[0].count} aktive(s) Material(ien). Bitte zuerst verschieben oder entfernen.` 
+      });
+    }
+    
+    const [result] = await pool.query<ResultSetHeader>(
+      'UPDATE compartments SET active = FALSE WHERE id = ? AND cabinet_id = ?',
+      [req.params.compartmentId, req.params.cabinetId]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Fach nicht gefunden' });
+    }
+    
+    res.json({ message: 'Fach erfolgreich deaktiviert' });
+  } catch (error) {
+    console.error('Fehler beim Löschen des Fachs:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 export default router;

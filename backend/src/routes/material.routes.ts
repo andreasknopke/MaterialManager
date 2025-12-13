@@ -146,7 +146,7 @@ router.get('/:id/transactions', async (req: Request, res: Response) => {
 // POST neues Material
 router.post('/', async (req: Request, res: Response) => {
   const {
-    category_id, company_id, cabinet_id, name, description,
+    category_id, company_id, cabinet_id, compartment_id, name, description,
     size, unit, min_stock, current_stock, expiry_date,
     lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes,
     custom_fields, barcodes, unit_id
@@ -184,12 +184,12 @@ router.post('/', async (req: Request, res: Response) => {
     // min_stock ist nicht mehr relevant für einzelne Materialien (nur Kategorien)
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO materials 
-       (category_id, company_id, cabinet_id, unit_id, name, description, size, unit,
+       (category_id, company_id, cabinet_id, compartment_id, unit_id, name, description, size, unit,
         min_stock, current_stock, expiry_date, lot_number, article_number, cost,
         location_in_cabinet, shipping_container_code, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        category_id, company_id, cabinet_id, materialUnitId, name, description, size, unit,
+        category_id, company_id, cabinet_id, compartment_id || null, materialUnitId, name, description, size, unit,
         0, current_stock || 1, expiry_date, lot_number,
         article_number, cost || null, location_in_cabinet, shipping_container_code, notes
       ]
@@ -245,7 +245,7 @@ router.post('/', async (req: Request, res: Response) => {
 // PUT Material aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
   const {
-    category_id, company_id, cabinet_id, unit_id, name, description,
+    category_id, company_id, cabinet_id, compartment_id, unit_id, name, description,
     size, unit, min_stock, expiry_date,
     lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes, active
   } = req.body;
@@ -287,13 +287,13 @@ router.put('/:id', async (req: Request, res: Response) => {
     
     const [result] = await pool.query<ResultSetHeader>(
       `UPDATE materials 
-       SET category_id = ?, company_id = ?, cabinet_id = ?, unit_id = ?, name = ?,
+       SET category_id = ?, company_id = ?, cabinet_id = ?, compartment_id = ?, unit_id = ?, name = ?,
            description = ?, size = ?, unit = ?, min_stock = ?,
            expiry_date = ?, lot_number = ?,
            article_number = ?, cost = ?, location_in_cabinet = ?, shipping_container_code = ?, notes = ?, active = ?
        WHERE id = ?`,
       [
-        category_id, company_id, cabinet_id, materialUnitId, name, description, size, unit,
+        category_id, company_id, cabinet_id, compartment_id || null, materialUnitId, name, description, size, unit,
         min_stock, expiry_date, lot_number, article_number, cost || null,
         location_in_cabinet, shipping_container_code, notes, isActive, req.params.id
       ]

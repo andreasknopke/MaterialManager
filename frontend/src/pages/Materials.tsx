@@ -86,6 +86,7 @@ const Materials: React.FC = () => {
     { field: 'category_name', headerName: 'Kategorie', width: 120 },
     { field: 'company_name', headerName: 'Firma', width: 120 },
     { field: 'cabinet_name', headerName: 'Schrank', width: 100 },
+    { field: 'compartment_name', headerName: 'Fach', width: 80 },
     { field: 'size', headerName: 'Größe', width: 80 },
     { field: 'current_stock', headerName: 'Bestand', width: 90, type: 'number' },
     { field: 'min_stock', headerName: 'Min.', width: 70, type: 'number' },

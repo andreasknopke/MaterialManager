@@ -29,6 +29,7 @@ interface MaterialFormData {
   category_id: number | '';
   company_id: number | '';
   cabinet_id: number | '';
+  compartment_id: number | '';
   unit_id: number | '';
   size: string;
   unit: string;
@@ -40,6 +41,13 @@ interface MaterialFormData {
   location_in_cabinet: string;
   notes: string;
   gs1_barcode: string;
+}
+
+interface Compartment {
+  id: number;
+  cabinet_id: number;
+  name: string;
+  description: string | null;
 }
 
 const MaterialForm: React.FC = () => {
@@ -65,6 +73,7 @@ const MaterialForm: React.FC = () => {
   const [companies, setCompanies] = useState<any[]>([]);
   const [cabinets, setCabinets] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
+  const [compartments, setCompartments] = useState<Compartment[]>([]);
 
   // GS1-Parser Status
   const [gs1Data, setGs1Data] = useState<GS1Data | null>(null);
@@ -80,6 +89,7 @@ const MaterialForm: React.FC = () => {
     category_id: '',
     company_id: '',
     cabinet_id: '',
+    compartment_id: '',
     unit_id: '',
     size: '',
     unit: 'Stück',
@@ -191,6 +201,7 @@ const MaterialForm: React.FC = () => {
         category_id: material.category_id || '',
         company_id: material.company_id || '',
         cabinet_id: material.cabinet_id || '',
+        compartment_id: material.compartment_id || '',
         unit_id: material.unit_id || '',
         size: material.size || '',
         unit: material.unit || 'Stück',
@@ -203,6 +214,11 @@ const MaterialForm: React.FC = () => {
         notes: material.notes || '',
         gs1_barcode: '',
       });
+      
+      // Fächer für den Schrank laden wenn vorhanden
+      if (material.cabinet_id) {
+        await fetchCompartments(material.cabinet_id);
+      }
     } catch (err) {
       console.error('Fehler beim Laden des Materials:', err);
       setError('Material nicht gefunden');
@@ -211,10 +227,31 @@ const MaterialForm: React.FC = () => {
     }
   };
 
+  const fetchCompartments = async (cabinetId: number) => {
+    try {
+      const response = await cabinetAPI.getCompartments(cabinetId);
+      setCompartments(response.data || []);
+    } catch (err) {
+      console.error('Fehler beim Laden der Fächer:', err);
+      setCompartments([]);
+    }
+  };
+
   const handleChange = (field: keyof MaterialFormData) => (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     setFormData({ ...formData, [field]: e.target.value });
+    
+    // Wenn der Schrank gewechselt wird, Fächer neu laden und compartment_id zurücksetzen
+    if (field === 'cabinet_id') {
+      const newCabinetId = e.target.value;
+      if (newCabinetId) {
+        fetchCompartments(Number(newCabinetId));
+      } else {
+        setCompartments([]);
+      }
+      setFormData(prev => ({ ...prev, [field]: e.target.value, compartment_id: '' }));
+    }
   };
 
   const handleGS1BarcodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -330,6 +367,7 @@ const MaterialForm: React.FC = () => {
         category_id: formData.category_id || null,
         company_id: formData.company_id || null,
         cabinet_id: formData.cabinet_id || null,
+        compartment_id: formData.compartment_id || null,
         expiry_date: formData.expiry_date || null,
         cost: formData.cost ? parseFloat(formData.cost) : null,
       };
@@ -713,12 +751,27 @@ const MaterialForm: React.FC = () => {
 
             <Grid item xs={12} md={6}>
               <TextField
+                select
                 fullWidth
-                label="Position im Schrank"
-                value={formData.location_in_cabinet}
-                onChange={handleChange('location_in_cabinet')}
-                placeholder="z.B. Fach 3, Regal 2"
-              />
+                label="Fach im Schrank"
+                value={formData.compartment_id}
+                onChange={handleChange('compartment_id')}
+                disabled={!formData.cabinet_id || compartments.length === 0}
+                helperText={
+                  !formData.cabinet_id 
+                    ? 'Bitte zuerst einen Schrank auswählen' 
+                    : compartments.length === 0 
+                      ? 'Keine Fächer für diesen Schrank konfiguriert' 
+                      : ''
+                }
+              >
+                <MenuItem value="">Kein Fach ausgewählt</MenuItem>
+                {compartments.map((comp) => (
+                  <MenuItem key={comp.id} value={comp.id}>
+                    {comp.name}{comp.description ? ` - ${comp.description}` : ''}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
 
             <Grid item xs={12} md={6}>

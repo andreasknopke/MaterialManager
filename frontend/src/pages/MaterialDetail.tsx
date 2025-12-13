@@ -132,6 +132,14 @@ const MaterialDetail: React.FC = () => {
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
+                label="Fach"
+                value={material?.compartment_name || 'Kein Fach zugewiesen'}
+                disabled
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
                 label="Größe"
                 value={material?.size || ''}
                 disabled
