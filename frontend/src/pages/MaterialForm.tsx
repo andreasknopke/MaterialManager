@@ -22,6 +22,7 @@ import {
 } from '@mui/icons-material';
 import { materialAPI, cabinetAPI, categoryAPI, companyAPI, unitAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
+import { useAuth } from '../contexts/AuthContext';
 
 interface MaterialFormData {
   name: string;
@@ -54,6 +55,7 @@ const MaterialForm: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, isRoot } = useAuth();
   
   // Prüfe ob wir auf /materials/new sind (id ist undefined) oder eine echte ID haben
   const isNew = !id || id === 'new';
@@ -118,6 +120,11 @@ const MaterialForm: React.FC = () => {
       console.log('Creating new material - setting loading to false');
       // Bei neuem Material: Loading beenden
       setLoading(false);
+      
+      // Für nicht-root User: unit_id automatisch setzen
+      if (!isRoot && user?.departmentId) {
+        setFormData(prev => ({ ...prev, unit_id: user.departmentId as number }));
+      }
       
       // Prüfe ob Daten vom Scanner übergeben wurden
       const state = location.state as any;
@@ -594,6 +601,8 @@ const MaterialForm: React.FC = () => {
                 label="Einheit / Abteilung"
                 value={formData.unit_id}
                 onChange={handleChange('unit_id')}
+                disabled={!isRoot}
+                helperText={!isRoot ? 'Automatisch zugewiesen' : undefined}
               >
                 <MenuItem value="">Keine Einheit</MenuItem>
                 {units.map((unit) => (

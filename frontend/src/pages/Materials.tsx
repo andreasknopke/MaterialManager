@@ -22,6 +22,7 @@ const Materials: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [hideZeroStock, setHideZeroStock] = useState(true);
+  const [groupIdentical, setGroupIdentical] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -82,13 +83,49 @@ const Materials: React.FC = () => {
 
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'name', headerName: 'Bezeichnung', minWidth: 150, flex: 1 },
+    { 
+      field: 'name', 
+      headerName: 'Bezeichnung', 
+      minWidth: 150, 
+      flex: 1,
+      renderCell: (params) => (
+        <Box>
+          {params.value}
+          {groupIdentical && params.row.grouped_count > 1 && (
+            <Chip 
+              label={`${params.row.grouped_count}x`} 
+              size="small" 
+              color="info" 
+              sx={{ ml: 1, height: 18, fontSize: '0.7rem' }}
+            />
+          )}
+        </Box>
+      ),
+    },
+    { field: 'article_number', headerName: 'GTIN/Art.Nr.', width: 130 },
     { field: 'category_name', headerName: 'Kategorie', width: 120 },
     { field: 'company_name', headerName: 'Firma', width: 120 },
-    { field: 'cabinet_name', headerName: 'Schrank', width: 100 },
+    { 
+      field: 'cabinet_name', 
+      headerName: 'Schrank', 
+      width: 120,
+      valueGetter: (params) => groupIdentical && params.row.locations ? params.row.locations : params.value,
+    },
     { field: 'compartment_name', headerName: 'Fach', width: 80 },
-    { field: 'size', headerName: 'Größe', width: 80 },
-    { field: 'current_stock', headerName: 'Bestand', width: 90, type: 'number' },
+    { field: 'size', headerName: 'Einh./Pkg.', width: 80 },
+    { 
+      field: 'current_stock', 
+      headerName: 'Bestand', 
+      width: 90, 
+      type: 'number',
+      renderCell: (params) => (
+        <Chip 
+          label={params.value} 
+          size="small" 
+          color={params.value <= 0 ? 'error' : params.value <= (params.row.min_stock || 0) ? 'warning' : 'default'}
+        />
+      ),
+    },
     { field: 'min_stock', headerName: 'Min.', width: 70, type: 'number' },
     {
       field: 'expiry_date',
@@ -137,6 +174,45 @@ const Materials: React.FC = () => {
     
     return matchesSearch && hasStock;
   });
+
+  // Gruppiere identische Materialien (gleiche GTIN oder gleicher Name)
+  const groupedMaterials = React.useMemo(() => {
+    if (!groupIdentical) return filteredMaterials;
+
+    const groups = new Map<string, any>();
+    
+    filteredMaterials.forEach((material: any) => {
+      // Gruppierungsschlüssel: GTIN wenn vorhanden, sonst Name
+      const key = material.article_number || material.name;
+      
+      if (groups.has(key)) {
+        const existing = groups.get(key);
+        existing.current_stock += material.current_stock || 0;
+        existing.grouped_count += 1;
+        existing.grouped_ids.push(material.id);
+        // Behalte die niedrigste min_stock
+        if (material.min_stock > 0 && (existing.min_stock === 0 || material.min_stock < existing.min_stock)) {
+          existing.min_stock = material.min_stock;
+        }
+        // Sammle alle Standorte
+        if (material.cabinet_name) {
+          existing.locations.add(material.cabinet_name);
+        }
+      } else {
+        groups.set(key, {
+          ...material,
+          grouped_count: 1,
+          grouped_ids: [material.id],
+          locations: new Set(material.cabinet_name ? [material.cabinet_name] : []),
+        });
+      }
+    });
+
+    return Array.from(groups.values()).map(g => ({
+      ...g,
+      locations: Array.from(g.locations).join(', '),
+    }));
+  }, [filteredMaterials, groupIdentical]);
 
   const getFilterTitle = () => {
     if (activeFilter === 'lowStock') return 'Niedriger Bestand';
@@ -189,7 +265,7 @@ const Materials: React.FC = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Nach Name, Kategorie oder Firma suchen..."
         />
-        <Box sx={{ mt: 2 }}>
+        <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <FormControlLabel
             control={
               <Checkbox
@@ -200,12 +276,22 @@ const Materials: React.FC = () => {
             }
             label="Materialien mit Bestand 0 ausblenden"
           />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={groupIdentical}
+                onChange={(e) => setGroupIdentical(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Identische Materialien gruppieren (GTIN/Name)"
+          />
         </Box>
       </Paper>
 
       <Paper sx={{ height: { xs: 400, sm: 600 }, width: '100%' }}>
         <DataGrid
-          rows={filteredMaterials}
+          rows={groupedMaterials}
           columns={columns}
           loading={loading}
           pageSizeOptions={[10, 25, 50, 100]}
