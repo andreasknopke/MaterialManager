@@ -13,6 +13,8 @@ import {
   InputAdornment,
   IconButton,
   Tooltip,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -42,6 +44,7 @@ interface MaterialFormData {
   location_in_cabinet: string;
   notes: string;
   gs1_barcode: string;
+  is_consignment: boolean;
 }
 
 interface Compartment {
@@ -103,6 +106,7 @@ const MaterialForm: React.FC = () => {
     location_in_cabinet: '',
     notes: '',
     gs1_barcode: '',
+    is_consignment: false,
   });
 
   useEffect(() => {
@@ -220,6 +224,7 @@ const MaterialForm: React.FC = () => {
         location_in_cabinet: material.location_in_cabinet || '',
         notes: material.notes || '',
         gs1_barcode: '',
+        is_consignment: material.is_consignment || false,
       });
       
       // Fächer für den Schrank laden wenn vorhanden
@@ -812,6 +817,26 @@ const MaterialForm: React.FC = () => {
                 label="Notizen"
                 value={formData.notes}
                 onChange={handleChange('notes')}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={formData.is_consignment}
+                    onChange={(e) => setFormData({ ...formData, is_consignment: e.target.checked })}
+                    color="error"
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography>Konsignationsware</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      (wird rot markiert in Listen)
+                    </Typography>
+                  </Box>
+                }
               />
             </Grid>
 

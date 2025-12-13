@@ -63,6 +63,7 @@ interface SearchResult {
   compartment_name: string | null;
   category_name: string | null;
   size: string | null;
+  is_consignment: boolean;
 }
 
 const Search: React.FC = () => {
@@ -182,6 +183,24 @@ const Search: React.FC = () => {
     }
   };
 
+  // Konsignationsware-Suche
+  const handleConsignmentSearch = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await materialAPI.search({ is_consignment: true });
+      setResults(response.data || []);
+      if ((response.data || []).length === 0) {
+        setError('Keine Konsignationsmaterialien gefunden');
+      }
+    } catch (err) {
+      console.error('Suchfehler:', err);
+      setError('Fehler bei der Suche');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Verfallsdatum-Status
   const getExpiryStatus = (expiryDate: string | null) => {
     if (!expiryDate) return { status: 'none', label: 'Kein Datum', color: 'default' as const };
@@ -227,6 +246,7 @@ const Search: React.FC = () => {
           <Tab label="📦 Chargen (LOT)" />
           <Tab label="⏰ Verfallsdatum" />
           <Tab label="📁 Kategorie" />
+          <Tab label="🔴 Konsignation" />
         </Tabs>
       </Paper>
 
@@ -429,6 +449,39 @@ const Search: React.FC = () => {
         </Card>
       </TabPanel>
 
+      {/* Konsignationsware-Suche */}
+      <TabPanel value={tabValue} index={4}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Konsignationsware
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Zeigen Sie alle Materialien an, die als Konsignationsware markiert sind.
+            </Typography>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} sm={8}>
+                <Alert severity="info" sx={{ py: 1 }}>
+                  Konsignationsware sind Materialien, die vom Lieferanten bereitgestellt werden und erst bei Verwendung bezahlt werden.
+                </Alert>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  onClick={handleConsignmentSearch}
+                  disabled={loading}
+                  startIcon={<SearchIcon />}
+                  color="error"
+                >
+                  Konsignation anzeigen
+                </Button>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      </TabPanel>
+
       {/* Fehler-Anzeige */}
       {error && (
         <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -465,16 +518,36 @@ const Search: React.FC = () => {
                 {results.map((item) => {
                   const expiryStatus = getExpiryStatus(item.expiry_date);
                   return (
-                    <TableRow key={item.id} hover>
+                    <TableRow 
+                      key={item.id} 
+                      hover
+                      sx={{
+                        backgroundColor: item.is_consignment ? 'rgba(211, 47, 47, 0.08)' : 'transparent',
+                        borderLeft: item.is_consignment ? '4px solid #d32f2f' : 'none',
+                      }}
+                    >
                       <TableCell>
-                        <Typography variant="body2" fontWeight="medium">
-                          {item.name}
-                        </Typography>
-                        {item.size && (
-                          <Typography variant="caption" color="text.secondary">
-                            {item.size}
-                          </Typography>
-                        )}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Box>
+                            <Typography variant="body2" fontWeight="medium">
+                              {item.name}
+                            </Typography>
+                            {item.size && (
+                              <Typography variant="caption" color="text.secondary">
+                                {item.size}
+                              </Typography>
+                            )}
+                          </Box>
+                          {item.is_consignment && (
+                            <Chip 
+                              label="K" 
+                              size="small" 
+                              color="error" 
+                              sx={{ height: 18, fontSize: '0.7rem', minWidth: 20 }}
+                              title="Konsignationsware"
+                            />
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell>{item.article_number || '-'}</TableCell>
                       <TableCell>

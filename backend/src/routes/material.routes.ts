@@ -12,7 +12,7 @@ router.use(authenticate);
 // POST erweiterte Suche für Materialien
 router.post('/search', async (req: Request, res: Response) => {
   try {
-    const { lot_number, expiry_months, query: searchQuery, category_id } = req.body;
+    const { lot_number, expiry_months, query: searchQuery, category_id, is_consignment } = req.body;
     
     let sql = 'SELECT * FROM v_materials_overview WHERE active = TRUE';
     const params: any[] = [];
@@ -49,6 +49,12 @@ router.post('/search', async (req: Request, res: Response) => {
     if (category_id) {
       sql += ' AND category_id = ?';
       params.push(category_id);
+    }
+    
+    // Consignationsware-Filter
+    if (is_consignment !== undefined) {
+      sql += ' AND is_consignment = ?';
+      params.push(is_consignment ? 1 : 0);
     }
     
     sql += ' ORDER BY expiry_date ASC, name ASC';
@@ -201,7 +207,7 @@ router.post('/', async (req: Request, res: Response) => {
     category_id, company_id, cabinet_id, compartment_id, name, description,
     size, unit, min_stock, current_stock, expiry_date,
     lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes,
-    custom_fields, barcodes, unit_id
+    custom_fields, barcodes, unit_id, is_consignment
   } = req.body;
   
   if (!name) {
@@ -238,12 +244,12 @@ router.post('/', async (req: Request, res: Response) => {
       `INSERT INTO materials 
        (category_id, company_id, cabinet_id, compartment_id, unit_id, name, description, size, unit,
         min_stock, current_stock, expiry_date, lot_number, article_number, cost,
-        location_in_cabinet, shipping_container_code, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        location_in_cabinet, shipping_container_code, notes, is_consignment)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         category_id, company_id, cabinet_id, compartment_id || null, materialUnitId, name, description, size, unit,
         0, current_stock || 1, expiry_date, lot_number,
-        article_number, cost || null, location_in_cabinet, shipping_container_code, notes
+        article_number, cost || null, location_in_cabinet, shipping_container_code, notes, is_consignment || false
       ]
     );
     
@@ -299,7 +305,7 @@ router.put('/:id', async (req: Request, res: Response) => {
   const {
     category_id, company_id, cabinet_id, compartment_id, unit_id, name, description,
     size, unit, min_stock, expiry_date,
-    lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes, active
+    lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes, active, is_consignment
   } = req.body;
   
   try {
@@ -342,12 +348,12 @@ router.put('/:id', async (req: Request, res: Response) => {
        SET category_id = ?, company_id = ?, cabinet_id = ?, compartment_id = ?, unit_id = ?, name = ?,
            description = ?, size = ?, unit = ?, min_stock = ?,
            expiry_date = ?, lot_number = ?,
-           article_number = ?, cost = ?, location_in_cabinet = ?, shipping_container_code = ?, notes = ?, active = ?
+           article_number = ?, cost = ?, location_in_cabinet = ?, shipping_container_code = ?, notes = ?, active = ?, is_consignment = ?
        WHERE id = ?`,
       [
         category_id, company_id, cabinet_id, compartment_id || null, materialUnitId, name, description, size, unit,
         min_stock, expiry_date, lot_number, article_number, cost || null,
-        location_in_cabinet, shipping_container_code, notes, isActive, req.params.id
+        location_in_cabinet, shipping_container_code, notes, isActive, is_consignment || false, req.params.id
       ]
     );
     

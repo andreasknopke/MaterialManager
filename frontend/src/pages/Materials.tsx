@@ -89,8 +89,25 @@ const Materials: React.FC = () => {
       minWidth: 150, 
       flex: 1,
       renderCell: (params) => (
-        <Box>
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          width: '100%',
+          backgroundColor: params.row.is_consignment ? 'rgba(211, 47, 47, 0.1)' : 'transparent',
+          borderLeft: params.row.is_consignment ? '4px solid #d32f2f' : 'none',
+          pl: params.row.is_consignment ? 1 : 0,
+          ml: params.row.is_consignment ? -1 : 0,
+        }}>
           {params.value}
+          {params.row.is_consignment && (
+            <Chip 
+              label="K" 
+              size="small" 
+              color="error" 
+              sx={{ ml: 1, height: 18, fontSize: '0.7rem', minWidth: 20 }}
+              title="Konsignationsware"
+            />
+          )}
           {groupIdentical && params.row.grouped_count > 1 && (
             <Chip 
               label={`${params.row.grouped_count}x`} 
