@@ -33,6 +33,7 @@ router.get('/transactions', async (req: Request, res: Response) => {
         m.name AS material_name,
         m.article_number,
         t.transaction_type,
+        t.usage_type,
         t.quantity,
         t.previous_stock,
         t.new_stock,

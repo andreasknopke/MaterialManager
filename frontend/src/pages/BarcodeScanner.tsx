@@ -463,6 +463,7 @@ const BarcodeScanner: React.FC = () => {
         quantity: 1,
         user_name: 'System',
         notes: 'GTIN-Scan Entnahme',
+        usage_type: isInterventionMode ? 'patient_use' : 'destock',
       });
       
       const data = response.data;
@@ -562,6 +563,7 @@ const BarcodeScanner: React.FC = () => {
         quantity,
         user_name: 'System',
         notes: 'Barcode-Scan Entnahme',
+        usage_type: isInterventionMode ? 'patient_use' : 'destock',
       });
       
       const data = response.data;

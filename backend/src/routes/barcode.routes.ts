@@ -226,7 +226,10 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // Unterstützt sowohl einzelne ID als auch komma-separierte IDs (für aggregierte Materialien)
 router.post('/material/:materialId/remove', async (req: Request, res: Response) => {
   const materialIdParam = req.params.materialId;
-  const { quantity, user_name, notes } = req.body;
+  const { quantity, user_name, notes, usage_type } = req.body;
+  
+  // usage_type: patient_use (Protokollmodus), destock (normal)
+  const validUsageType = ['patient_use', 'destock'].includes(usage_type) ? usage_type : 'destock';
   
   if (!quantity || quantity < 1) {
     return res.status(400).json({ error: 'Gültige Menge ist erforderlich' });
@@ -284,9 +287,9 @@ router.post('/material/:materialId/remove', async (req: Request, res: Response) 
       // Transaktion aufzeichnen
       await connection.query(
         `INSERT INTO material_transactions 
-         (material_id, transaction_type, quantity, previous_stock, new_stock, notes, user_name)
-         VALUES (?, 'out', ?, ?, ?, ?, ?)`,
-        [mat.id, takeFromThis, mat.current_stock, newStock, notes || 'GTIN-Scan Entnahme', user_name || 'System']
+         (material_id, transaction_type, usage_type, quantity, previous_stock, new_stock, notes, user_name)
+         VALUES (?, 'out', ?, ?, ?, ?, ?, ?)`,
+        [mat.id, validUsageType, takeFromThis, mat.current_stock, newStock, notes || 'GTIN-Scan Entnahme', user_name || 'System']
       );
     }
     
@@ -315,7 +318,10 @@ router.post('/material/:materialId/remove', async (req: Request, res: Response) 
 });
 
 router.post('/scan-out', async (req: Request, res: Response) => {
-  const { barcode, quantity, user_name, notes } = req.body;
+  const { barcode, quantity, user_name, notes, usage_type } = req.body;
+  
+  // usage_type: patient_use (Protokollmodus), destock (normal)
+  const validUsageType = ['patient_use', 'destock'].includes(usage_type) ? usage_type : 'destock';
   
   if (!barcode || !quantity) {
     return res.status(400).json({ error: 'Barcode und Menge sind erforderlich' });
@@ -363,9 +369,9 @@ router.post('/scan-out', async (req: Request, res: Response) => {
     // Transaktion aufzeichnen
     await connection.query(
       `INSERT INTO material_transactions 
-       (material_id, transaction_type, quantity, previous_stock, new_stock, notes, user_name)
-       VALUES (?, 'out', ?, ?, ?, ?, ?)`,
-      [materialId, quantity, previousStock, newStock, notes || 'Barcode-Scan Ausgang', user_name]
+       (material_id, transaction_type, usage_type, quantity, previous_stock, new_stock, notes, user_name)
+       VALUES (?, 'out', ?, ?, ?, ?, ?, ?)`,
+      [materialId, validUsageType, quantity, previousStock, newStock, notes || 'Barcode-Scan Ausgang', user_name]
     );
     
     await connection.commit();

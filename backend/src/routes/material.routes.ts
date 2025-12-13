@@ -439,11 +439,14 @@ router.post('/:id/stock-in', async (req: Request, res: Response) => {
 
 // POST Material-Ausgang
 router.post('/:id/stock-out', async (req: Request, res: Response) => {
-  const { quantity, reference_number, notes } = req.body;
+  const { quantity, reference_number, notes, usage_type } = req.body;
   
   // user_id und user_name vom authentifizierten User
   const userId = req.user?.id;
   const userName = req.user?.fullName || req.user?.username || 'Unbekannt';
+  
+  // usage_type: patient_use (Protokollmodus), destock (normal), correction
+  const validUsageType = ['patient_use', 'destock', 'correction'].includes(usage_type) ? usage_type : 'destock';
   
   if (!quantity || quantity <= 0) {
     return res.status(400).json({ error: 'Ungültige Menge' });
@@ -495,9 +498,9 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
     
     await connection.query(
       `INSERT INTO material_transactions 
-       (material_id, transaction_type, quantity, previous_stock, new_stock, reference_number, notes, user_id, user_name, unit_id)
-       VALUES (?, 'out', ?, ?, ?, ?, ?, ?, ?, (SELECT unit_id FROM materials WHERE id = ?))`,
-      [req.params.id, quantity, previousStock, newStock, reference_number, notes, userId, userName, req.params.id]
+       (material_id, transaction_type, usage_type, quantity, previous_stock, new_stock, reference_number, notes, user_id, user_name, unit_id)
+       VALUES (?, 'out', ?, ?, ?, ?, ?, ?, ?, ?, (SELECT unit_id FROM materials WHERE id = ?))`,
+      [req.params.id, validUsageType, quantity, previousStock, newStock, reference_number, notes, userId, userName, req.params.id]
     );
     
     await connection.commit();
@@ -517,35 +520,70 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
   }
 });
 
-// DELETE Material (soft delete)
+// DELETE Material (soft delete) - mit Correction-Protokollierung
 router.delete('/:id', async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+  
   try {
+    await connection.beginTransaction();
+    
     // Department-Validierung
     const departmentFilter = getDepartmentFilter(req, '');
     if (departmentFilter.whereClause) {
-      const [materials] = await pool.query<RowDataPacket[]>(
+      const [materials] = await connection.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
         [req.params.id, ...departmentFilter.params]
       );
       
       if (materials.length === 0) {
+        await connection.rollback();
+        connection.release();
         return res.status(403).json({ error: 'Material nicht gefunden oder kein Zugriff' });
       }
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
-      'UPDATE materials SET active = FALSE WHERE id = ?',
+    // Hole aktuellen Bestand für Protokollierung
+    const [materials] = await connection.query<RowDataPacket[]>(
+      'SELECT current_stock, unit_id FROM materials WHERE id = ?',
       [req.params.id]
     );
     
-    if (result.affectedRows === 0) {
+    if (materials.length === 0) {
+      await connection.rollback();
+      connection.release();
       return res.status(404).json({ error: 'Material nicht gefunden' });
     }
     
+    const previousStock = materials[0].current_stock;
+    const unitId = materials[0].unit_id;
+    const userId = req.user?.id;
+    const userName = req.user?.fullName || req.user?.username || 'Unbekannt';
+    
+    // Nur protokollieren wenn Bestand > 0 war
+    if (previousStock > 0) {
+      await connection.query(
+        `INSERT INTO material_transactions 
+         (material_id, transaction_type, usage_type, quantity, previous_stock, new_stock, notes, user_id, user_name, unit_id)
+         VALUES (?, 'out', 'correction', ?, ?, 0, 'Korrektur: Material über Tabelle gelöscht', ?, ?, ?)`,
+        [req.params.id, previousStock, previousStock, userId, userName, unitId]
+      );
+    }
+    
+    // Material deaktivieren und Bestand auf 0 setzen
+    await connection.query(
+      'UPDATE materials SET active = FALSE, current_stock = 0 WHERE id = ?',
+      [req.params.id]
+    );
+    
+    await connection.commit();
+    
     res.json({ message: 'Material erfolgreich deaktiviert' });
   } catch (error) {
+    await connection.rollback();
     console.error('Fehler beim Löschen des Materials:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
+  } finally {
+    connection.release();
   }
 });
 

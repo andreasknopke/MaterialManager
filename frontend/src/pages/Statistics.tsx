@@ -75,6 +75,7 @@ interface Transaction {
   material_name: string;
   article_number: string;
   transaction_type: 'in' | 'out' | 'adjustment' | 'expired';
+  usage_type: 'patient_use' | 'destock' | 'correction' | 'stock_in' | 'initial' | null;
   quantity: number;
   previous_stock: number;
   new_stock: number;
@@ -231,6 +232,17 @@ const Statistics: React.FC = () => {
       expired: { label: 'Abgelaufen', color: 'info' },
     };
     return labels[type] || { label: type, color: 'info' };
+  };
+
+  const getUsageTypeLabel = (usageType: string | null) => {
+    const labels: { [key: string]: { label: string; color: 'success' | 'error' | 'warning' | 'info' | 'default' } } = {
+      patient_use: { label: 'Patient', color: 'error' },
+      destock: { label: 'Entnahme', color: 'warning' },
+      correction: { label: 'Korrektur', color: 'info' },
+      stock_in: { label: 'Eingang', color: 'success' },
+      initial: { label: 'Initial', color: 'default' },
+    };
+    return labels[usageType || ''] || { label: '-', color: 'default' };
   };
 
   const formatDate = (dateStr: string) => {
@@ -416,6 +428,7 @@ const Statistics: React.FC = () => {
                       <TableRow>
                         <TableCell>Datum</TableCell>
                         <TableCell>Typ</TableCell>
+                        <TableCell>Verwendung</TableCell>
                         <TableCell>Material</TableCell>
                         <TableCell align="right">Menge</TableCell>
                         <TableCell align="right">Bestand vorher</TableCell>
@@ -427,13 +440,14 @@ const Statistics: React.FC = () => {
                     <TableBody>
                       {transactions.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={8} align="center">
+                          <TableCell colSpan={9} align="center">
                             Keine Transaktionen im gewählten Zeitraum
                           </TableCell>
                         </TableRow>
                       ) : (
                         transactions.map((t) => {
                           const typeInfo = getTransactionTypeLabel(t.transaction_type);
+                          const usageInfo = getUsageTypeLabel(t.usage_type);
                           return (
                             <TableRow key={t.id} hover>
                               <TableCell>{formatDate(t.transaction_date)}</TableCell>
@@ -442,6 +456,14 @@ const Statistics: React.FC = () => {
                                   label={typeInfo.label}
                                   color={typeInfo.color}
                                   size="small"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={usageInfo.label}
+                                  color={usageInfo.color as any}
+                                  size="small"
+                                  variant="outlined"
                                 />
                               </TableCell>
                               <TableCell>
