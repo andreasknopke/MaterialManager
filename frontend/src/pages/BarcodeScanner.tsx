@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -19,6 +19,9 @@ import {
   DialogActions,
   Divider,
   LinearProgress,
+  ToggleButton,
+  ToggleButtonGroup,
+  Chip,
 } from '@mui/material';
 import { 
   QrCodeScanner as ScannerIcon, 
@@ -29,9 +32,12 @@ import {
   Close as CloseIcon,
   PowerSettingsNew as ReactivateIcon,
   Inventory as InventoryIcon,
-  DocumentScanner as OcrIcon,
   BluetoothConnected as BluetoothIcon,
   TextFields as TextFieldsIcon,
+  QrCode2 as BarcodeIcon,
+  CameraAlt as CaptureIcon,
+  Check as ConfirmIcon,
+  Refresh as RetryIcon,
 } from '@mui/icons-material';
 import { barcodeAPI, materialAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
@@ -39,6 +45,18 @@ import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/
 import Tesseract from 'tesseract.js';
 import { getScannerSettings } from './Admin';
 import { getInterventionSession, addInterventionItem } from './Dashboard';
+
+// OCR erkannter Textblock Interface
+interface OCRTextBlock {
+  text: string;
+  bbox: {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  };
+  confidence: number;
+}
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
@@ -55,9 +73,24 @@ const BarcodeScanner: React.FC = () => {
   const [handscannerMode, setHandscannerMode] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
   const handscannerInputRef = useRef<HTMLInputElement>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanLoopRef = useRef<boolean>(false);
+  
+  // Scanner-Modi: 'barcode' oder 'ocr'
+  const [scanMode, setScanMode] = useState<'barcode' | 'ocr'>('barcode');
+  
+  // OCR-spezifische States
+  const [ocrFrozen, setOcrFrozen] = useState(false);
+  const [ocrTextBlocks, setOcrTextBlocks] = useState<OCRTextBlock[]>([]);
+  const [selectedOcrText, setSelectedOcrText] = useState<string>('');
+  const [frozenImageData, setFrozenImageData] = useState<string>('');
+  
+  // Video-Dimensionen für Overlay-Skalierung
+  const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0, displayWidth: 0, displayHeight: 0 });
   
   // Scanner-Einstellungen aus Admin laden
   const scannerSettings = getScannerSettings();
@@ -72,6 +105,118 @@ const BarcodeScanner: React.FC = () => {
   const [gtinMasterData, setGtinMasterData] = useState<any>(null);
   const [existingMaterials, setExistingMaterials] = useState<any[]>([]);
 
+  // Scan-Linie Animation
+  const scanLineAnimationRef = useRef<number | null>(null);
+  const scanLinePositionRef = useRef(0);
+  const scanLineDirectionRef = useRef(1);
+
+  // Zeichne Scan-Bereich Overlay
+  const drawScanOverlay = useCallback(() => {
+    const canvas = overlayCanvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video || !cameraOpen || scanMode !== 'barcode') return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const displayWidth = video.clientWidth;
+    const displayHeight = video.clientHeight;
+
+    // Canvas auf Video-Display-Größe setzen
+    canvas.width = displayWidth;
+    canvas.height = displayHeight;
+
+    // Hintergrund verdunkeln
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, displayWidth, displayHeight);
+
+    // Scan-Bereich berechnen (80% der Breite, 30% der Höhe, zentriert)
+    const scanAreaWidth = displayWidth * 0.85;
+    const scanAreaHeight = displayHeight * 0.25;
+    const scanAreaX = (displayWidth - scanAreaWidth) / 2;
+    const scanAreaY = (displayHeight - scanAreaHeight) / 2;
+
+    // Scan-Bereich ausschneiden (transparent machen)
+    ctx.clearRect(scanAreaX, scanAreaY, scanAreaWidth, scanAreaHeight);
+
+    // Scan-Bereich Rahmen zeichnen
+    ctx.strokeStyle = '#ffcc00';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(scanAreaX, scanAreaY, scanAreaWidth, scanAreaHeight);
+
+    // Ecken hervorheben
+    const cornerLength = 25;
+    ctx.strokeStyle = '#ffcc00';
+    ctx.lineWidth = 5;
+
+    // Oben links
+    ctx.beginPath();
+    ctx.moveTo(scanAreaX, scanAreaY + cornerLength);
+    ctx.lineTo(scanAreaX, scanAreaY);
+    ctx.lineTo(scanAreaX + cornerLength, scanAreaY);
+    ctx.stroke();
+
+    // Oben rechts
+    ctx.beginPath();
+    ctx.moveTo(scanAreaX + scanAreaWidth - cornerLength, scanAreaY);
+    ctx.lineTo(scanAreaX + scanAreaWidth, scanAreaY);
+    ctx.lineTo(scanAreaX + scanAreaWidth, scanAreaY + cornerLength);
+    ctx.stroke();
+
+    // Unten links
+    ctx.beginPath();
+    ctx.moveTo(scanAreaX, scanAreaY + scanAreaHeight - cornerLength);
+    ctx.lineTo(scanAreaX, scanAreaY + scanAreaHeight);
+    ctx.lineTo(scanAreaX + cornerLength, scanAreaY + scanAreaHeight);
+    ctx.stroke();
+
+    // Unten rechts
+    ctx.beginPath();
+    ctx.moveTo(scanAreaX + scanAreaWidth - cornerLength, scanAreaY + scanAreaHeight);
+    ctx.lineTo(scanAreaX + scanAreaWidth, scanAreaY + scanAreaHeight);
+    ctx.lineTo(scanAreaX + scanAreaWidth, scanAreaY + scanAreaHeight - cornerLength);
+    ctx.stroke();
+
+    // Animierte Scan-Linie
+    scanLinePositionRef.current += scanLineDirectionRef.current * 3;
+    if (scanLinePositionRef.current >= scanAreaHeight - 5) {
+      scanLineDirectionRef.current = -1;
+    } else if (scanLinePositionRef.current <= 5) {
+      scanLineDirectionRef.current = 1;
+    }
+
+    const lineY = scanAreaY + scanLinePositionRef.current;
+    
+    // Scan-Linie mit Farbverlauf
+    const gradient = ctx.createLinearGradient(scanAreaX, lineY, scanAreaX + scanAreaWidth, lineY);
+    gradient.addColorStop(0, 'rgba(255, 0, 0, 0)');
+    gradient.addColorStop(0.1, 'rgba(255, 0, 0, 1)');
+    gradient.addColorStop(0.5, 'rgba(255, 50, 50, 1)');
+    gradient.addColorStop(0.9, 'rgba(255, 0, 0, 1)');
+    gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(scanAreaX + 10, lineY);
+    ctx.lineTo(scanAreaX + scanAreaWidth - 10, lineY);
+    ctx.stroke();
+
+    // Punkte auf der Linie für visuellen Effekt
+    ctx.fillStyle = '#ff0000';
+    for (let i = 0; i < 5; i++) {
+      const dotX = scanAreaX + (scanAreaWidth / 6) * (i + 1);
+      ctx.beginPath();
+      ctx.arc(dotX, lineY, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Animation fortsetzen
+    if (cameraOpen && scanMode === 'barcode' && !ocrFrozen) {
+      scanLineAnimationRef.current = requestAnimationFrame(drawScanOverlay);
+    }
+  }, [cameraOpen, scanMode, ocrFrozen]);
+
   // Auto-open camera if navigated from dashboard or scanning cabinet (nur wenn Kamera aktiviert)
   useEffect(() => {
     const state = location.state as { autoOpenCamera?: boolean; scanCabinet?: boolean; returnTo?: string; removalMode?: boolean } | null;
@@ -85,8 +230,20 @@ const BarcodeScanner: React.FC = () => {
     console.log('useEffect triggered, cameraOpen:', cameraOpen, 'videoRef.current:', !!videoRef.current);
     
     if (!cameraOpen) {
+      // Animation stoppen beim Schließen
+      if (scanLineAnimationRef.current) {
+        cancelAnimationFrame(scanLineAnimationRef.current);
+        scanLineAnimationRef.current = null;
+      }
+      scanLoopRef.current = false;
       return;
     }
+
+    // OCR-States zurücksetzen beim Öffnen
+    setOcrFrozen(false);
+    setOcrTextBlocks([]);
+    setSelectedOcrText('');
+    setFrozenImageData('');
 
     // Warte kurz, bis der Dialog vollständig gerendert ist
     const timer = setTimeout(() => {
@@ -108,17 +265,41 @@ const BarcodeScanner: React.FC = () => {
           const stream = await navigator.mediaDevices.getUserMedia({
             video: { 
               facingMode: 'environment',
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
             }
           });
           
+          streamRef.current = stream;
           console.log('✓ Kamera-Berechtigung erhalten');
           
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
             await videoRef.current.play();
             console.log('✓ Video-Stream gestartet');
+            
+            // Video-Dimensionen speichern
+            const updateDimensions = () => {
+              if (videoRef.current) {
+                setVideoDimensions({
+                  width: videoRef.current.videoWidth,
+                  height: videoRef.current.videoHeight,
+                  displayWidth: videoRef.current.clientWidth,
+                  displayHeight: videoRef.current.clientHeight,
+                });
+              }
+            };
+            videoRef.current.onloadedmetadata = updateDimensions;
+            updateDimensions();
+            
+            // Overlay-Animation starten (nur im Barcode-Modus)
+            if (scanMode === 'barcode') {
+              setTimeout(() => {
+                scanLinePositionRef.current = 0;
+                scanLineDirectionRef.current = 1;
+                drawScanOverlay();
+              }, 100);
+            }
             
             // Jetzt ZXing Scanner starten mit optimierten Einstellungen für GS1-128
             const hints = new Map();
@@ -129,6 +310,11 @@ const BarcodeScanner: React.FC = () => {
               BarcodeFormat.EAN_8,         // EAN-8
               BarcodeFormat.QR_CODE,       // QR Codes
               BarcodeFormat.DATA_MATRIX,   // Data Matrix
+              BarcodeFormat.UPC_A,         // UPC-A
+              BarcodeFormat.UPC_E,         // UPC-E
+              BarcodeFormat.CODABAR,       // Codabar
+              BarcodeFormat.CODE_39,       // Code 39
+              BarcodeFormat.ITF,           // ITF
             ]);
             // Versuche härter zu dekodieren
             hints.set(DecodeHintType.TRY_HARDER, true);
@@ -137,10 +323,11 @@ const BarcodeScanner: React.FC = () => {
             codeReaderRef.current = codeReader;
             
             console.log('Starte Barcode-Erkennung...');
+            scanLoopRef.current = true;
             
             // Kontinuierliches Scanning direkt vom Stream
             const scanLoop = async () => {
-              while (cameraOpen && videoRef.current) {
+              while (scanLoopRef.current && videoRef.current && scanMode === 'barcode') {
                 try {
                   const result = await codeReader.decodeOnce(videoRef.current);
                   
@@ -148,6 +335,12 @@ const BarcodeScanner: React.FC = () => {
                     const scannedCode = result.getText();
                     console.log('✓ Barcode gescannt:', scannedCode);
                     console.log('Format:', result.getBarcodeFormat());
+                    
+                    // Animation stoppen
+                    if (scanLineAnimationRef.current) {
+                      cancelAnimationFrame(scanLineAnimationRef.current);
+                    }
+                    scanLoopRef.current = false;
                     
                     // Stream stoppen
                     stream.getTracks().forEach(track => track.stop());
@@ -197,7 +390,10 @@ const BarcodeScanner: React.FC = () => {
               }
             };
             
-            scanLoop();
+            // Nur im Barcode-Modus automatisch scannen
+            if (scanMode === 'barcode') {
+              scanLoop();
+            }
           }
         } catch (err: any) {
           console.error('Fehler beim Kamera-Zugriff:', err);
@@ -217,19 +413,217 @@ const BarcodeScanner: React.FC = () => {
 
     return () => {
       clearTimeout(timer);
+      scanLoopRef.current = false;
+      if (scanLineAnimationRef.current) {
+        cancelAnimationFrame(scanLineAnimationRef.current);
+        scanLineAnimationRef.current = null;
+      }
       if (codeReaderRef.current) {
         console.log('Stoppe Scanner...');
         codeReaderRef.current.reset();
       }
       // Video-Stream stoppen
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [cameraOpen]);
+  }, [cameraOpen, scanMode, drawScanOverlay, location.state, navigate]);
 
-  // OCR-Funktion: Texterkennung unter dem Barcode
+  // Effect für Modus-Wechsel während Kamera offen
+  useEffect(() => {
+    if (!cameraOpen) return;
+    
+    if (scanMode === 'barcode' && !ocrFrozen) {
+      // Overlay-Animation starten
+      scanLinePositionRef.current = 0;
+      scanLineDirectionRef.current = 1;
+      drawScanOverlay();
+    } else {
+      // Animation stoppen im OCR-Modus
+      if (scanLineAnimationRef.current) {
+        cancelAnimationFrame(scanLineAnimationRef.current);
+        scanLineAnimationRef.current = null;
+      }
+    }
+  }, [scanMode, cameraOpen, ocrFrozen, drawScanOverlay]);
+
+  // OCR-Modus: Bild einfrieren und zur Analyse vorbereiten
+  const freezeForOCR = async () => {
+    if (!videoRef.current) {
+      setError('Kein Video-Stream verfügbar');
+      return;
+    }
+    
+    // Canvas erstellen und aktuelles Video-Frame erfassen
+    const canvas = canvasRef.current || document.createElement('canvas');
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) {
+      setError('Canvas-Context nicht verfügbar');
+      return;
+    }
+    
+    ctx.drawImage(video, 0, 0);
+    
+    // Bild als Data-URL speichern
+    const imageData = canvas.toDataURL('image/png');
+    setFrozenImageData(imageData);
+    setOcrFrozen(true);
+    
+    // Dimensionen für Skalierung speichern
+    setVideoDimensions({
+      width: video.videoWidth,
+      height: video.videoHeight,
+      displayWidth: video.clientWidth,
+      displayHeight: video.clientHeight,
+    });
+    
+    // OCR starten
+    await performOCRAnalysis(canvas);
+  };
+
+  // OCR-Analyse durchführen und Textblöcke extrahieren
+  const performOCRAnalysis = async (canvas: HTMLCanvasElement) => {
+    setOcrLoading(true);
+    setOcrProgress(0);
+    setError('');
+    setOcrTextBlocks([]);
+    
+    try {
+      // OCR mit Tesseract durchführen - Wörter mit Bounding-Boxes
+      const result = await Tesseract.recognize(
+        canvas,
+        'deu+eng', // Deutsch + Englisch für beste Erkennung
+        {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              setOcrProgress(Math.round(m.progress * 100));
+            }
+          },
+        }
+      );
+      
+      console.log('OCR Ergebnis:', result.data);
+      
+      // Textblöcke (Wörter) mit Bounding-Boxes extrahieren
+      const extractedBlocks: OCRTextBlock[] = [];
+      
+      // Tesseract.js v6 Struktur: blocks[].paragraphs[].lines[].words[]
+      if (result.data.blocks) {
+        for (const block of result.data.blocks) {
+          // Block-Text als eine Option
+          if (block.confidence > 40 && block.text.trim().length > 3) {
+            extractedBlocks.push({
+              text: block.text.trim(),
+              bbox: block.bbox,
+              confidence: block.confidence,
+            });
+          }
+          
+          // Durch Paragraphen, Zeilen und Wörter gehen
+          if (block.paragraphs) {
+            for (const paragraph of block.paragraphs) {
+              if (paragraph.lines) {
+                for (const line of paragraph.lines) {
+                  // Zeile hinzufügen wenn sinnvoll
+                  if (line.confidence > 40 && line.text.trim().length > 2) {
+                    const lineText = line.text.trim();
+                    // Nur wenn nicht schon als Block vorhanden
+                    if (!extractedBlocks.some(b => b.text === lineText || b.text.includes(lineText))) {
+                      extractedBlocks.push({
+                        text: lineText,
+                        bbox: line.bbox,
+                        confidence: line.confidence,
+                      });
+                    }
+                  }
+                  
+                  // Einzelne Wörter für präzise Auswahl
+                  if (line.words) {
+                    for (const word of line.words) {
+                      if (word.confidence > 50 && word.text.trim().length > 0) {
+                        const wordText = word.text.trim();
+                        // Nur hinzufügen wenn es nicht schon Teil eines größeren Blocks ist
+                        if (!extractedBlocks.some(b => b.text === wordText)) {
+                          extractedBlocks.push({
+                            text: wordText,
+                            bbox: word.bbox,
+                            confidence: word.confidence,
+                          });
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      console.log('Erkannte Textblöcke:', extractedBlocks.length);
+      setOcrTextBlocks(extractedBlocks);
+      
+      if (extractedBlocks.length === 0) {
+        setError('Keine Texte erkannt. Versuchen Sie es mit besserer Beleuchtung.');
+      }
+    } catch (err: any) {
+      console.error('OCR Fehler:', err);
+      setError('OCR-Erkennung fehlgeschlagen: ' + err.message);
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  // OCR-Textblock auswählen
+  const handleOcrTextSelect = (block: OCRTextBlock) => {
+    // Text zur aktuellen Auswahl hinzufügen oder ersetzen
+    if (selectedOcrText) {
+      setSelectedOcrText(selectedOcrText + ' ' + block.text);
+    } else {
+      setSelectedOcrText(block.text);
+    }
+  };
+
+  // OCR-Auswahl bestätigen und als Barcode verwenden
+  const confirmOcrSelection = () => {
+    if (!selectedOcrText.trim()) {
+      setError('Bitte wählen Sie mindestens einen Text aus');
+      return;
+    }
+    
+    // Zahlen extrahieren für Barcode
+    const cleanedText = selectedOcrText.replace(/\s/g, '');
+    setBarcode(cleanedText);
+    setCameraOpen(false);
+    setSuccess('Text übernommen');
+    setOcrFrozen(false);
+    setOcrTextBlocks([]);
+    setSelectedOcrText('');
+    
+    // Automatisch verarbeiten wenn es wie ein Barcode aussieht
+    if (cleanedText.length >= 8 && /^\d+$/.test(cleanedText)) {
+      setTimeout(() => handleScannedBarcode(cleanedText), 500);
+    }
+  };
+
+  // OCR zurücksetzen und neu aufnehmen
+  const resetOcr = () => {
+    setOcrFrozen(false);
+    setOcrTextBlocks([]);
+    setSelectedOcrText('');
+    setFrozenImageData('');
+  };
+
+  // Legacy OCR-Funktion für automatische Barcode-Erkennung
   const performOCR = async () => {
     if (!videoRef.current) {
       setError('Kein Video-Stream verfügbar');
@@ -840,66 +1234,307 @@ const BarcodeScanner: React.FC = () => {
       {/* Camera Scanner Dialog */}
       <Dialog 
         open={cameraOpen} 
-        onClose={() => setCameraOpen(false)}
+        onClose={() => {
+          setCameraOpen(false);
+          resetOcr();
+        }}
         maxWidth="md"
         fullWidth
+        PaperProps={{
+          sx: {
+            maxHeight: '95vh',
+          }
+        }}
       >
-        <DialogTitle>
+        <DialogTitle sx={{ pb: 1 }}>
           <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">Barcode scannen</Typography>
-            <IconButton onClick={() => setCameraOpen(false)} edge="end">
+            <Box display="flex" alignItems="center" gap={1}>
+              {scanMode === 'barcode' ? <BarcodeIcon /> : <TextFieldsIcon />}
+              <Typography variant="h6">
+                {scanMode === 'barcode' ? 'Barcode scannen' : 'Text erkennen (OCR)'}
+              </Typography>
+            </Box>
+            <IconButton onClick={() => {
+              setCameraOpen(false);
+              resetOcr();
+            }} edge="end">
               <CloseIcon />
             </IconButton>
           </Box>
-        </DialogTitle>
-        <DialogContent sx={{ minHeight: 400, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <Box sx={{ width: '100%', maxWidth: 600, position: 'relative' }}>
-            <video
-              ref={videoRef}
-              style={{
-                width: '100%',
-                maxHeight: '400px',
-                borderRadius: '8px',
-                backgroundColor: '#000',
+          
+          {/* Modus-Umschaltung */}
+          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+            <ToggleButtonGroup
+              value={scanMode}
+              exclusive
+              onChange={(_, newMode) => {
+                if (newMode) {
+                  setScanMode(newMode);
+                  resetOcr();
+                }
               }}
-            />
+              size="small"
+            >
+              <ToggleButton value="barcode">
+                <BarcodeIcon sx={{ mr: 1 }} />
+                Barcode/QR
+              </ToggleButton>
+              <ToggleButton value="ocr">
+                <TextFieldsIcon sx={{ mr: 1 }} />
+                Text (OCR)
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        </DialogTitle>
+        
+        <DialogContent sx={{ p: 0, position: 'relative', overflow: 'hidden' }}>
+          <Box sx={{ 
+            width: '100%', 
+            position: 'relative',
+            backgroundColor: '#000',
+            minHeight: 350,
+          }}>
+            {/* Video oder eingefrorenes Bild */}
+            {ocrFrozen && frozenImageData ? (
+              <Box sx={{ position: 'relative', width: '100%' }}>
+                <img 
+                  src={frozenImageData} 
+                  alt="Captured frame"
+                  style={{
+                    width: '100%',
+                    maxHeight: '450px',
+                    objectFit: 'contain',
+                  }}
+                />
+                
+                {/* OCR-Textblock-Overlays */}
+                {ocrTextBlocks.map((block, index) => {
+                  // Skalierung berechnen
+                  const scaleX = videoDimensions.displayWidth / videoDimensions.width || 1;
+                  const scaleY = videoDimensions.displayHeight / videoDimensions.height || 1;
+                  const scale = Math.min(scaleX, scaleY);
+                  
+                  return (
+                    <Box
+                      key={index}
+                      onClick={() => handleOcrTextSelect(block)}
+                      sx={{
+                        position: 'absolute',
+                        left: block.bbox.x0 * scale,
+                        top: block.bbox.y0 * scale,
+                        width: (block.bbox.x1 - block.bbox.x0) * scale,
+                        height: (block.bbox.y1 - block.bbox.y0) * scale,
+                        border: '2px solid',
+                        borderColor: selectedOcrText.includes(block.text) ? '#4caf50' : '#ffcc00',
+                        backgroundColor: selectedOcrText.includes(block.text) 
+                          ? 'rgba(76, 175, 80, 0.3)' 
+                          : 'rgba(255, 204, 0, 0.2)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          borderColor: '#fff',
+                          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                        },
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Typography 
+                        variant="caption" 
+                        sx={{ 
+                          color: '#fff',
+                          textShadow: '1px 1px 2px #000',
+                          fontSize: '10px',
+                          maxWidth: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          px: 0.5,
+                        }}
+                      >
+                        {block.text.length > 15 ? block.text.substring(0, 15) + '...' : block.text}
+                      </Typography>
+                    </Box>
+                  );
+                })}
+              </Box>
+            ) : (
+              <>
+                <video
+                  ref={videoRef}
+                  style={{
+                    width: '100%',
+                    maxHeight: '450px',
+                    objectFit: 'contain',
+                    backgroundColor: '#000',
+                  }}
+                  playsInline
+                  muted
+                />
+                
+                {/* Overlay Canvas für Scan-Bereich (nur im Barcode-Modus) */}
+                {scanMode === 'barcode' && (
+                  <canvas
+                    ref={overlayCanvasRef}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                )}
+              </>
+            )}
+            
             {/* Hidden canvas for OCR frame capture */}
             <canvas ref={canvasRef} style={{ display: 'none' }} />
+          </Box>
+          
+          {/* Hinweistext */}
+          <Box sx={{ p: 2, backgroundColor: 'background.paper' }}>
+            {scanMode === 'barcode' && !ocrFrozen && (
+              <Typography 
+                variant="body2" 
+                color="text.secondary" 
+                align="center"
+              >
+                Positionieren Sie den Barcode innerhalb des Rechtecks
+              </Typography>
+            )}
             
-            <Typography 
-              variant="body2" 
-              color="text.secondary" 
-              align="center" 
-              sx={{ mt: 2 }}
-            >
-              Halten Sie den Barcode vor die Kamera
-            </Typography>
+            {scanMode === 'ocr' && !ocrFrozen && (
+              <Typography 
+                variant="body2" 
+                color="text.secondary" 
+                align="center"
+              >
+                Halten Sie den Text vor die Kamera und drücken Sie "Aufnehmen"
+              </Typography>
+            )}
+            
+            {ocrFrozen && ocrTextBlocks.length > 0 && (
+              <Box>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary" 
+                  align="center"
+                  gutterBottom
+                >
+                  Tippen Sie auf die gewünschten Texte, um sie auszuwählen
+                </Typography>
+                
+                {/* Ausgewählter Text Anzeige */}
+                {selectedOcrText && (
+                  <Box sx={{ mt: 2, p: 1.5, bgcolor: 'grey.100', borderRadius: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Ausgewählter Text:
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                      <Chip 
+                        label={selectedOcrText}
+                        color="primary"
+                        onDelete={() => setSelectedOcrText('')}
+                      />
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+            )}
             
             {/* OCR Progress Indicator */}
             {ocrLoading && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="body2" align="center" color="primary">
-                  OCR-Erkennung läuft... {Math.round(ocrProgress * 100)}%
+                  Texterkennung läuft... {ocrProgress}%
                 </Typography>
-                <LinearProgress variant="determinate" value={ocrProgress * 100} sx={{ mt: 1 }} />
+                <LinearProgress variant="determinate" value={ocrProgress} sx={{ mt: 1 }} />
               </Box>
             )}
           </Box>
         </DialogContent>
+        
         <DialogActions sx={{ p: 2, flexDirection: 'column', gap: 1 }}>
-          <Button 
-            onClick={performOCR} 
-            variant="contained" 
-            color="secondary"
-            fullWidth
-            disabled={ocrLoading}
-            startIcon={<TextFieldsIcon />}
-          >
-            {ocrLoading ? 'OCR läuft...' : 'OCR versuchen (Zahlen unter Barcode)'}
-          </Button>
-          <Button onClick={() => setCameraOpen(false)} variant="outlined" fullWidth>
-            Abbrechen
-          </Button>
+          {/* Barcode-Modus Aktionen */}
+          {scanMode === 'barcode' && (
+            <>
+              <Button 
+                onClick={performOCR} 
+                variant="outlined" 
+                color="secondary"
+                fullWidth
+                disabled={ocrLoading}
+                startIcon={<TextFieldsIcon />}
+              >
+                {ocrLoading ? 'OCR läuft...' : 'OCR versuchen (Zahlen unter Barcode)'}
+              </Button>
+              <Button onClick={() => {
+                setCameraOpen(false);
+                resetOcr();
+              }} variant="outlined" fullWidth>
+                Abbrechen
+              </Button>
+            </>
+          )}
+          
+          {/* OCR-Modus Aktionen */}
+          {scanMode === 'ocr' && !ocrFrozen && (
+            <>
+              <Button 
+                onClick={freezeForOCR} 
+                variant="contained" 
+                color="primary"
+                fullWidth
+                disabled={ocrLoading}
+                startIcon={<CaptureIcon />}
+                size="large"
+              >
+                Aufnehmen & Text erkennen
+              </Button>
+              <Button onClick={() => {
+                setCameraOpen(false);
+                resetOcr();
+              }} variant="outlined" fullWidth>
+                Abbrechen
+              </Button>
+            </>
+          )}
+          
+          {/* OCR-Auswahl Aktionen */}
+          {scanMode === 'ocr' && ocrFrozen && (
+            <>
+              <Button 
+                onClick={confirmOcrSelection} 
+                variant="contained" 
+                color="success"
+                fullWidth
+                disabled={!selectedOcrText}
+                startIcon={<ConfirmIcon />}
+                size="large"
+              >
+                Auswahl übernehmen
+              </Button>
+              <Button 
+                onClick={resetOcr} 
+                variant="outlined" 
+                color="primary"
+                fullWidth
+                startIcon={<RetryIcon />}
+              >
+                Neu aufnehmen
+              </Button>
+              <Button onClick={() => {
+                setCameraOpen(false);
+                resetOcr();
+              }} variant="outlined" fullWidth>
+                Abbrechen
+              </Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
 
