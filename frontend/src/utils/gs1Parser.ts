@@ -247,34 +247,36 @@ export function parseGS1Barcode(barcode: string): GS1Data {
       
       if (isDateAI) {
         // Bei Datums-AIs: Prüfe ob ein neuer AI vor der vollen Länge beginnt
-        let endPos = position;
+        // Manche Hersteller verwenden YYMM (4 Zeichen) statt YYMMDD (6 Zeichen)
         const maxEndPos = Math.min(position + pattern.length, normalized.length);
         console.log(`Datums-AI: Suche Ende von Position ${position} bis maximal ${maxEndPos}`);
         
-        while (endPos < maxEndPos) {
-          // Erst ab Position 4 (Mindestlänge für YYMM) nach nächstem AI suchen
-          if (endPos >= position + 4) {
-            let foundNextAI = false;
-            for (let len = 2; len <= 4; len++) {
-              const testAI = normalized.substring(endPos, endPos + len);
-              if (AI_PATTERNS[testAI]) {
-                const aiPattern = AI_PATTERNS[testAI];
-                const remainingAfterAI = normalized.length - endPos - len;
-                
-                // Prüfe ob nach dem AI genug Daten folgen
-                if (aiPattern.length !== null && remainingAfterAI >= Math.min(aiPattern.length, 4)) {
-                  foundNextAI = true;
-                  break;
-                }
-                if (aiPattern.length === null && remainingAfterAI >= 1) {
-                  foundNextAI = true;
-                  break;
-                }
+        // Prüfe explizit an Position+4 ob dort ein bekannter AI beginnt
+        let endPos = maxEndPos; // Default: volle Länge
+        
+        // Prüfe ob an Position+4 ein gültiger AI beginnt (YYMM Format)
+        if (position + 4 < normalized.length) {
+          for (let len = 2; len <= 4; len++) {
+            const testAI = normalized.substring(position + 4, position + 4 + len);
+            console.log(`  Prüfe YYMM-Ende: AI "${testAI}" an Position ${position + 4}`);
+            if (AI_PATTERNS[testAI]) {
+              const aiPattern = AI_PATTERNS[testAI];
+              const remainingAfterAI = normalized.length - (position + 4) - len;
+              console.log(`  -> AI ${testAI} gefunden, remaining: ${remainingAfterAI}`);
+              
+              // Prüfe ob nach dem AI genug Daten folgen
+              if (aiPattern.length !== null && remainingAfterAI >= Math.min(aiPattern.length, 4)) {
+                console.log(`  -> Beende Datums-AI nach 4 Zeichen (YYMM Format)`);
+                endPos = position + 4;
+                break;
+              }
+              if (aiPattern.length === null && remainingAfterAI >= 1) {
+                console.log(`  -> Beende Datums-AI nach 4 Zeichen (YYMM Format)`);
+                endPos = position + 4;
+                break;
               }
             }
-            if (foundNextAI) break;
           }
-          endPos++;
         }
         
         value = normalized.substring(position, endPos);

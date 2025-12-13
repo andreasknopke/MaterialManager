@@ -26,6 +26,9 @@ import { materialAPI, cabinetAPI, categoryAPI, companyAPI, unitAPI } from '../se
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
 import { useAuth } from '../contexts/AuthContext';
 
+// Debounce Timer für GS1 Debug Logging
+let gs1DebugTimer: ReturnType<typeof setTimeout> | null = null;
+
 interface MaterialFormData {
   name: string;
   description: string;
@@ -290,17 +293,22 @@ const MaterialForm: React.FC = () => {
       const parsed = parseGS1Barcode(barcode);
       console.log('Parsed Result in MaterialForm:', parsed);
       
-      // Debug-Log ans Backend senden
-      fetch('/api/debug/gs1-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          barcode,
-          hexDump,
-          parsedResult: parsed,
-          source: 'MaterialForm.handleGS1BarcodeChange'
-        })
-      }).catch(err => console.log('Debug log failed:', err));
+      // Debug-Log ans Backend senden (debounced - wartet 500ms nach letztem Zeichen)
+      if (gs1DebugTimer) {
+        clearTimeout(gs1DebugTimer);
+      }
+      gs1DebugTimer = setTimeout(() => {
+        fetch('/api/debug/gs1-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            barcode,
+            hexDump,
+            parsedResult: parsed,
+            source: 'MaterialForm.handleGS1BarcodeChange'
+          })
+        }).catch(err => console.log('Debug log failed:', err));
+      }, 500);
       setGs1Data(parsed);
 
       // Auto-Fill Felder
