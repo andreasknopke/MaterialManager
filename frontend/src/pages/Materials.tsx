@@ -10,11 +10,46 @@ import {
   Alert,
   FormControlLabel,
   Checkbox,
+  Grid,
+  MenuItem,
+  Collapse,
+  Badge,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { 
+  Add as AddIcon, 
+  Edit as EditIcon, 
+  Delete as DeleteIcon,
+  FilterList as FilterListIcon,
+  Clear as ClearIcon,
+} from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { materialAPI } from '../services/api';
+import { materialAPI, categoryAPI, companyAPI, cabinetAPI, shapeAPI } from '../services/api';
+
+// Guidewire-Acceptance Optionen
+const GUIDEWIRE_OPTIONS = ['0.014in', '0.018in', '0.032in', '0.038in'];
+
+interface FilterState {
+  category_id: string;
+  company_id: string;
+  cabinet_id: string;
+  shape_id: string;
+  french_size: string;
+  guidewire_acceptance: string;
+  is_consignment: string;
+  has_expiry: string;
+}
+
+const emptyFilters: FilterState = {
+  category_id: '',
+  company_id: '',
+  cabinet_id: '',
+  shape_id: '',
+  french_size: '',
+  guidewire_acceptance: '',
+  is_consignment: '',
+  has_expiry: '',
+};
 
 const Materials: React.FC = () => {
   const [materials, setMaterials] = useState<any[]>([]);
@@ -23,6 +58,15 @@ const Materials: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [hideZeroStock, setHideZeroStock] = useState(true);
   const [groupIdentical, setGroupIdentical] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterState>(emptyFilters);
+  
+  // Dropdown-Daten für Filter
+  const [categories, setCategories] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [cabinets, setCabinets] = useState<any[]>([]);
+  const [shapes, setShapes] = useState<any[]>([]);
+  
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -32,7 +76,25 @@ const Materials: React.FC = () => {
       setActiveFilter(filter);
     }
     fetchMaterials();
+    fetchFilterData();
   }, [location.state]);
+
+  const fetchFilterData = async () => {
+    try {
+      const [catRes, compRes, cabRes, shapeRes] = await Promise.all([
+        categoryAPI.getAll(),
+        companyAPI.getAll(),
+        cabinetAPI.getAll(),
+        shapeAPI.getAll(),
+      ]);
+      setCategories(catRes.data || []);
+      setCompanies(compRes.data || []);
+      setCabinets(cabRes.data || []);
+      setShapes(shapeRes.data || []);
+    } catch (error) {
+      console.error('Fehler beim Laden der Filterdaten:', error);
+    }
+  };
 
   const fetchMaterials = async () => {
     try {
@@ -182,14 +244,46 @@ const Materials: React.FC = () => {
     },
   ];
 
+  // Zähle aktive Filter
+  const activeFilterCount = Object.values(filters).filter(v => v !== '').length;
+
+  const handleFilterChange = (field: keyof FilterState) => (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setFilters({ ...filters, [field]: e.target.value });
+  };
+
+  const clearFilters = () => {
+    setFilters(emptyFilters);
+  };
+
   const filteredMaterials = materials.filter((material: any) => {
-    const matchesSearch = material.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    // Textsuche
+    const matchesSearch = searchTerm === '' || 
+      material.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       material.category_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      material.company_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      material.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      material.article_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      material.lot_number?.toLowerCase().includes(searchTerm.toLowerCase());
     
+    // Bestand-Filter
     const hasStock = hideZeroStock ? material.current_stock > 0 : true;
     
-    return matchesSearch && hasStock;
+    // Dropdown-Filter
+    const matchesCategory = filters.category_id === '' || String(material.category_id) === filters.category_id;
+    const matchesCompany = filters.company_id === '' || String(material.company_id) === filters.company_id;
+    const matchesCabinet = filters.cabinet_id === '' || String(material.cabinet_id) === filters.cabinet_id;
+    const matchesShape = filters.shape_id === '' || String(material.shape_id) === filters.shape_id;
+    const matchesFrenchSize = filters.french_size === '' || 
+      (material.french_size && material.french_size.toLowerCase().includes(filters.french_size.toLowerCase()));
+    const matchesGuidewire = filters.guidewire_acceptance === '' || material.guidewire_acceptance === filters.guidewire_acceptance;
+    const matchesConsignment = filters.is_consignment === '' || 
+      (filters.is_consignment === 'true' ? material.is_consignment : !material.is_consignment);
+    const matchesExpiry = filters.has_expiry === '' || 
+      (filters.has_expiry === 'true' ? material.expiry_date != null : material.expiry_date == null);
+    
+    return matchesSearch && hasStock && matchesCategory && matchesCompany && matchesCabinet && 
+           matchesShape && matchesFrenchSize && matchesGuidewire && matchesConsignment && matchesExpiry;
   });
 
   // Gruppiere identische Materialien (gleiche GTIN oder gleicher Name)
@@ -274,14 +368,171 @@ const Materials: React.FC = () => {
       )}
 
       <Paper sx={{ p: 2, mb: 2 }}>
-        <TextField
-          fullWidth
-          label="Suche"
-          variant="outlined"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Nach Name, Kategorie oder Firma suchen..."
-        />
+        {/* Suchfeld und Filter-Toggle */}
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TextField
+            sx={{ flex: 1, minWidth: 200 }}
+            label="Suche"
+            variant="outlined"
+            size="small"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Name, GTIN, Kategorie, Firma, LOT..."
+          />
+          <Button
+            variant={showFilters ? "contained" : "outlined"}
+            startIcon={
+              <Badge badgeContent={activeFilterCount} color="error">
+                <FilterListIcon />
+              </Badge>
+            }
+            onClick={() => setShowFilters(!showFilters)}
+            size="small"
+          >
+            Filter
+          </Button>
+          {activeFilterCount > 0 && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<ClearIcon />}
+              onClick={clearFilters}
+              size="small"
+            >
+              Filter löschen
+            </Button>
+          )}
+        </Box>
+
+        {/* Erweiterte Filter */}
+        <Collapse in={showFilters}>
+          <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+            <Grid container spacing={2}>
+              <Grid item xs={6} sm={4} md={2}>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Kategorie"
+                  value={filters.category_id}
+                  onChange={handleFilterChange('category_id')}
+                >
+                  <MenuItem value="">Alle</MenuItem>
+                  {categories.map((cat) => (
+                    <MenuItem key={cat.id} value={String(cat.id)}>{cat.name}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              
+              <Grid item xs={6} sm={4} md={2}>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Firma"
+                  value={filters.company_id}
+                  onChange={handleFilterChange('company_id')}
+                >
+                  <MenuItem value="">Alle</MenuItem>
+                  {companies.map((comp) => (
+                    <MenuItem key={comp.id} value={String(comp.id)}>{comp.name}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              
+              <Grid item xs={6} sm={4} md={2}>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Schrank"
+                  value={filters.cabinet_id}
+                  onChange={handleFilterChange('cabinet_id')}
+                >
+                  <MenuItem value="">Alle</MenuItem>
+                  {cabinets.map((cab) => (
+                    <MenuItem key={cab.id} value={String(cab.id)}>{cab.name}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              
+              <Grid item xs={6} sm={4} md={2}>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Shape/Form"
+                  value={filters.shape_id}
+                  onChange={handleFilterChange('shape_id')}
+                >
+                  <MenuItem value="">Alle</MenuItem>
+                  {shapes.map((shape) => (
+                    <MenuItem key={shape.id} value={String(shape.id)}>{shape.name}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              
+              <Grid item xs={6} sm={4} md={2}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="French-Size"
+                  value={filters.french_size}
+                  onChange={handleFilterChange('french_size')}
+                  placeholder="z.B. 5F"
+                />
+              </Grid>
+              
+              <Grid item xs={6} sm={4} md={2}>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Guidewire"
+                  value={filters.guidewire_acceptance}
+                  onChange={handleFilterChange('guidewire_acceptance')}
+                >
+                  <MenuItem value="">Alle</MenuItem>
+                  {GUIDEWIRE_OPTIONS.map((opt) => (
+                    <MenuItem key={opt} value={opt}>{opt}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              
+              <Grid item xs={6} sm={4} md={2}>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Konsignation"
+                  value={filters.is_consignment}
+                  onChange={handleFilterChange('is_consignment')}
+                >
+                  <MenuItem value="">Alle</MenuItem>
+                  <MenuItem value="true">Nur Konsignation</MenuItem>
+                  <MenuItem value="false">Keine Konsignation</MenuItem>
+                </TextField>
+              </Grid>
+              
+              <Grid item xs={6} sm={4} md={2}>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Verfallsdatum"
+                  value={filters.has_expiry}
+                  onChange={handleFilterChange('has_expiry')}
+                >
+                  <MenuItem value="">Alle</MenuItem>
+                  <MenuItem value="true">Mit Verfallsdatum</MenuItem>
+                  <MenuItem value="false">Ohne Verfallsdatum</MenuItem>
+                </TextField>
+              </Grid>
+            </Grid>
+          </Box>
+        </Collapse>
+
+        {/* Checkboxen */}
         <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <FormControlLabel
             control={
