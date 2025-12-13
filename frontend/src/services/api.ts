@@ -129,3 +129,12 @@ export const statisticsAPI = {
   getMaterialStats: (params?: any) => api.get('/statistics/material-stats', { params }),
   getUserActivity: (params?: any) => api.get('/statistics/user-activity', { params }),
 };
+
+// Shapes (Device-Formen)
+export const shapeAPI = {
+  getAll: () => api.get('/shapes'),
+  getAllIncludingInactive: () => api.get('/shapes/all'),
+  create: (data: any) => api.post('/shapes', data),
+  update: (id: number, data: any) => api.put(`/shapes/${id}`, data),
+  delete: (id: number) => api.delete(`/shapes/${id}`),
+};

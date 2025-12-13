@@ -22,13 +22,16 @@ import {
   QrCodeScanner as QrCodeScannerIcon,
   Clear as ClearIcon,
 } from '@mui/icons-material';
-import { materialAPI, cabinetAPI, categoryAPI, companyAPI, unitAPI } from '../services/api';
+import { materialAPI, cabinetAPI, categoryAPI, companyAPI, unitAPI, shapeAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
 import { useAuth } from '../contexts/AuthContext';
 
 // Debounce Timer für GS1 Debug Logging und GTIN-Suche
 let gs1DebugTimer: ReturnType<typeof setTimeout> | null = null;
 let gtinSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Guidewire-Acceptance Optionen
+const GUIDEWIRE_OPTIONS = ['0.014in', '0.018in', '0.032in', '0.038in'];
 
 interface MaterialFormData {
   name: string;
@@ -49,6 +52,19 @@ interface MaterialFormData {
   notes: string;
   gs1_barcode: string;
   is_consignment: boolean;
+  // Device-Eigenschaften
+  shape_id: number | '';
+  shaft_length: string;
+  device_length: string;
+  device_diameter: string;
+  french_size: string;
+  guidewire_acceptance: string;
+}
+
+interface Shape {
+  id: number;
+  name: string;
+  active: boolean;
 }
 
 interface Compartment {
@@ -83,6 +99,7 @@ const MaterialForm: React.FC = () => {
   const [cabinets, setCabinets] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [compartments, setCompartments] = useState<Compartment[]>([]);
+  const [shapes, setShapes] = useState<Shape[]>([]);
 
   // GS1-Parser Status
   const [gs1Data, setGs1Data] = useState<GS1Data | null>(null);
@@ -111,6 +128,13 @@ const MaterialForm: React.FC = () => {
     notes: '',
     gs1_barcode: '',
     is_consignment: false,
+    // Device-Eigenschaften
+    shape_id: '',
+    shaft_length: '',
+    device_length: '',
+    device_diameter: '',
+    french_size: '',
+    guidewire_acceptance: '',
   });
 
   useEffect(() => {
@@ -189,17 +213,19 @@ const MaterialForm: React.FC = () => {
   const fetchDropdownData = async () => {
     console.log('fetchDropdownData called');
     try {
-      const [categoriesRes, companiesRes, cabinetsRes, unitsRes] = await Promise.all([
+      const [categoriesRes, companiesRes, cabinetsRes, unitsRes, shapesRes] = await Promise.all([
         categoryAPI.getAll(),
         companyAPI.getAll(),
         cabinetAPI.getAll(),
         unitAPI.getAll(),
+        shapeAPI.getAll(),
       ]);
       console.log('Dropdown data loaded successfully');
       setCategories(categoriesRes.data);
       setCompanies(companiesRes.data);
       setCabinets(cabinetsRes.data);
       setUnits(unitsRes.data);
+      setShapes(shapesRes.data);
     } catch (err) {
       console.error('Fehler beim Laden der Dropdown-Daten:', err);
       setError('Fehler beim Laden der Formulardaten');
@@ -229,6 +255,13 @@ const MaterialForm: React.FC = () => {
         notes: material.notes || '',
         gs1_barcode: '',
         is_consignment: material.is_consignment || false,
+        // Device-Eigenschaften
+        shape_id: material.shape_id || '',
+        shaft_length: material.shaft_length || '',
+        device_length: material.device_length || '',
+        device_diameter: material.device_diameter || '',
+        french_size: material.french_size || '',
+        guidewire_acceptance: material.guidewire_acceptance || '',
       });
       
       // Fächer für den Schrank laden wenn vorhanden
@@ -364,6 +397,14 @@ const MaterialForm: React.FC = () => {
                 if (!prev.location_in_cabinet && template.location_in_cabinet) templateUpdates.location_in_cabinet = template.location_in_cabinet;
                 if (template.is_consignment !== undefined) templateUpdates.is_consignment = template.is_consignment;
                 
+                // Device-Eigenschaften
+                if (!prev.shape_id && template.shape_id) templateUpdates.shape_id = template.shape_id;
+                if (!prev.shaft_length && template.shaft_length) templateUpdates.shaft_length = template.shaft_length;
+                if (!prev.device_length && template.device_length) templateUpdates.device_length = template.device_length;
+                if (!prev.device_diameter && template.device_diameter) templateUpdates.device_diameter = template.device_diameter;
+                if (!prev.french_size && template.french_size) templateUpdates.french_size = template.french_size;
+                if (!prev.guidewire_acceptance && template.guidewire_acceptance) templateUpdates.guidewire_acceptance = template.guidewire_acceptance;
+                
                 console.log('Template Updates:', templateUpdates);
                 return { ...prev, ...templateUpdates };
               });
@@ -456,6 +497,13 @@ const MaterialForm: React.FC = () => {
         compartment_id: formData.compartment_id || null,
         expiry_date: formData.expiry_date || null,
         cost: formData.cost ? parseFloat(formData.cost) : null,
+        // Device-Eigenschaften
+        shape_id: formData.shape_id || null,
+        shaft_length: formData.shaft_length || null,
+        device_length: formData.device_length || null,
+        device_diameter: formData.device_diameter || null,
+        french_size: formData.french_size || null,
+        guidewire_acceptance: formData.guidewire_acceptance || null,
       };
 
       // GS1 Barcode als zusätzlichen Barcode hinzufügen, falls vorhanden
@@ -909,6 +957,91 @@ const MaterialForm: React.FC = () => {
                   </Box>
                 }
               />
+            </Grid>
+
+            {/* Device-Eigenschaften */}
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                Device-Eigenschaften (optional)
+              </Typography>
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <TextField
+                select
+                fullWidth
+                label="Shape / Form"
+                value={formData.shape_id}
+                onChange={handleChange('shape_id')}
+              >
+                <MenuItem value="">
+                  <em>Keine Auswahl</em>
+                </MenuItem>
+                {shapes.map((shape) => (
+                  <MenuItem key={shape.id} value={shape.id}>
+                    {shape.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Schaftlänge"
+                value={formData.shaft_length}
+                onChange={handleChange('shaft_length')}
+                placeholder="z.B. 100cm"
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Device-Länge"
+                value={formData.device_length}
+                onChange={handleChange('device_length')}
+                placeholder="z.B. 150cm"
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Device-Durchmesser"
+                value={formData.device_diameter}
+                onChange={handleChange('device_diameter')}
+                placeholder="z.B. 5mm"
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="French-Size"
+                value={formData.french_size}
+                onChange={handleChange('french_size')}
+                placeholder="z.B. 5F, 6F"
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <TextField
+                select
+                fullWidth
+                label="Guidewire-Acceptance"
+                value={formData.guidewire_acceptance}
+                onChange={handleChange('guidewire_acceptance')}
+              >
+                <MenuItem value="">
+                  <em>Keine Auswahl</em>
+                </MenuItem>
+                {GUIDEWIRE_OPTIONS.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
 
             {/* Aktionsbuttons */}

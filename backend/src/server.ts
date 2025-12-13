@@ -12,6 +12,7 @@ import unitRoutes from './routes/unit.routes';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import statisticsRoutes from './routes/statistics.routes';
+import shapeRoutes from './routes/shape.routes';
 
 dotenv.config();
 
@@ -68,6 +69,7 @@ app.use('/api/field-configs', fieldConfigRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/units', unitRoutes);
 app.use('/api/statistics', statisticsRoutes);
+app.use('/api/shapes', shapeRoutes);
 
 // Health Check
 app.get('/health', (req: Request, res: Response) => {

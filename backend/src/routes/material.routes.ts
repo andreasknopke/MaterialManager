@@ -63,7 +63,14 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
         article_number: material.article_number,
         cost: material.cost,
         location_in_cabinet: material.location_in_cabinet,
-        is_consignment: material.is_consignment
+        is_consignment: material.is_consignment,
+        // Device-Eigenschaften
+        shape_id: material.shape_id,
+        shaft_length: material.shaft_length,
+        device_length: material.device_length,
+        device_diameter: material.device_diameter,
+        french_size: material.french_size,
+        guidewire_acceptance: material.guidewire_acceptance
       }
     });
   } catch (error) {
@@ -270,7 +277,8 @@ router.post('/', async (req: Request, res: Response) => {
     category_id, company_id, cabinet_id, compartment_id, name, description,
     size, unit, min_stock, current_stock, expiry_date,
     lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes,
-    custom_fields, barcodes, unit_id, is_consignment
+    custom_fields, barcodes, unit_id, is_consignment,
+    shape_id, shaft_length, device_length, device_diameter, french_size, guidewire_acceptance
   } = req.body;
   
   if (!name) {
@@ -300,19 +308,21 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     await connection.beginTransaction();
     
-    // Material einfügen (inkl. unit_id!)
+    // Material einfügen (inkl. unit_id und Device-Eigenschaften!)
     // current_stock startet bei 1 (ein Material wird aufgenommen)
     // min_stock ist nicht mehr relevant für einzelne Materialien (nur Kategorien)
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO materials 
        (category_id, company_id, cabinet_id, compartment_id, unit_id, name, description, size, unit,
         min_stock, current_stock, expiry_date, lot_number, article_number, cost,
-        location_in_cabinet, shipping_container_code, notes, is_consignment)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        location_in_cabinet, shipping_container_code, notes, is_consignment,
+        shape_id, shaft_length, device_length, device_diameter, french_size, guidewire_acceptance)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         category_id, company_id, cabinet_id, compartment_id || null, materialUnitId, name, description, size, unit,
         0, current_stock || 1, expiry_date, lot_number,
-        article_number, cost || null, location_in_cabinet, shipping_container_code, notes, is_consignment || false
+        article_number, cost || null, location_in_cabinet, shipping_container_code, notes, is_consignment || false,
+        shape_id || null, shaft_length || null, device_length || null, device_diameter || null, french_size || null, guidewire_acceptance || null
       ]
     );
     
@@ -371,7 +381,8 @@ router.put('/:id', async (req: Request, res: Response) => {
   const {
     category_id, company_id, cabinet_id, compartment_id, unit_id, name, description,
     size, unit, min_stock, expiry_date,
-    lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes, active, is_consignment
+    lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes, active, is_consignment,
+    shape_id, shaft_length, device_length, device_diameter, french_size, guidewire_acceptance
   } = req.body;
   
   try {
@@ -414,12 +425,15 @@ router.put('/:id', async (req: Request, res: Response) => {
        SET category_id = ?, company_id = ?, cabinet_id = ?, compartment_id = ?, unit_id = ?, name = ?,
            description = ?, size = ?, unit = ?, min_stock = ?,
            expiry_date = ?, lot_number = ?,
-           article_number = ?, cost = ?, location_in_cabinet = ?, shipping_container_code = ?, notes = ?, active = ?, is_consignment = ?
+           article_number = ?, cost = ?, location_in_cabinet = ?, shipping_container_code = ?, notes = ?, active = ?, is_consignment = ?,
+           shape_id = ?, shaft_length = ?, device_length = ?, device_diameter = ?, french_size = ?, guidewire_acceptance = ?
        WHERE id = ?`,
       [
         category_id, company_id, cabinet_id, compartment_id || null, materialUnitId, name, description, size, unit,
         min_stock, expiry_date, lot_number, article_number, cost || null,
-        location_in_cabinet, shipping_container_code, notes, isActive, is_consignment || false, req.params.id
+        location_in_cabinet, shipping_container_code, notes, isActive, is_consignment || false,
+        shape_id || null, shaft_length || null, device_length || null, device_diameter || null, french_size || null, guidewire_acceptance || null,
+        req.params.id
       ]
     );
     
