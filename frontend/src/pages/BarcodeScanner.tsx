@@ -496,18 +496,20 @@ const BarcodeScanner: React.FC = () => {
     try {
       console.log('performOCRAnalysis: Starting with canvas', canvas.width, 'x', canvas.height);
       
-      // OCR mit Tesseract durchführen - Wörter mit Bounding-Boxes
-      const result = await Tesseract.recognize(
-        canvas,
-        'eng', // Nur Englisch für bessere Zahlen/Buchstaben-Erkennung
-        {
-          logger: (m) => {
-            if (m.status === 'recognizing text') {
-              setOcrProgress(Math.round(m.progress * 100));
-            }
-          },
-        }
-      );
+      // Worker erstellen für Zugriff auf Blöcke mit Bounding-Boxes
+      const worker = await Tesseract.createWorker('eng', undefined, {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            setOcrProgress(Math.round(m.progress * 100));
+          }
+        },
+      });
+      
+      // OCR mit Blöcke-Ausgabe
+      const result = await worker.recognize(canvas, {}, { blocks: true });
+      
+      // Worker beenden
+      await worker.terminate();
       
       console.log('OCR Ergebnis vollständig:', JSON.stringify(result.data, null, 2).substring(0, 2000));
       console.log('OCR Text:', result.data.text);
@@ -598,7 +600,7 @@ const BarcodeScanner: React.FC = () => {
   };
 
   // OCR zurücksetzen und neu aufnehmen
-  const resetOcr = () => {
+  const resetOcr = async () => {
     console.log('resetOcr called');
     setOcrFrozen(false);
     setOcrTextBlocks([]);
@@ -607,14 +609,38 @@ const BarcodeScanner: React.FC = () => {
     setOcrLoading(false);
     setOcrProgress(0);
     
-    // Video-Stream wieder aktivieren und Video-Element neu verbinden
+    // Video-Stream wieder aktivieren
     if (streamRef.current && videoRef.current) {
-      streamRef.current.getTracks().forEach(track => {
-        track.enabled = true;
-      });
-      // Video-Element neu mit Stream verbinden
-      videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().catch(err => console.error('Video play error:', err));
+      // Prüfen ob Tracks noch aktiv sind
+      const tracks = streamRef.current.getTracks();
+      const allEnded = tracks.every(track => track.readyState === 'ended');
+      
+      if (allEnded) {
+        console.log('Stream beendet, fordere neuen an...');
+        // Neuen Stream anfordern
+        try {
+          const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          });
+          streamRef.current = newStream;
+          videoRef.current.srcObject = newStream;
+          await videoRef.current.play();
+          console.log('Neuer Stream gestartet');
+        } catch (err) {
+          console.error('Fehler beim Neustarten des Streams:', err);
+        }
+      } else {
+        // Tracks reaktivieren
+        tracks.forEach(track => {
+          track.enabled = true;
+        });
+        videoRef.current.srcObject = streamRef.current;
+        videoRef.current.play().catch(err => console.error('Video play error:', err));
+      }
     }
   };
 
