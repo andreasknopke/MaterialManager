@@ -9,6 +9,69 @@ const router = Router();
 // Alle Routes benötigen Authentifizierung
 router.use(authenticate);
 
+// GET Material-Template anhand GTIN (für Auto-Fill beim Scannen)
+router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
+  try {
+    const { gtin } = req.params;
+    
+    if (!gtin || gtin.length < 8) {
+      return res.status(400).json({ error: 'Ungültige GTIN' });
+    }
+    
+    // Department-Filter
+    const departmentFilter = getDepartmentFilter(req, '');
+    
+    // Suche Material mit dieser GTIN (article_number)
+    let query = `
+      SELECT m.*, c.name as category_name, co.name as company_name
+      FROM materials m
+      LEFT JOIN categories c ON m.category_id = c.id
+      LEFT JOIN companies co ON m.company_id = co.id
+      WHERE m.article_number = ?
+    `;
+    const params: any[] = [gtin];
+    
+    if (departmentFilter.whereClause) {
+      query += ` AND ${departmentFilter.whereClause.replace('unit_id', 'm.unit_id')}`;
+      params.push(...departmentFilter.params);
+    }
+    
+    query += ' ORDER BY m.created_at DESC LIMIT 1';
+    
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Kein Material mit dieser GTIN gefunden' });
+    }
+    
+    // Gib Template-Daten zurück (ohne unique Felder wie LOT, Verfallsdatum)
+    const material = rows[0];
+    res.json({
+      found: true,
+      template: {
+        name: material.name,
+        description: material.description,
+        category_id: material.category_id,
+        category_name: material.category_name,
+        company_id: material.company_id,
+        company_name: material.company_name,
+        cabinet_id: material.cabinet_id,
+        compartment_id: material.compartment_id,
+        unit_id: material.unit_id,
+        size: material.size,
+        unit: material.unit,
+        article_number: material.article_number,
+        cost: material.cost,
+        location_in_cabinet: material.location_in_cabinet,
+        is_consignment: material.is_consignment
+      }
+    });
+  } catch (error) {
+    console.error('Fehler beim Suchen nach GTIN:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 // POST erweiterte Suche für Materialien
 router.post('/search', async (req: Request, res: Response) => {
   try {

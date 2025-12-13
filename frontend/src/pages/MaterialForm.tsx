@@ -271,7 +271,7 @@ const MaterialForm: React.FC = () => {
     }
   };
 
-  const handleGS1BarcodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGS1BarcodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const barcode = e.target.value;
     console.log('=== MaterialForm GS1 Input ===');
     console.log('Eingegebener Barcode:', barcode);
@@ -311,11 +311,39 @@ const MaterialForm: React.FC = () => {
       }, 500);
       setGs1Data(parsed);
 
-      // Auto-Fill Felder
+      // Auto-Fill Felder aus dem gescannten Barcode
       const updates: Partial<MaterialFormData> = {};
 
       if (parsed.gtin) {
         updates.article_number = parsed.gtin;
+        
+        // Versuche, existierendes Material mit dieser GTIN zu finden und Felder vorzufüllen
+        try {
+          const response = await materialAPI.getByGtin(parsed.gtin);
+          if (response.data?.template) {
+            const template = response.data.template;
+            console.log('GTIN Template gefunden:', template);
+            
+            // Nur Felder übernehmen, die noch leer sind (außer die GTIN-spezifischen)
+            if (!formData.name && template.name) updates.name = template.name;
+            if (!formData.description && template.description) updates.description = template.description;
+            if (!formData.category_id && template.category_id) updates.category_id = template.category_id;
+            if (!formData.company_id && template.company_id) updates.company_id = template.company_id;
+            if (!formData.cabinet_id && template.cabinet_id) updates.cabinet_id = template.cabinet_id;
+            if (!formData.compartment_id && template.compartment_id) updates.compartment_id = template.compartment_id;
+            if (!formData.size && template.size) updates.size = template.size;
+            if (!formData.unit && template.unit) updates.unit = template.unit;
+            if (!formData.cost && template.cost) updates.cost = template.cost;
+            if (!formData.location_in_cabinet && template.location_in_cabinet) updates.location_in_cabinet = template.location_in_cabinet;
+            if (template.is_consignment !== undefined) updates.is_consignment = template.is_consignment;
+            
+            setSuccess('Material mit dieser GTIN gefunden - Felder vorausgefüllt!');
+            setTimeout(() => setSuccess(null), 4000);
+          }
+        } catch (err) {
+          // 404 ist OK - bedeutet nur, dass keine GTIN gefunden wurde
+          console.log('Keine existierende GTIN gefunden (neues Produkt)');
+        }
       }
 
       // LOT: batchNumber (AI 10) oder falls nicht vorhanden serialNumber (AI 21)
@@ -331,8 +359,11 @@ const MaterialForm: React.FC = () => {
 
       if (Object.keys(updates).length > 0) {
         setFormData(prev => ({ ...prev, ...updates }));
-        setSuccess('GS1-Daten erfolgreich ausgelesen!');
-        setTimeout(() => setSuccess(null), 3000);
+        if (!updates.name) {
+          // Nur diese Meldung zeigen, wenn kein Template gefunden wurde
+          setSuccess('GS1-Daten erfolgreich ausgelesen!');
+          setTimeout(() => setSuccess(null), 3000);
+        }
       }
     } else if (barcode.length > 3) {
       setGs1Warning('Dies scheint kein gültiger GS1-Barcode zu sein.');
