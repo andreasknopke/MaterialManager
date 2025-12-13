@@ -265,11 +265,14 @@ router.post('/', async (req: Request, res: Response) => {
       }
     }
     
-    // Barcodes einfügen
+    // Barcodes einfügen (mit UPSERT für bereits existierende Barcodes)
     if (barcodes && Array.isArray(barcodes)) {
       for (const barcode of barcodes) {
+        // Falls Barcode bereits existiert, aktualisiere die Verknüpfung zum neuen Material
         await connection.query(
-          'INSERT INTO barcodes (material_id, barcode, barcode_type, is_primary) VALUES (?, ?, ?, ?)',
+          `INSERT INTO barcodes (material_id, barcode, barcode_type, is_primary) 
+           VALUES (?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE material_id = VALUES(material_id), is_primary = VALUES(is_primary)`,
           [materialId, barcode.barcode, barcode.barcode_type || 'CODE128', barcode.is_primary || false]
         );
       }
