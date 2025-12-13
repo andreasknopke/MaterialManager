@@ -41,7 +41,7 @@ import {
 } from '@mui/icons-material';
 import { barcodeAPI, materialAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
-import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library';
+import { BrowserMultiFormatReader } from '@zxing/library';
 import Tesseract from 'tesseract.js';
 import { getScannerSettings } from './Admin';
 import { getInterventionSession, addInterventionItem } from './Dashboard';
@@ -254,8 +254,8 @@ const BarcodeScanner: React.FC = () => {
           const stream = await navigator.mediaDevices.getUserMedia({
             video: { 
               facingMode: 'environment',
-              width: { ideal: 1920 },
-              height: { ideal: 1080 }
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
             }
           });
           
@@ -288,25 +288,8 @@ const BarcodeScanner: React.FC = () => {
               }, 100);
             }
             
-            // Jetzt ZXing Scanner starten mit optimierten Einstellungen für GS1-128
-            const hints = new Map();
-            // Unterstützte Formate - priorisiere Code 128 (GS1-128)
-            hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-              BarcodeFormat.CODE_128,      // GS1-128 Barcodes
-              BarcodeFormat.EAN_13,        // EAN-13
-              BarcodeFormat.EAN_8,         // EAN-8
-              BarcodeFormat.QR_CODE,       // QR Codes
-              BarcodeFormat.DATA_MATRIX,   // Data Matrix
-              BarcodeFormat.UPC_A,         // UPC-A
-              BarcodeFormat.UPC_E,         // UPC-E
-              BarcodeFormat.CODABAR,       // Codabar
-              BarcodeFormat.CODE_39,       // Code 39
-              BarcodeFormat.ITF,           // ITF
-            ]);
-            // Versuche härter zu dekodieren
-            hints.set(DecodeHintType.TRY_HARDER, true);
-            
-            const codeReader = new BrowserMultiFormatReader(hints);
+            // ZXing Scanner mit Standard-Einstellungen
+            const codeReader = new BrowserMultiFormatReader();
             codeReaderRef.current = codeReader;
             
             console.log('Starte Barcode-Erkennung...');
@@ -1315,69 +1298,99 @@ const BarcodeScanner: React.FC = () => {
           }}>
             {/* Video oder eingefrorenes Bild */}
             {ocrFrozen && frozenImageData ? (
-              <Box sx={{ position: 'relative', width: '100%' }}>
-                <img 
-                  src={frozenImageData} 
-                  alt="Captured frame"
-                  style={{
+              <Box 
+                sx={{ 
+                  position: 'relative', 
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                {/* Container mit festen Proportionen basierend auf Video-Dimensionen */}
+                <Box
+                  sx={{
+                    position: 'relative',
                     width: '100%',
-                    maxHeight: '450px',
-                    objectFit: 'contain',
+                    maxWidth: videoDimensions.width > 0 ? `${Math.min(600, videoDimensions.width)}px` : '100%',
                   }}
-                />
-                
-                {/* OCR-Textblock-Overlays */}
-                {ocrTextBlocks.map((block, index) => {
-                  // Skalierung berechnen
-                  const scaleX = videoDimensions.displayWidth / videoDimensions.width || 1;
-                  const scaleY = videoDimensions.displayHeight / videoDimensions.height || 1;
-                  const scale = Math.min(scaleX, scaleY);
+                >
+                  <img 
+                    src={frozenImageData} 
+                    alt="Captured frame"
+                    style={{
+                      width: '100%',
+                      height: 'auto',
+                      display: 'block',
+                    }}
+                    onLoad={(e) => {
+                      // Dimensionen nach Laden aktualisieren
+                      const img = e.target as HTMLImageElement;
+                      console.log('Frozen image loaded:', img.clientWidth, 'x', img.clientHeight);
+                      setVideoDimensions(prev => ({
+                        ...prev,
+                        displayWidth: img.clientWidth,
+                        displayHeight: img.clientHeight,
+                      }));
+                    }}
+                  />
                   
-                  return (
+                  {/* OCR-Textblock-Overlays */}
+                  {ocrTextBlocks.length > 0 && videoDimensions.width > 0 && (
                     <Box
-                      key={index}
-                      onClick={() => handleOcrTextSelect(block)}
                       sx={{
                         position: 'absolute',
-                        left: block.bbox.x0 * scale,
-                        top: block.bbox.y0 * scale,
-                        width: (block.bbox.x1 - block.bbox.x0) * scale,
-                        height: (block.bbox.y1 - block.bbox.y0) * scale,
-                        border: '2px solid',
-                        borderColor: selectedOcrText.includes(block.text) ? '#4caf50' : '#ffcc00',
-                        backgroundColor: selectedOcrText.includes(block.text) 
-                          ? 'rgba(76, 175, 80, 0.3)' 
-                          : 'rgba(255, 204, 0, 0.2)',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        '&:hover': {
-                          borderColor: '#fff',
-                          backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                        },
-                        borderRadius: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        pointerEvents: 'none',
                       }}
                     >
-                      <Typography 
-                        variant="caption" 
-                        sx={{ 
-                          color: '#fff',
-                          textShadow: '1px 1px 2px #000',
-                          fontSize: '10px',
-                          maxWidth: '100%',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          px: 0.5,
-                        }}
-                      >
-                        {block.text.length > 15 ? block.text.substring(0, 15) + '...' : block.text}
-                      </Typography>
+                      {ocrTextBlocks.map((block, index) => {
+                        // Skalierung: Originalbild -> Anzeige
+                        const scaleX = videoDimensions.displayWidth / videoDimensions.width;
+                        const scaleY = videoDimensions.displayHeight / videoDimensions.height;
+                        
+                        const left = block.bbox.x0 * scaleX;
+                        const top = block.bbox.y0 * scaleY;
+                        const width = (block.bbox.x1 - block.bbox.x0) * scaleX;
+                        const height = (block.bbox.y1 - block.bbox.y0) * scaleY;
+                        
+                        console.log(`Block ${index}: "${block.text}" at (${left.toFixed(0)}, ${top.toFixed(0)}) ${width.toFixed(0)}x${height.toFixed(0)}`);
+                        
+                        return (
+                          <Box
+                            key={index}
+                            onClick={() => handleOcrTextSelect(block)}
+                            sx={{
+                              position: 'absolute',
+                              left: `${left}px`,
+                              top: `${top}px`,
+                              width: `${width}px`,
+                              height: `${height}px`,
+                              border: '2px solid',
+                              borderColor: selectedOcrText.includes(block.text) ? '#4caf50' : '#ffcc00',
+                              backgroundColor: selectedOcrText.includes(block.text) 
+                                ? 'rgba(76, 175, 80, 0.3)' 
+                                : 'rgba(255, 204, 0, 0.2)',
+                              cursor: 'pointer',
+                              pointerEvents: 'auto',
+                              transition: 'all 0.2s',
+                              '&:hover': {
+                                borderColor: '#fff',
+                                backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                              },
+                              borderRadius: '2px',
+                              minWidth: '20px',
+                              minHeight: '12px',
+                            }}
+                          />
+                        );
+                      })}
                     </Box>
-                  );
-                })}
+                  )}
+                </Box>
               </Box>
             ) : (
               <>
@@ -1501,14 +1514,13 @@ const BarcodeScanner: React.FC = () => {
           )}
           
           {/* OCR-Modus Aktionen */}
-          {scanMode === 'ocr' && !ocrFrozen && (
+          {scanMode === 'ocr' && !ocrFrozen && !ocrLoading && (
             <>
               <Button 
                 onClick={freezeForOCR} 
                 variant="contained" 
                 color="primary"
                 fullWidth
-                disabled={ocrLoading}
                 startIcon={<CaptureIcon />}
                 size="large"
               >
