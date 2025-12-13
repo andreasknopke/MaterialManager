@@ -26,8 +26,9 @@ import { materialAPI, cabinetAPI, categoryAPI, companyAPI, unitAPI } from '../se
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
 import { useAuth } from '../contexts/AuthContext';
 
-// Debounce Timer für GS1 Debug Logging
+// Debounce Timer für GS1 Debug Logging und GTIN-Suche
 let gs1DebugTimer: ReturnType<typeof setTimeout> | null = null;
+let gtinSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
 interface MaterialFormData {
   name: string;
@@ -316,34 +317,6 @@ const MaterialForm: React.FC = () => {
 
       if (parsed.gtin) {
         updates.article_number = parsed.gtin;
-        
-        // Versuche, existierendes Material mit dieser GTIN zu finden und Felder vorzufüllen
-        try {
-          const response = await materialAPI.getByGtin(parsed.gtin);
-          if (response.data?.template) {
-            const template = response.data.template;
-            console.log('GTIN Template gefunden:', template);
-            
-            // Nur Felder übernehmen, die noch leer sind (außer die GTIN-spezifischen)
-            if (!formData.name && template.name) updates.name = template.name;
-            if (!formData.description && template.description) updates.description = template.description;
-            if (!formData.category_id && template.category_id) updates.category_id = template.category_id;
-            if (!formData.company_id && template.company_id) updates.company_id = template.company_id;
-            if (!formData.cabinet_id && template.cabinet_id) updates.cabinet_id = template.cabinet_id;
-            if (!formData.compartment_id && template.compartment_id) updates.compartment_id = template.compartment_id;
-            if (!formData.size && template.size) updates.size = template.size;
-            if (!formData.unit && template.unit) updates.unit = template.unit;
-            if (!formData.cost && template.cost) updates.cost = template.cost;
-            if (!formData.location_in_cabinet && template.location_in_cabinet) updates.location_in_cabinet = template.location_in_cabinet;
-            if (template.is_consignment !== undefined) updates.is_consignment = template.is_consignment;
-            
-            setSuccess('Material mit dieser GTIN gefunden - Felder vorausgefüllt!');
-            setTimeout(() => setSuccess(null), 4000);
-          }
-        } catch (err) {
-          // 404 ist OK - bedeutet nur, dass keine GTIN gefunden wurde
-          console.log('Keine existierende GTIN gefunden (neues Produkt)');
-        }
       }
 
       // LOT: batchNumber (AI 10) oder falls nicht vorhanden serialNumber (AI 21)
@@ -357,13 +330,52 @@ const MaterialForm: React.FC = () => {
         updates.expiry_date = parsed.expiryDate;
       }
 
+      // Sofort die Barcode-Daten anwenden
       if (Object.keys(updates).length > 0) {
         setFormData(prev => ({ ...prev, ...updates }));
-        if (!updates.name) {
-          // Nur diese Meldung zeigen, wenn kein Template gefunden wurde
-          setSuccess('GS1-Daten erfolgreich ausgelesen!');
-          setTimeout(() => setSuccess(null), 3000);
+      }
+
+      // GTIN-Suche debounced ausführen (wartet bis Scanner fertig ist)
+      if (parsed.gtin) {
+        if (gtinSearchTimer) {
+          clearTimeout(gtinSearchTimer);
         }
+        gtinSearchTimer = setTimeout(async () => {
+          try {
+            console.log('Suche nach GTIN:', parsed.gtin);
+            const response = await materialAPI.getByGtin(parsed.gtin!);
+            if (response.data?.template) {
+              const template = response.data.template;
+              console.log('GTIN Template gefunden:', template);
+              
+              // Felder vorausfüllen (aktuelle formData nochmal holen)
+              setFormData(prev => {
+                const templateUpdates: Partial<MaterialFormData> = {};
+                
+                if (!prev.name && template.name) templateUpdates.name = template.name;
+                if (!prev.description && template.description) templateUpdates.description = template.description;
+                if (!prev.category_id && template.category_id) templateUpdates.category_id = template.category_id;
+                if (!prev.company_id && template.company_id) templateUpdates.company_id = template.company_id;
+                if (!prev.cabinet_id && template.cabinet_id) templateUpdates.cabinet_id = template.cabinet_id;
+                if (!prev.compartment_id && template.compartment_id) templateUpdates.compartment_id = template.compartment_id;
+                if (!prev.size && template.size) templateUpdates.size = template.size;
+                if (!prev.unit && template.unit) templateUpdates.unit = template.unit;
+                if (!prev.cost && template.cost) templateUpdates.cost = String(template.cost);
+                if (!prev.location_in_cabinet && template.location_in_cabinet) templateUpdates.location_in_cabinet = template.location_in_cabinet;
+                if (template.is_consignment !== undefined) templateUpdates.is_consignment = template.is_consignment;
+                
+                console.log('Template Updates:', templateUpdates);
+                return { ...prev, ...templateUpdates };
+              });
+              
+              setSuccess('Material mit dieser GTIN gefunden - Felder vorausgefüllt!');
+              setTimeout(() => setSuccess(null), 4000);
+            }
+          } catch (err) {
+            // 404 ist OK - bedeutet nur, dass keine GTIN gefunden wurde
+            console.log('Keine existierende GTIN gefunden (neues Produkt)');
+          }
+        }, 600); // Etwas länger als Debug-Timer warten
       }
     } else if (barcode.length > 3) {
       setGs1Warning('Dies scheint kein gültiger GS1-Barcode zu sein.');
