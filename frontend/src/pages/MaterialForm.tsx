@@ -91,7 +91,7 @@ const MaterialForm: React.FC = () => {
     cabinet_id: '',
     compartment_id: '',
     unit_id: '',
-    size: '',
+    size: '1',
     unit: 'Stück',
     min_stock: 0,
     expiry_date: '',
@@ -686,29 +686,49 @@ const MaterialForm: React.FC = () => {
             <Grid item xs={12} md={3}>
               <TextField
                 fullWidth
-                label="Größe"
+                type="number"
+                label="Einheiten pro Packung"
                 value={formData.size}
                 onChange={handleChange('size')}
-                placeholder="z.B. 100ml, 5kg"
+                disabled={formData.unit === 'Stück'}
+                helperText={formData.unit === 'Stück' ? 'Bei Stück immer 1' : 'Anzahl Einheiten in der Packung'}
+                InputProps={{
+                  inputProps: { min: 1 }
+                }}
               />
             </Grid>
 
             <Grid item xs={12} md={3}>
               <TextField
                 fullWidth
+                select
                 label="Einheit"
                 value={formData.unit}
-                onChange={handleChange('unit')}
-              />
+                onChange={(e) => {
+                  const newUnit = e.target.value;
+                  setFormData(prev => ({
+                    ...prev,
+                    unit: newUnit,
+                    size: newUnit === 'Stück' ? '1' : prev.size
+                  }));
+                }}
+              >
+                <MenuItem value="Stück">Stück</MenuItem>
+                <MenuItem value="Packung">Packung</MenuItem>
+              </TextField>
             </Grid>
 
             <Grid item xs={12} md={3}>
               <TextField
                 fullWidth
                 type="number"
-                label="Mindestbestand"
+                label="Mindestbestand (optional)"
                 value={formData.min_stock}
                 onChange={handleChange('min_stock')}
+                helperText="0 = nutzt Kategorie-Mindestbestand"
+                InputProps={{
+                  inputProps: { min: 0 }
+                }}
               />
             </Grid>
 
