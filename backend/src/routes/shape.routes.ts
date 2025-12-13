@@ -24,8 +24,8 @@ router.get('/', async (req: Request, res: Response) => {
 // GET alle Shapes (inkl. inaktive) - für Admin
 router.get('/all', async (req: Request, res: Response) => {
   try {
-    // Nur Root-User dürfen alle sehen
-    if (!req.user?.isRoot) {
+    // Admins (inkl. Department-Admin) dürfen alle sehen
+    if (req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
     
@@ -42,8 +42,8 @@ router.get('/all', async (req: Request, res: Response) => {
 // POST neuen Shape erstellen
 router.post('/', async (req: Request, res: Response) => {
   try {
-    // Nur Root-User dürfen erstellen
-    if (!req.user?.isRoot) {
+    // Admins (inkl. Department-Admin) dürfen erstellen
+    if (req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
     
@@ -74,8 +74,8 @@ router.post('/', async (req: Request, res: Response) => {
 // PUT Shape aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    // Nur Root-User dürfen bearbeiten
-    if (!req.user?.isRoot) {
+    // Admins (inkl. Department-Admin) dürfen bearbeiten
+    if (req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
     
@@ -103,8 +103,8 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE Shape löschen (soft delete)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    // Nur Root-User dürfen löschen
-    if (!req.user?.isRoot) {
+    // Admins (inkl. Department-Admin) dürfen löschen
+    if (req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
     

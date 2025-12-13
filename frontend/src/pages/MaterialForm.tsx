@@ -15,12 +15,24 @@ import {
   Tooltip,
   FormControlLabel,
   Checkbox,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  Switch,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
   Save as SaveIcon,
   QrCodeScanner as QrCodeScannerIcon,
   Clear as ClearIcon,
+  Edit as EditIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { materialAPI, cabinetAPI, categoryAPI, companyAPI, unitAPI, shapeAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
@@ -78,7 +90,7 @@ const MaterialForm: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, isRoot } = useAuth();
+  const { user, isRoot, isAdmin } = useAuth();
   
   // Prüfe ob wir auf /materials/new sind (id ist undefined) oder eine echte ID haben
   const isNew = !id || id === 'new';
@@ -100,6 +112,15 @@ const MaterialForm: React.FC = () => {
   const [units, setUnits] = useState<any[]>([]);
   const [compartments, setCompartments] = useState<Compartment[]>([]);
   const [shapes, setShapes] = useState<Shape[]>([]);
+
+  // Shape-Verwaltungs-Dialog
+  const [shapeDialogOpen, setShapeDialogOpen] = useState(false);
+  const [allShapes, setAllShapes] = useState<Shape[]>([]);
+  const [newShapeName, setNewShapeName] = useState('');
+  const [editingShapeId, setEditingShapeId] = useState<number | null>(null);
+  const [editingShapeName, setEditingShapeName] = useState('');
+  const [shapeLoading, setShapeLoading] = useState(false);
+  const [shapeError, setShapeError] = useState<string | null>(null);
 
   // GS1-Parser Status
   const [gs1Data, setGs1Data] = useState<GS1Data | null>(null);
@@ -229,6 +250,108 @@ const MaterialForm: React.FC = () => {
     } catch (err) {
       console.error('Fehler beim Laden der Dropdown-Daten:', err);
       setError('Fehler beim Laden der Formulardaten');
+    }
+  };
+
+  // Shape-Verwaltungs-Funktionen
+  const openShapeDialog = async () => {
+    setShapeDialogOpen(true);
+    setShapeError(null);
+    setNewShapeName('');
+    setEditingShapeId(null);
+    setShapeLoading(true);
+    try {
+      const response = await shapeAPI.getAllIncludingInactive();
+      setAllShapes(response.data);
+    } catch (err) {
+      console.error('Fehler beim Laden der Shapes:', err);
+      setShapeError('Fehler beim Laden der Shapes');
+    } finally {
+      setShapeLoading(false);
+    }
+  };
+
+  const handleAddShape = async () => {
+    if (!newShapeName.trim()) return;
+    setShapeLoading(true);
+    setShapeError(null);
+    try {
+      await shapeAPI.create({ name: newShapeName.trim() });
+      setNewShapeName('');
+      // Shapes neu laden
+      const response = await shapeAPI.getAllIncludingInactive();
+      setAllShapes(response.data);
+      // Aktive Shapes für Dropdown aktualisieren
+      const activeResponse = await shapeAPI.getAll();
+      setShapes(activeResponse.data);
+    } catch (err: any) {
+      setShapeError(err.response?.data?.error || 'Fehler beim Erstellen');
+    } finally {
+      setShapeLoading(false);
+    }
+  };
+
+  const handleUpdateShape = async (shapeId: number) => {
+    if (!editingShapeName.trim()) return;
+    setShapeLoading(true);
+    setShapeError(null);
+    try {
+      const shape = allShapes.find(s => s.id === shapeId);
+      await shapeAPI.update(shapeId, { 
+        name: editingShapeName.trim(),
+        active: shape?.active !== false
+      });
+      setEditingShapeId(null);
+      setEditingShapeName('');
+      // Shapes neu laden
+      const response = await shapeAPI.getAllIncludingInactive();
+      setAllShapes(response.data);
+      // Aktive Shapes für Dropdown aktualisieren
+      const activeResponse = await shapeAPI.getAll();
+      setShapes(activeResponse.data);
+    } catch (err: any) {
+      setShapeError(err.response?.data?.error || 'Fehler beim Aktualisieren');
+    } finally {
+      setShapeLoading(false);
+    }
+  };
+
+  const handleToggleShapeActive = async (shape: Shape) => {
+    setShapeLoading(true);
+    setShapeError(null);
+    try {
+      await shapeAPI.update(shape.id, { 
+        name: shape.name,
+        active: !shape.active
+      });
+      // Shapes neu laden
+      const response = await shapeAPI.getAllIncludingInactive();
+      setAllShapes(response.data);
+      // Aktive Shapes für Dropdown aktualisieren
+      const activeResponse = await shapeAPI.getAll();
+      setShapes(activeResponse.data);
+    } catch (err: any) {
+      setShapeError(err.response?.data?.error || 'Fehler beim Aktualisieren');
+    } finally {
+      setShapeLoading(false);
+    }
+  };
+
+  const handleDeleteShape = async (shapeId: number) => {
+    setShapeLoading(true);
+    setShapeError(null);
+    try {
+      await shapeAPI.delete(shapeId);
+      // Shapes neu laden
+      const response = await shapeAPI.getAllIncludingInactive();
+      setAllShapes(response.data);
+      // Aktive Shapes für Dropdown aktualisieren
+      const activeResponse = await shapeAPI.getAll();
+      setShapes(activeResponse.data);
+    } catch (err: any) {
+      setShapeError(err.response?.data?.error || 'Fehler beim Löschen');
+    } finally {
+      setShapeLoading(false);
     }
   };
 
@@ -967,22 +1090,34 @@ const MaterialForm: React.FC = () => {
             </Grid>
 
             <Grid item xs={12} md={4}>
-              <TextField
-                select
-                fullWidth
-                label="Shape / Form"
-                value={formData.shape_id}
-                onChange={handleChange('shape_id')}
-              >
-                <MenuItem value="">
-                  <em>Keine Auswahl</em>
-                </MenuItem>
-                {shapes.map((shape) => (
-                  <MenuItem key={shape.id} value={shape.id}>
-                    {shape.name}
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                <TextField
+                  select
+                  fullWidth
+                  label="Shape / Form"
+                  value={formData.shape_id}
+                  onChange={handleChange('shape_id')}
+                >
+                  <MenuItem value="">
+                    <em>Keine Auswahl</em>
                   </MenuItem>
-                ))}
-              </TextField>
+                  {shapes.map((shape) => (
+                    <MenuItem key={shape.id} value={shape.id}>
+                      {shape.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                {isAdmin && (
+                  <Tooltip title="Shapes bearbeiten">
+                    <IconButton 
+                      onClick={openShapeDialog}
+                      sx={{ mt: 1 }}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
             </Grid>
 
             <Grid item xs={12} md={4}>
@@ -1067,6 +1202,153 @@ const MaterialForm: React.FC = () => {
           </Grid>
         </form>
       </Paper>
+
+      {/* Shape-Verwaltungs-Dialog */}
+      <Dialog 
+        open={shapeDialogOpen} 
+        onClose={() => setShapeDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Shape-Typen verwalten</DialogTitle>
+        <DialogContent>
+          {shapeError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setShapeError(null)}>
+              {shapeError}
+            </Alert>
+          )}
+
+          {/* Neuen Shape hinzufügen */}
+          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Neuen Shape hinzufügen"
+              value={newShapeName}
+              onChange={(e) => setNewShapeName(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddShape();
+                }
+              }}
+              disabled={shapeLoading}
+            />
+            <Button
+              variant="contained"
+              onClick={handleAddShape}
+              disabled={!newShapeName.trim() || shapeLoading}
+              startIcon={<AddIcon />}
+            >
+              Hinzufügen
+            </Button>
+          </Box>
+
+          {/* Liste der Shapes */}
+          {shapeLoading && allShapes.length === 0 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <List dense>
+              {allShapes.map((shape) => (
+                <ListItem 
+                  key={shape.id}
+                  sx={{ 
+                    bgcolor: shape.active ? 'transparent' : 'action.disabledBackground',
+                    borderRadius: 1,
+                    mb: 0.5
+                  }}
+                >
+                  {editingShapeId === shape.id ? (
+                    <Box sx={{ display: 'flex', gap: 1, width: '100%', alignItems: 'center' }}>
+                      <TextField
+                        size="small"
+                        fullWidth
+                        value={editingShapeName}
+                        onChange={(e) => setEditingShapeName(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleUpdateShape(shape.id);
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <Button 
+                        size="small" 
+                        onClick={() => handleUpdateShape(shape.id)}
+                        disabled={shapeLoading}
+                      >
+                        OK
+                      </Button>
+                      <Button 
+                        size="small" 
+                        onClick={() => {
+                          setEditingShapeId(null);
+                          setEditingShapeName('');
+                        }}
+                      >
+                        Abbrechen
+                      </Button>
+                    </Box>
+                  ) : (
+                    <>
+                      <ListItemText 
+                        primary={shape.name}
+                        secondary={!shape.active ? 'Deaktiviert' : undefined}
+                        sx={{ 
+                          opacity: shape.active ? 1 : 0.5,
+                          textDecoration: shape.active ? 'none' : 'line-through'
+                        }}
+                      />
+                      <ListItemSecondaryAction>
+                        <Tooltip title={shape.active ? 'Deaktivieren' : 'Aktivieren'}>
+                          <Switch
+                            edge="end"
+                            size="small"
+                            checked={shape.active}
+                            onChange={() => handleToggleShapeActive(shape)}
+                            disabled={shapeLoading}
+                          />
+                        </Tooltip>
+                        <Tooltip title="Bearbeiten">
+                          <IconButton
+                            edge="end"
+                            size="small"
+                            onClick={() => {
+                              setEditingShapeId(shape.id);
+                              setEditingShapeName(shape.name);
+                            }}
+                            disabled={shapeLoading}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Löschen (Deaktivieren)">
+                          <IconButton
+                            edge="end"
+                            size="small"
+                            onClick={() => handleDeleteShape(shape.id)}
+                            disabled={shapeLoading || !shape.active}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </ListItemSecondaryAction>
+                    </>
+                  )}
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShapeDialogOpen(false)}>
+            Schließen
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
