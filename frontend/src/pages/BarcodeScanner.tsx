@@ -494,10 +494,12 @@ const BarcodeScanner: React.FC = () => {
     setOcrTextBlocks([]);
     
     try {
+      console.log('performOCRAnalysis: Starting with canvas', canvas.width, 'x', canvas.height);
+      
       // OCR mit Tesseract durchführen - Wörter mit Bounding-Boxes
       const result = await Tesseract.recognize(
         canvas,
-        'deu+eng', // Deutsch + Englisch für beste Erkennung
+        'eng', // Nur Englisch für bessere Zahlen/Buchstaben-Erkennung
         {
           logger: (m) => {
             if (m.status === 'recognizing text') {
@@ -507,69 +509,53 @@ const BarcodeScanner: React.FC = () => {
         }
       );
       
-      console.log('OCR Ergebnis:', result.data);
+      console.log('OCR Ergebnis vollständig:', JSON.stringify(result.data, null, 2).substring(0, 2000));
+      console.log('OCR Text:', result.data.text);
+      console.log('OCR Blocks:', result.data.blocks?.length || 0);
       
       // Textblöcke (Wörter) mit Bounding-Boxes extrahieren
       const extractedBlocks: OCRTextBlock[] = [];
       
       // Tesseract.js v6 Struktur: blocks[].paragraphs[].lines[].words[]
-      if (result.data.blocks) {
+      if (result.data.blocks && result.data.blocks.length > 0) {
+        console.log('Verarbeite', result.data.blocks.length, 'Blöcke');
+        
         for (const block of result.data.blocks) {
-          // Block-Text als eine Option
-          if (block.confidence > 40 && block.text.trim().length > 3) {
-            extractedBlocks.push({
-              text: block.text.trim(),
-              bbox: block.bbox,
-              confidence: block.confidence,
-            });
-          }
+          console.log('Block:', block.text?.substring(0, 50), 'confidence:', block.confidence);
           
           // Durch Paragraphen, Zeilen und Wörter gehen
           if (block.paragraphs) {
             for (const paragraph of block.paragraphs) {
               if (paragraph.lines) {
                 for (const line of paragraph.lines) {
-                  // Zeile hinzufügen wenn sinnvoll
-                  if (line.confidence > 40 && line.text.trim().length > 2) {
+                  // Zeile hinzufügen - niedrigere Schwelle
+                  if (line.confidence > 20 && line.text && line.text.trim().length > 1) {
                     const lineText = line.text.trim();
-                    // Nur wenn nicht schon als Block vorhanden
-                    if (!extractedBlocks.some(b => b.text === lineText || b.text.includes(lineText))) {
-                      extractedBlocks.push({
-                        text: lineText,
-                        bbox: line.bbox,
-                        confidence: line.confidence,
-                      });
-                    }
-                  }
-                  
-                  // Einzelne Wörter für präzise Auswahl
-                  if (line.words) {
-                    for (const word of line.words) {
-                      if (word.confidence > 50 && word.text.trim().length > 0) {
-                        const wordText = word.text.trim();
-                        // Nur hinzufügen wenn es nicht schon Teil eines größeren Blocks ist
-                        if (!extractedBlocks.some(b => b.text === wordText)) {
-                          extractedBlocks.push({
-                            text: wordText,
-                            bbox: word.bbox,
-                            confidence: word.confidence,
-                          });
-                        }
-                      }
-                    }
+                    console.log('Zeile gefunden:', lineText, 'bbox:', line.bbox);
+                    extractedBlocks.push({
+                      text: lineText,
+                      bbox: line.bbox,
+                      confidence: line.confidence,
+                    });
                   }
                 }
               }
             }
           }
         }
+      } else {
+        console.log('Keine Blöcke in OCR-Ergebnis gefunden');
       }
       
-      console.log('Erkannte Textblöcke:', extractedBlocks.length);
+      console.log('Erkannte Textblöcke insgesamt:', extractedBlocks.length);
+      
+      // Blöcke setzen
       setOcrTextBlocks(extractedBlocks);
       
       if (extractedBlocks.length === 0) {
         setError('Keine Texte erkannt. Versuchen Sie es mit besserer Beleuchtung.');
+      } else {
+        console.log('Setze', extractedBlocks.length, 'Textblöcke für Anzeige');
       }
     } catch (err: any) {
       console.error('OCR Fehler:', err);
@@ -618,10 +604,17 @@ const BarcodeScanner: React.FC = () => {
     setOcrTextBlocks([]);
     setSelectedOcrText('');
     setFrozenImageData('');
+    setOcrLoading(false);
+    setOcrProgress(0);
     
-    // Video-Stream wieder aktivieren
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.enabled = true);
+    // Video-Stream wieder aktivieren und Video-Element neu verbinden
+    if (streamRef.current && videoRef.current) {
+      streamRef.current.getTracks().forEach(track => {
+        track.enabled = true;
+      });
+      // Video-Element neu mit Stream verbinden
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(err => console.error('Video play error:', err));
     }
   };
 
@@ -1302,31 +1295,33 @@ const BarcodeScanner: React.FC = () => {
                 sx={{ 
                   position: 'relative', 
                   width: '100%',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
+                  maxHeight: '450px',
+                  overflow: 'hidden',
                 }}
               >
-                {/* Container mit festen Proportionen basierend auf Video-Dimensionen */}
+                {/* Container für Bild mit OCR-Overlays */}
                 <Box
                   sx={{
                     position: 'relative',
                     width: '100%',
-                    maxWidth: videoDimensions.width > 0 ? `${Math.min(600, videoDimensions.width)}px` : '100%',
+                    height: 'auto',
                   }}
                 >
                   <img 
+                    id="frozen-ocr-image"
                     src={frozenImageData} 
                     alt="Captured frame"
                     style={{
                       width: '100%',
                       height: 'auto',
+                      maxHeight: '450px',
+                      objectFit: 'contain',
                       display: 'block',
                     }}
                     onLoad={(e) => {
                       // Dimensionen nach Laden aktualisieren
                       const img = e.target as HTMLImageElement;
-                      console.log('Frozen image loaded:', img.clientWidth, 'x', img.clientHeight);
+                      console.log('Frozen image loaded:', img.clientWidth, 'x', img.clientHeight, 'natural:', img.naturalWidth, 'x', img.naturalHeight);
                       setVideoDimensions(prev => ({
                         ...prev,
                         displayWidth: img.clientWidth,
