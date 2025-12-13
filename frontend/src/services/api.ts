@@ -43,6 +43,7 @@ export const cabinetAPI = {
   getById: (id: number) => api.get(`/cabinets/${id}`),
   getMaterials: (id: number) => api.get(`/cabinets/${id}/materials`),
   getCompartments: (id: number) => api.get(`/cabinets/${id}/compartments`),
+  getCompartmentMaterials: (cabinetId: number, compartmentId: number) => api.get(`/cabinets/${cabinetId}/compartments/${compartmentId}/materials`),
   createCompartment: (cabinetId: number, data: any) => api.post(`/cabinets/${cabinetId}/compartments`, data),
   updateCompartment: (cabinetId: number, compartmentId: number, data: any) => api.put(`/cabinets/${cabinetId}/compartments/${compartmentId}`, data),
   deleteCompartment: (cabinetId: number, compartmentId: number) => api.delete(`/cabinets/${cabinetId}/compartments/${compartmentId}`),

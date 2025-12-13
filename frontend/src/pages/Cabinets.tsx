@@ -18,7 +18,7 @@ import {
   Divider,
   Chip,
   Alert,
-  Collapse,
+  CircularProgress,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { 
@@ -28,8 +28,6 @@ import {
   QrCode2 as QrCodeIcon,
   Print as PrintIcon,
   Inventory as InventoryIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { cabinetAPI } from '../services/api';
 import QRCode from 'qrcode';
@@ -42,6 +40,15 @@ interface Compartment {
   description: string | null;
   position: number;
   material_count: number;
+}
+
+interface CompartmentMaterial {
+  name: string;
+  article_number: string | null;
+  size: string | null;
+  category_name: string | null;
+  total_stock: number;
+  item_count: number;
 }
 
 const Cabinets: React.FC = () => {
@@ -68,6 +75,14 @@ const Cabinets: React.FC = () => {
   const [editingCompartment, setEditingCompartment] = useState<Compartment | null>(null);
   const [compartmentForm, setCompartmentForm] = useState({ name: '', description: '' });
   const [compartmentError, setCompartmentError] = useState<string | null>(null);
+  
+  // Fach-QR-Code
+  const [compartmentQrDialogOpen, setCompartmentQrDialogOpen] = useState(false);
+  const [selectedCompartment, setSelectedCompartment] = useState<Compartment | null>(null);
+  const [compartmentQrCodeUrl, setCompartmentQrCodeUrl] = useState('');
+  const [compartmentMaterials, setCompartmentMaterials] = useState<CompartmentMaterial[]>([]);
+  const [compartmentMaterialsLoading, setCompartmentMaterialsLoading] = useState(false);
+  const compartmentPrintRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchCabinets();
@@ -154,12 +169,6 @@ const Cabinets: React.FC = () => {
     }
   };
 
-  const handleAddCompartment = () => {
-    setEditingCompartment(null);
-    setCompartmentForm({ name: '', description: '' });
-    setCompartmentError(null);
-  };
-
   const handleEditCompartment = (comp: Compartment) => {
     setEditingCompartment(comp);
     setCompartmentForm({ name: comp.name, description: comp.description || '' });
@@ -205,6 +214,48 @@ const Cabinets: React.FC = () => {
       }
     }
   };
+
+  // ==================== FACH-QR-CODE ====================
+  
+  const handleShowCompartmentQR = async (comp: Compartment) => {
+    setSelectedCompartment(comp);
+    setCompartmentMaterialsLoading(true);
+    
+    // QR-Code generieren mit Fach-Daten
+    const qrData = JSON.stringify({
+      type: 'COMPARTMENT',
+      cabinetId: compartmentCabinet.id,
+      compartmentId: comp.id,
+      cabinetName: compartmentCabinet.name,
+      compartmentName: comp.name,
+    });
+    
+    try {
+      const url = await QRCode.toDataURL(qrData, {
+        width: 150,
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      setCompartmentQrCodeUrl(url);
+      
+      // Materialien des Fachs laden
+      const response = await cabinetAPI.getCompartmentMaterials(compartmentCabinet.id, comp.id);
+      setCompartmentMaterials(response.data.materials || []);
+    } catch (error) {
+      console.error('Fehler beim Generieren des QR-Codes:', error);
+      setCompartmentMaterials([]);
+    } finally {
+      setCompartmentMaterialsLoading(false);
+      setCompartmentQrDialogOpen(true);
+    }
+  };
+
+  const handlePrintCompartment = useReactToPrint({
+    contentRef: compartmentPrintRef,
+  });
 
   const handleShowQR = async (cabinet: any) => {
     setSelectedCabinet(cabinet);
@@ -475,6 +526,9 @@ const Cabinets: React.FC = () => {
                       secondary={comp.description || 'Keine Beschreibung'}
                     />
                     <ListItemSecondaryAction>
+                      <IconButton size="small" onClick={() => handleShowCompartmentQR(comp)} color="primary" title="QR-Code drucken">
+                        <QrCodeIcon fontSize="small" />
+                      </IconButton>
                       <IconButton size="small" onClick={() => handleEditCompartment(comp)}>
                         <EditIcon fontSize="small" />
                       </IconButton>
@@ -495,6 +549,126 @@ const Cabinets: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCompartmentDialogOpen(false)}>Schließen</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Fach-QR-Code Druck Dialog */}
+      <Dialog 
+        open={compartmentQrDialogOpen} 
+        onClose={() => setCompartmentQrDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Fach-Etikett drucken: {selectedCompartment?.name}
+        </DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" alignItems="center" gap={2} py={2}>
+            {/* Druckbare Etikette - Kompaktes Format für Schrankschilder */}
+            <div 
+              ref={compartmentPrintRef} 
+              style={{ 
+                backgroundColor: 'white',
+                border: '2px solid #333',
+                borderRadius: '4px',
+                padding: '8px',
+                width: '80mm',
+                minHeight: '50mm',
+                fontFamily: 'Arial, sans-serif',
+              }}
+            >
+              {/* Header mit Schrank/Fach-Info */}
+              <div style={{ 
+                borderBottom: '1px solid #ccc', 
+                paddingBottom: '4px', 
+                marginBottom: '4px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '2px' }}>
+                    {compartmentCabinet?.name}
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1976d2' }}>
+                    {selectedCompartment?.name}
+                  </div>
+                  {compartmentCabinet?.location && (
+                    <div style={{ fontSize: '10px', color: '#666' }}>
+                      {compartmentCabinet.location}
+                    </div>
+                  )}
+                </div>
+                {compartmentQrCodeUrl && (
+                  <img 
+                    src={compartmentQrCodeUrl} 
+                    alt="QR Code" 
+                    style={{ width: '25mm', height: '25mm' }} 
+                  />
+                )}
+              </div>
+              
+              {/* Materialien-Liste */}
+              {compartmentMaterialsLoading ? (
+                <div style={{ textAlign: 'center', padding: '10px' }}>
+                  <CircularProgress size={20} />
+                </div>
+              ) : compartmentMaterials.length === 0 ? (
+                <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', padding: '10px' }}>
+                  Keine Materialien in diesem Fach
+                </div>
+              ) : (
+                <table style={{ width: '100%', fontSize: '9px', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #ddd' }}>
+                      <th style={{ textAlign: 'left', padding: '2px', fontWeight: 'bold' }}>Material</th>
+                      <th style={{ textAlign: 'right', padding: '2px', fontWeight: 'bold', width: '40px' }}>Bestand</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {compartmentMaterials.map((mat, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px dotted #eee' }}>
+                        <td style={{ padding: '2px' }}>
+                          {mat.name}
+                          {mat.size && <span style={{ color: '#666' }}> ({mat.size})</span>}
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '2px', fontWeight: 'bold' }}>
+                          {mat.total_stock}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              
+              {/* Footer mit IDs */}
+              <div style={{ 
+                marginTop: '4px', 
+                paddingTop: '4px', 
+                borderTop: '1px solid #eee',
+                fontSize: '8px', 
+                color: '#999',
+                textAlign: 'center',
+              }}>
+                Schrank-ID: {compartmentCabinet?.id} | Fach-ID: {selectedCompartment?.id}
+              </div>
+            </div>
+            
+            <Typography variant="caption" color="text.secondary">
+              Das Etikett ist für das Format 80mm x 50mm optimiert
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCompartmentQrDialogOpen(false)}>Schließen</Button>
+          <Button 
+            onClick={handlePrintCompartment} 
+            variant="contained" 
+            startIcon={<PrintIcon />}
+            disabled={compartmentMaterialsLoading}
+          >
+            Drucken
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

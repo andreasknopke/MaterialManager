@@ -79,9 +79,9 @@ const MaterialForm: React.FC = () => {
   const [gs1Data, setGs1Data] = useState<GS1Data | null>(null);
   const [gs1Warning, setGs1Warning] = useState<string | null>(null);
 
-  // Kategorie-QR-Code Status
-  const [categoryQrInput, setCategoryQrInput] = useState<string>('');
-  const [categoryQrData, setCategoryQrData] = useState<any>(null);
+  // Fach-QR-Code Status
+  const [compartmentQrInput, setCompartmentQrInput] = useState<string>('');
+  const [compartmentQrData, setCompartmentQrData] = useState<any>(null);
 
   const [formData, setFormData] = useState<MaterialFormData>({
     name: '',
@@ -310,11 +310,11 @@ const MaterialForm: React.FC = () => {
     setGs1Warning(null);
   };
 
-  // Kategorie-QR-Code Handler
-  const handleCategoryQrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Fach-QR-Code Handler
+  const handleCompartmentQrChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value;
-    setCategoryQrInput(input);
-    setCategoryQrData(null);
+    setCompartmentQrInput(input);
+    setCompartmentQrData(null);
 
     if (!input) return;
 
@@ -322,40 +322,41 @@ const MaterialForm: React.FC = () => {
       // Versuche JSON zu parsen
       const parsed = JSON.parse(input);
       
-      // Prüfe ob es ein Kategorie-QR-Code ist
-      if (parsed.type === 'CATEGORY' && parsed.id) {
-        setCategoryQrData(parsed);
+      // Prüfe ob es ein Fach-QR-Code ist
+      if (parsed.type === 'COMPARTMENT' && parsed.cabinetId && parsed.compartmentId) {
+        setCompartmentQrData(parsed);
         
-        // Formular-Updates vorbereiten
-        const updates: Partial<MaterialFormData> = {};
+        // Schrank und Fach setzen
+        const cabinetId = parsed.cabinetId;
+        const compartmentId = parsed.compartmentId;
         
-        // Kategorie setzen
-        if (parsed.id) {
-          updates.category_id = parsed.id;
+        // Erst Schrank setzen, dann Fächer laden
+        setFormData(prev => ({ ...prev, cabinet_id: cabinetId }));
+        
+        // Fächer für diesen Schrank laden
+        try {
+          const response = await cabinetAPI.getCompartments(cabinetId);
+          const loadedCompartments = response.data || [];
+          setCompartments(loadedCompartments);
+          
+          // Fach setzen
+          setFormData(prev => ({ ...prev, cabinet_id: cabinetId, compartment_id: compartmentId }));
+          
+          setSuccess(`Schrank "${parsed.cabinetName}" und Fach "${parsed.compartmentName}" übernommen!`);
+          setTimeout(() => setSuccess(null), 4000);
+        } catch (err) {
+          console.error('Fehler beim Laden der Fächer:', err);
+          setError('Fehler beim Laden der Fächer für diesen Schrank');
         }
-        
-        // Schrank setzen wenn vorhanden
-        if (parsed.cabinet?.id) {
-          updates.cabinet_id = parsed.cabinet.id;
-        }
-        
-        // Mindestbestand aus Kategorie übernehmen wenn vorhanden
-        if (parsed.min_quantity !== undefined && parsed.min_quantity > 0) {
-          updates.min_stock = parsed.min_quantity;
-        }
-        
-        setFormData(prev => ({ ...prev, ...updates }));
-        setSuccess(`Kategorie "${parsed.name}" übernommen!${parsed.cabinet ? ` Schrank: ${parsed.cabinet.name}` : ''}`);
-        setTimeout(() => setSuccess(null), 4000);
       }
     } catch {
       // Kein gültiges JSON - ignorieren
     }
   };
 
-  const clearCategoryQrData = () => {
-    setCategoryQrInput('');
-    setCategoryQrData(null);
+  const clearCompartmentQrData = () => {
+    setCompartmentQrInput('');
+    setCompartmentQrData(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -440,27 +441,27 @@ const MaterialForm: React.FC = () => {
       <Paper sx={{ p: { xs: 2, sm: 3 }, mt: { xs: 2, sm: 3 } }}>
         <form onSubmit={handleSubmit}>
           <Grid container spacing={{ xs: 2, sm: 3 }}>
-            {/* Kategorie-QR-Code Eingabe */}
+            {/* Fach-QR-Code Eingabe */}
             <Grid item xs={12}>
               <Typography variant="h6" gutterBottom>
-                Kategorie-QR-Code Scanner
+                Fach-QR-Code Scanner
               </Typography>
               <TextField
                 fullWidth
-                label="Kategorie-QR-Code"
-                value={categoryQrInput}
-                onChange={handleCategoryQrChange}
-                placeholder="Scannen Sie einen Kategorie-QR-Code vom Schrankschild"
+                label="Fach-QR-Code"
+                value={compartmentQrInput}
+                onChange={handleCompartmentQrChange}
+                placeholder="Scannen Sie einen Fach-QR-Code vom Schranketikett"
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
                       <QrCodeScannerIcon color="secondary" />
                     </InputAdornment>
                   ),
-                  endAdornment: categoryQrInput && (
+                  endAdornment: compartmentQrInput && (
                     <InputAdornment position="end">
-                      <Tooltip title="Kategorie-Daten löschen">
-                        <IconButton onClick={clearCategoryQrData} size="small">
+                      <Tooltip title="Fach-Daten löschen">
+                        <IconButton onClick={clearCompartmentQrData} size="small">
                           <ClearIcon />
                         </IconButton>
                       </Tooltip>
@@ -468,15 +469,13 @@ const MaterialForm: React.FC = () => {
                   ),
                 }}
               />
-              {categoryQrData && (
+              {compartmentQrData && (
                 <Alert severity="success" sx={{ mt: 1 }}>
                   <Typography variant="body2">
-                    <strong>✅ Kategorie-Daten übernommen:</strong>
+                    <strong>✅ Fach-Daten übernommen:</strong>
                   </Typography>
-                  <Typography variant="body2">• Kategorie: {categoryQrData.name}</Typography>
-                  {categoryQrData.cabinet && <Typography variant="body2">• Schrank: {categoryQrData.cabinet.name}</Typography>}
-                  {categoryQrData.ops_code && <Typography variant="body2">• OPS-Code: {categoryQrData.ops_code}</Typography>}
-                  {categoryQrData.zusatzentgelt && <Typography variant="body2">• Zusatzentgelt: {categoryQrData.zusatzentgelt}</Typography>}
+                  <Typography variant="body2">• Schrank: {compartmentQrData.cabinetName}</Typography>
+                  <Typography variant="body2">• Fach: {compartmentQrData.compartmentName}</Typography>
                 </Alert>
               )}
             </Grid>

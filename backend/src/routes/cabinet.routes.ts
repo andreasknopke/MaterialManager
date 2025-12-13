@@ -385,4 +385,58 @@ router.delete('/:cabinetId/compartments/:compartmentId', async (req: Request, re
   }
 });
 
+// GET Materialien eines Fachs (für QR-Code-Ausdruck)
+router.get('/:cabinetId/compartments/:compartmentId/materials', async (req: Request, res: Response) => {
+  try {
+    // Prüfe Zugriff auf den Schrank
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
+        [req.params.cabinetId, req.user.departmentId]
+      );
+      if (cabinetCheck.length === 0) {
+        return res.status(403).json({ error: 'Schrank nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
+    // Hole Fach-Info
+    const [compartmentRows] = await pool.query<RowDataPacket[]>(
+      `SELECT c.*, cab.name AS cabinet_name, cab.location AS cabinet_location
+       FROM compartments c
+       JOIN cabinets cab ON c.cabinet_id = cab.id
+       WHERE c.id = ? AND c.cabinet_id = ?`,
+      [req.params.compartmentId, req.params.cabinetId]
+    );
+    
+    if (compartmentRows.length === 0) {
+      return res.status(404).json({ error: 'Fach nicht gefunden' });
+    }
+    
+    // Hole Materialien im Fach (gruppiert nach Name um Mehrfachnennung zu vermeiden)
+    const [materials] = await pool.query<RowDataPacket[]>(
+      `SELECT 
+         m.name,
+         m.article_number,
+         m.size,
+         cat.name AS category_name,
+         SUM(m.current_stock) AS total_stock,
+         COUNT(*) AS item_count
+       FROM materials m
+       LEFT JOIN categories cat ON m.category_id = cat.id
+       WHERE m.compartment_id = ? AND m.active = TRUE
+       GROUP BY m.name, m.article_number, m.size, cat.name
+       ORDER BY cat.name, m.name`,
+      [req.params.compartmentId]
+    );
+    
+    res.json({
+      compartment: compartmentRows[0],
+      materials
+    });
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Fach-Materialien:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 export default router;
