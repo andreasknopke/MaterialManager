@@ -82,6 +82,12 @@ const BarcodeScanner: React.FC = () => {
   
   // Scanner-Modi: 'barcode' oder 'ocr'
   const [scanMode, setScanMode] = useState<'barcode' | 'ocr'>('barcode');
+  const scanModeRef = useRef<'barcode' | 'ocr'>('barcode');
+  
+  // Update ref when state changes
+  useEffect(() => {
+    scanModeRef.current = scanMode;
+  }, [scanMode]);
   
   // OCR-spezifische States
   const [ocrFrozen, setOcrFrozen] = useState(false);
@@ -107,11 +113,10 @@ const BarcodeScanner: React.FC = () => {
 
   // Scan-Linie Animation
   const scanLineAnimationRef = useRef<number | null>(null);
-  const scanLinePositionRef = useRef(0);
-  const scanLineDirectionRef = useRef(1);
+  const [scanLineColor, setScanLineColor] = useState<'red' | 'green'>('red');
 
-  // Zeichne Scan-Bereich Overlay
-  const drawScanOverlay = useCallback(() => {
+  // Zeichne Scan-Bereich Overlay (statische Linie)
+  const drawScanOverlay = useCallback((forceGreen: boolean = false) => {
     const canvas = overlayCanvasRef.current;
     const video = videoRef.current;
     if (!canvas || !video || !cameraOpen || scanMode !== 'barcode') return;
@@ -130,7 +135,7 @@ const BarcodeScanner: React.FC = () => {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(0, 0, displayWidth, displayHeight);
 
-    // Scan-Bereich berechnen (80% der Breite, 30% der Höhe, zentriert)
+    // Scan-Bereich berechnen (85% der Breite, 25% der Höhe, zentriert)
     const scanAreaWidth = displayWidth * 0.85;
     const scanAreaHeight = displayHeight * 0.25;
     const scanAreaX = (displayWidth - scanAreaWidth) / 2;
@@ -177,45 +182,29 @@ const BarcodeScanner: React.FC = () => {
     ctx.lineTo(scanAreaX + scanAreaWidth, scanAreaY + scanAreaHeight - cornerLength);
     ctx.stroke();
 
-    // Animierte Scan-Linie
-    scanLinePositionRef.current += scanLineDirectionRef.current * 3;
-    if (scanLinePositionRef.current >= scanAreaHeight - 5) {
-      scanLineDirectionRef.current = -1;
-    } else if (scanLinePositionRef.current <= 5) {
-      scanLineDirectionRef.current = 1;
-    }
-
-    const lineY = scanAreaY + scanLinePositionRef.current;
+    // Statische Scan-Linie in der Mitte
+    const lineY = scanAreaY + scanAreaHeight / 2;
+    const lineColor = forceGreen || scanLineColor === 'green' ? '#00ff00' : '#ff0000';
     
     // Scan-Linie mit Farbverlauf
     const gradient = ctx.createLinearGradient(scanAreaX, lineY, scanAreaX + scanAreaWidth, lineY);
-    gradient.addColorStop(0, 'rgba(255, 0, 0, 0)');
-    gradient.addColorStop(0.1, 'rgba(255, 0, 0, 1)');
-    gradient.addColorStop(0.5, 'rgba(255, 50, 50, 1)');
-    gradient.addColorStop(0.9, 'rgba(255, 0, 0, 1)');
-    gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    gradient.addColorStop(0.05, lineColor);
+    gradient.addColorStop(0.95, lineColor);
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
     ctx.strokeStyle = gradient;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(scanAreaX + 10, lineY);
-    ctx.lineTo(scanAreaX + scanAreaWidth - 10, lineY);
+    ctx.moveTo(scanAreaX, lineY);
+    ctx.lineTo(scanAreaX + scanAreaWidth, lineY);
     ctx.stroke();
 
-    // Punkte auf der Linie für visuellen Effekt
-    ctx.fillStyle = '#ff0000';
-    for (let i = 0; i < 5; i++) {
-      const dotX = scanAreaX + (scanAreaWidth / 6) * (i + 1);
-      ctx.beginPath();
-      ctx.arc(dotX, lineY, 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Animation fortsetzen
+    // Kontinuierlich neu zeichnen für flüssige Darstellung
     if (cameraOpen && scanMode === 'barcode' && !ocrFrozen) {
-      scanLineAnimationRef.current = requestAnimationFrame(drawScanOverlay);
+      scanLineAnimationRef.current = requestAnimationFrame(() => drawScanOverlay(false));
     }
-  }, [cameraOpen, scanMode, ocrFrozen]);
+  }, [cameraOpen, scanMode, ocrFrozen, scanLineColor]);
 
   // Auto-open camera if navigated from dashboard or scanning cabinet (nur wenn Kamera aktiviert)
   useEffect(() => {
@@ -293,11 +282,9 @@ const BarcodeScanner: React.FC = () => {
             updateDimensions();
             
             // Overlay-Animation starten (nur im Barcode-Modus)
-            if (scanMode === 'barcode') {
+            if (scanModeRef.current === 'barcode') {
               setTimeout(() => {
-                scanLinePositionRef.current = 0;
-                scanLineDirectionRef.current = 1;
-                drawScanOverlay();
+                drawScanOverlay(false);
               }, 100);
             }
             
@@ -327,7 +314,7 @@ const BarcodeScanner: React.FC = () => {
             
             // Kontinuierliches Scanning direkt vom Stream
             const scanLoop = async () => {
-              while (scanLoopRef.current && videoRef.current && scanMode === 'barcode') {
+              while (scanLoopRef.current && videoRef.current && scanModeRef.current === 'barcode') {
                 try {
                   const result = await codeReader.decodeOnce(videoRef.current);
                   
@@ -335,6 +322,13 @@ const BarcodeScanner: React.FC = () => {
                     const scannedCode = result.getText();
                     console.log('✓ Barcode gescannt:', scannedCode);
                     console.log('Format:', result.getBarcodeFormat());
+                    
+                    // Grüne Linie anzeigen bei Erkennung
+                    setScanLineColor('green');
+                    drawScanOverlay(true);
+                    
+                    // Nach 500ms Dialog schließen und verarbeiten
+                    await new Promise(resolve => setTimeout(resolve, 500));
                     
                     // Animation stoppen
                     if (scanLineAnimationRef.current) {
@@ -353,6 +347,7 @@ const BarcodeScanner: React.FC = () => {
                         if (cabinetData.type === 'CABINET') {
                           console.log('Cabinet QR code detected:', cabinetData);
                           setCameraOpen(false);
+                          setScanLineColor('red');
                           // Navigate back with cabinet data
                           navigate(state.returnTo || '/materials/new', {
                             state: {
@@ -369,6 +364,7 @@ const BarcodeScanner: React.FC = () => {
                     
                     setBarcode(scannedCode);
                     setCameraOpen(false);
+                    setScanLineColor('red');
                     setError('');
                     setSuccess('Barcode erfolgreich gescannt');
                     setTimeout(() => setSuccess(''), 2000);
@@ -391,7 +387,7 @@ const BarcodeScanner: React.FC = () => {
             };
             
             // Nur im Barcode-Modus automatisch scannen
-            if (scanMode === 'barcode') {
+            if (scanModeRef.current === 'barcode') {
               scanLoop();
             }
           }
@@ -432,19 +428,18 @@ const BarcodeScanner: React.FC = () => {
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [cameraOpen, scanMode, drawScanOverlay, location.state, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraOpen]); // Nur bei cameraOpen neu starten, NICHT bei scanMode-Wechsel
 
   // Effect für Modus-Wechsel während Kamera offen
   useEffect(() => {
     if (!cameraOpen) return;
     
     if (scanMode === 'barcode' && !ocrFrozen) {
-      // Overlay-Animation starten
-      scanLinePositionRef.current = 0;
-      scanLineDirectionRef.current = 1;
-      drawScanOverlay();
+      // Overlay starten
+      drawScanOverlay(false);
     } else {
-      // Animation stoppen im OCR-Modus
+      // Animation stoppen im OCR-Modus oder wenn frozen
       if (scanLineAnimationRef.current) {
         cancelAnimationFrame(scanLineAnimationRef.current);
         scanLineAnimationRef.current = null;
@@ -459,8 +454,20 @@ const BarcodeScanner: React.FC = () => {
       return;
     }
     
+    console.log('freezeForOCR: Start');
+    
+    // Video-Stream pausieren
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.enabled = false);
+    }
+    
     // Canvas erstellen und aktuelles Video-Frame erfassen
-    const canvas = canvasRef.current || document.createElement('canvas');
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      setError('Canvas nicht verfügbar');
+      return;
+    }
+    
     const video = videoRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -475,17 +482,23 @@ const BarcodeScanner: React.FC = () => {
     
     // Bild als Data-URL speichern
     const imageData = canvas.toDataURL('image/png');
-    setFrozenImageData(imageData);
-    setOcrFrozen(true);
+    console.log('freezeForOCR: Image captured, size:', imageData.length);
     
-    // Dimensionen für Skalierung speichern
-    setVideoDimensions({
+    // Dimensionen für Skalierung speichern BEVOR ocrFrozen gesetzt wird
+    const dims = {
       width: video.videoWidth,
       height: video.videoHeight,
       displayWidth: video.clientWidth,
       displayHeight: video.clientHeight,
-    });
+    };
+    console.log('freezeForOCR: Dimensions:', dims);
+    setVideoDimensions(dims);
     
+    // Jetzt erst frozen setzen - damit wird das Bild angezeigt
+    setFrozenImageData(imageData);
+    setOcrFrozen(true);
+    
+    console.log('freezeForOCR: Starting OCR analysis...');
     // OCR starten
     await performOCRAnalysis(canvas);
   };
@@ -617,10 +630,16 @@ const BarcodeScanner: React.FC = () => {
 
   // OCR zurücksetzen und neu aufnehmen
   const resetOcr = () => {
+    console.log('resetOcr called');
     setOcrFrozen(false);
     setOcrTextBlocks([]);
     setSelectedOcrText('');
     setFrozenImageData('');
+    
+    // Video-Stream wieder aktivieren
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.enabled = true);
+    }
   };
 
   // Legacy OCR-Funktion für automatische Barcode-Erkennung
