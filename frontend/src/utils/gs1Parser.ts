@@ -290,14 +290,29 @@ export function parseGS1Barcode(barcode: string): GS1Data {
       }
     } else {
       // Variable Länge - bis zum GS-Zeichen, nächsten AI oder Ende
-      console.log(`Variable Länge AI ab Position ${position}`);
+      console.log(`Variable Länge AI ${ai} ab Position ${position}`);
+      
+      // SPEZIALFALL: AI 21 (Serial Number) ist typischerweise das LETZTE Feld
+      // Ohne FNC1-Trenner würden wir fälschlich AIs innerhalb der Seriennummer finden
+      // (z.B. "522191006" enthält "21" und "10" als Substrings)
+      // Daher: Bei AI 21 nur bei echtem GS-Zeichen stoppen, sonst bis zum Ende lesen
+      const isSerialAI = (ai === '21');
+      
       let endPos = position;
       while (endPos < normalized.length) {
-        // GS-Zeichen (FNC1) beendet das variable Feld
+        // GS-Zeichen (FNC1) beendet das variable Feld - immer respektieren
         if (normalized.charAt(endPos) === '\x1D') {
           console.log(`GS-Zeichen gefunden an Position ${endPos}`);
           break;
         }
+        
+        // Bei Serial Number (AI 21): Keine AI-Suche innerhalb der Daten
+        // Serial ist fast immer das letzte Feld im GS1-Barcode
+        if (isSerialAI) {
+          endPos++;
+          continue;
+        }
+        
         // Prüfe ob an dieser Position ein neuer AI beginnt
         let foundNextAI = false;
         for (let len = 2; len <= 4; len++) {
