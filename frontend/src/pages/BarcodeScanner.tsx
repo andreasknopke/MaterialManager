@@ -46,18 +46,6 @@ import Tesseract from 'tesseract.js';
 import { getScannerSettings } from './Admin';
 import { getInterventionSession, addInterventionItem } from './Dashboard';
 
-// OCR erkannter Textblock Interface
-interface OCRTextBlock {
-  text: string;
-  bbox: {
-    x0: number;
-    y0: number;
-    x1: number;
-    y1: number;
-  };
-  confidence: number;
-}
-
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -91,9 +79,14 @@ const BarcodeScanner: React.FC = () => {
   
   // OCR-spezifische States
   const [ocrFrozen, setOcrFrozen] = useState(false);
-  const [ocrTextBlocks, setOcrTextBlocks] = useState<OCRTextBlock[]>([]);
   const [selectedOcrText, setSelectedOcrText] = useState<string>('');
   const [frozenImageData, setFrozenImageData] = useState<string>('');
+  
+  // Rechteck-Auswahl für OCR
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [selectionRect, setSelectionRect] = useState<{x: number, y: number, width: number, height: number} | null>(null);
+  const [startPoint, setStartPoint] = useState<{x: number, y: number} | null>(null);
+  const frozenImageRef = useRef<HTMLImageElement>(null);
   
   // Video-Dimensionen für Overlay-Skalierung
   const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0, displayWidth: 0, displayHeight: 0 });
@@ -230,7 +223,7 @@ const BarcodeScanner: React.FC = () => {
 
     // OCR-States zurücksetzen beim Öffnen
     setOcrFrozen(false);
-    setOcrTextBlocks([]);
+    setSelectionRect(null);
     setSelectedOcrText('');
     setFrozenImageData('');
 
@@ -480,24 +473,113 @@ const BarcodeScanner: React.FC = () => {
     // Jetzt erst frozen setzen - damit wird das Bild angezeigt
     setFrozenImageData(imageData);
     setOcrFrozen(true);
+    setSelectionRect(null);
     
-    console.log('freezeForOCR: Starting OCR analysis...');
-    // OCR starten
-    await performOCRAnalysis(canvas);
+    // Hinweis anzeigen statt automatisch OCR zu starten
+    setSuccess('Ziehen Sie ein Rechteck um den Text, den Sie erkennen möchten');
   };
 
-  // OCR-Analyse durchführen und Textblöcke extrahieren
-  const performOCRAnalysis = async (canvas: HTMLCanvasElement) => {
+  // Maus/Touch-Events für Rechteck-Zeichnung
+  const getEventPosition = (e: React.MouseEvent | React.TouchEvent, rect: DOMRect) => {
+    if ('touches' in e) {
+      const touch = e.touches[0];
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
+      };
+    } else {
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+    }
+  };
+
+  const handleSelectionStart = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!ocrFrozen || ocrLoading) return;
+    
+    const container = e.currentTarget.getBoundingClientRect();
+    const pos = getEventPosition(e, container);
+    
+    setIsDrawing(true);
+    setStartPoint(pos);
+    setSelectionRect({ x: pos.x, y: pos.y, width: 0, height: 0 });
+    setSelectedOcrText('');
+    setSuccess('');
+  };
+
+  const handleSelectionMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawing || !startPoint) return;
+    
+    const container = e.currentTarget.getBoundingClientRect();
+    const pos = getEventPosition(e, container);
+    
+    const x = Math.min(startPoint.x, pos.x);
+    const y = Math.min(startPoint.y, pos.y);
+    const width = Math.abs(pos.x - startPoint.x);
+    const height = Math.abs(pos.y - startPoint.y);
+    
+    setSelectionRect({ x, y, width, height });
+  };
+
+  const handleSelectionEnd = async () => {
+    if (!isDrawing || !selectionRect || selectionRect.width < 10 || selectionRect.height < 10) {
+      setIsDrawing(false);
+      setStartPoint(null);
+      return;
+    }
+    
+    setIsDrawing(false);
+    setStartPoint(null);
+    
+    // OCR auf den ausgewählten Bereich anwenden
+    await performOCROnSelection();
+  };
+
+  // OCR nur auf den ausgewählten Bereich anwenden
+  const performOCROnSelection = async () => {
+    if (!selectionRect || !frozenImageRef.current) return;
+    
     setOcrLoading(true);
     setOcrProgress(0);
     setError('');
-    setOcrTextBlocks([]);
     
     try {
-      console.log('performOCRAnalysis: Starting with canvas', canvas.width, 'x', canvas.height);
+      const img = frozenImageRef.current;
       
-      // Worker erstellen für Zugriff auf Blöcke mit Bounding-Boxes
-      const worker = await Tesseract.createWorker('eng', undefined, {
+      // Skalierung berechnen: Anzeige -> Originalbild
+      const scaleX = img.naturalWidth / img.clientWidth;
+      const scaleY = img.naturalHeight / img.clientHeight;
+      
+      // Ausgewählten Bereich im Original-Koordinatensystem
+      const cropX = Math.round(selectionRect.x * scaleX);
+      const cropY = Math.round(selectionRect.y * scaleY);
+      const cropWidth = Math.round(selectionRect.width * scaleX);
+      const cropHeight = Math.round(selectionRect.height * scaleY);
+      
+      console.log('OCR Selection:', { 
+        display: selectionRect, 
+        original: { cropX, cropY, cropWidth, cropHeight },
+        scale: { scaleX, scaleY }
+      });
+      
+      // Canvas für den Ausschnitt erstellen
+      const canvas = document.createElement('canvas');
+      canvas.width = cropWidth;
+      canvas.height = cropHeight;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        throw new Error('Canvas-Context nicht verfügbar');
+      }
+      
+      // Ausschnitt zeichnen
+      ctx.drawImage(img, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+      
+      console.log('OCR Canvas erstellt:', cropWidth, 'x', cropHeight);
+      
+      // OCR durchführen
+      const worker = await Tesseract.createWorker('eng+deu', undefined, {
         logger: (m) => {
           if (m.status === 'recognizing text') {
             setOcrProgress(Math.round(m.progress * 100));
@@ -505,75 +587,23 @@ const BarcodeScanner: React.FC = () => {
         },
       });
       
-      // OCR mit Blöcke-Ausgabe
-      const result = await worker.recognize(canvas, {}, { blocks: true });
-      
-      // Worker beenden
+      const result = await worker.recognize(canvas);
       await worker.terminate();
       
-      console.log('OCR Ergebnis vollständig:', JSON.stringify(result.data, null, 2).substring(0, 2000));
-      console.log('OCR Text:', result.data.text);
-      console.log('OCR Blocks:', result.data.blocks?.length || 0);
+      const recognizedText = result.data.text.trim();
+      console.log('OCR Ergebnis:', recognizedText, 'Confidence:', result.data.confidence);
       
-      // Textblöcke (Wörter) mit Bounding-Boxes extrahieren
-      const extractedBlocks: OCRTextBlock[] = [];
-      
-      // Tesseract.js v6 Struktur: blocks[].paragraphs[].lines[].words[]
-      if (result.data.blocks && result.data.blocks.length > 0) {
-        console.log('Verarbeite', result.data.blocks.length, 'Blöcke');
-        
-        for (const block of result.data.blocks) {
-          console.log('Block:', block.text?.substring(0, 50), 'confidence:', block.confidence);
-          
-          // Durch Paragraphen, Zeilen und Wörter gehen
-          if (block.paragraphs) {
-            for (const paragraph of block.paragraphs) {
-              if (paragraph.lines) {
-                for (const line of paragraph.lines) {
-                  // Zeile hinzufügen - niedrigere Schwelle
-                  if (line.confidence > 20 && line.text && line.text.trim().length > 1) {
-                    const lineText = line.text.trim();
-                    console.log('Zeile gefunden:', lineText, 'bbox:', line.bbox);
-                    extractedBlocks.push({
-                      text: lineText,
-                      bbox: line.bbox,
-                      confidence: line.confidence,
-                    });
-                  }
-                }
-              }
-            }
-          }
-        }
+      if (recognizedText) {
+        setSelectedOcrText(recognizedText);
+        setSuccess(`Text erkannt: "${recognizedText.substring(0, 50)}${recognizedText.length > 50 ? '...' : ''}"`);
       } else {
-        console.log('Keine Blöcke in OCR-Ergebnis gefunden');
-      }
-      
-      console.log('Erkannte Textblöcke insgesamt:', extractedBlocks.length);
-      
-      // Blöcke setzen
-      setOcrTextBlocks(extractedBlocks);
-      
-      if (extractedBlocks.length === 0) {
-        setError('Keine Texte erkannt. Versuchen Sie es mit besserer Beleuchtung.');
-      } else {
-        console.log('Setze', extractedBlocks.length, 'Textblöcke für Anzeige');
+        setError('Kein Text im ausgewählten Bereich erkannt. Versuchen Sie einen anderen Bereich.');
       }
     } catch (err: any) {
       console.error('OCR Fehler:', err);
       setError('OCR-Erkennung fehlgeschlagen: ' + err.message);
     } finally {
       setOcrLoading(false);
-    }
-  };
-
-  // OCR-Textblock auswählen
-  const handleOcrTextSelect = (block: OCRTextBlock) => {
-    // Text zur aktuellen Auswahl hinzufügen oder ersetzen
-    if (selectedOcrText) {
-      setSelectedOcrText(selectedOcrText + ' ' + block.text);
-    } else {
-      setSelectedOcrText(block.text);
     }
   };
 
@@ -584,13 +614,13 @@ const BarcodeScanner: React.FC = () => {
       return;
     }
     
-    // Zahlen extrahieren für Barcode
-    const cleanedText = selectedOcrText.replace(/\s/g, '');
+    // Text bereinigen (Zeilenumbrüche und mehrfache Leerzeichen entfernen)
+    const cleanedText = selectedOcrText.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
     setBarcode(cleanedText);
     setCameraOpen(false);
     setSuccess('Text übernommen');
     setOcrFrozen(false);
-    setOcrTextBlocks([]);
+    setSelectionRect(null);
     setSelectedOcrText('');
     
     // Automatisch verarbeiten wenn es wie ein Barcode aussieht
@@ -603,7 +633,7 @@ const BarcodeScanner: React.FC = () => {
   const resetOcr = async () => {
     console.log('resetOcr called');
     setOcrFrozen(false);
-    setOcrTextBlocks([]);
+    setSelectionRect(null);
     setSelectedOcrText('');
     setFrozenImageData('');
     setOcrLoading(false);
@@ -1325,91 +1355,59 @@ const BarcodeScanner: React.FC = () => {
                   overflow: 'hidden',
                 }}
               >
-                {/* Container für Bild mit OCR-Overlays */}
+                {/* Container für Bild mit Rechteck-Auswahl */}
                 <Box
                   sx={{
                     position: 'relative',
                     width: '100%',
                     height: 'auto',
+                    cursor: ocrFrozen && !ocrLoading ? 'crosshair' : 'default',
+                    userSelect: 'none',
+                    touchAction: 'none',
                   }}
+                  onMouseDown={handleSelectionStart}
+                  onMouseMove={handleSelectionMove}
+                  onMouseUp={handleSelectionEnd}
+                  onMouseLeave={handleSelectionEnd}
+                  onTouchStart={handleSelectionStart}
+                  onTouchMove={handleSelectionMove}
+                  onTouchEnd={handleSelectionEnd}
                 >
                   <img 
+                    ref={frozenImageRef}
                     id="frozen-ocr-image"
                     src={frozenImageData} 
                     alt="Captured frame"
+                    draggable={false}
                     style={{
                       width: '100%',
                       height: 'auto',
                       maxHeight: '450px',
                       objectFit: 'contain',
                       display: 'block',
+                      pointerEvents: 'none',
                     }}
                     onLoad={(e) => {
-                      // Dimensionen nach Laden aktualisieren
                       const img = e.target as HTMLImageElement;
                       console.log('Frozen image loaded:', img.clientWidth, 'x', img.clientHeight, 'natural:', img.naturalWidth, 'x', img.naturalHeight);
-                      setVideoDimensions(prev => ({
-                        ...prev,
-                        displayWidth: img.clientWidth,
-                        displayHeight: img.clientHeight,
-                      }));
                     }}
                   />
                   
-                  {/* OCR-Textblock-Overlays */}
-                  {ocrTextBlocks.length > 0 && videoDimensions.width > 0 && (
+                  {/* Auswahl-Rechteck */}
+                  {selectionRect && selectionRect.width > 0 && selectionRect.height > 0 && (
                     <Box
                       sx={{
                         position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
+                        left: `${selectionRect.x}px`,
+                        top: `${selectionRect.y}px`,
+                        width: `${selectionRect.width}px`,
+                        height: `${selectionRect.height}px`,
+                        border: '3px solid #2196f3',
+                        backgroundColor: 'rgba(33, 150, 243, 0.2)',
                         pointerEvents: 'none',
+                        boxShadow: '0 0 10px rgba(33, 150, 243, 0.5)',
                       }}
-                    >
-                      {ocrTextBlocks.map((block, index) => {
-                        // Skalierung: Originalbild -> Anzeige
-                        const scaleX = videoDimensions.displayWidth / videoDimensions.width;
-                        const scaleY = videoDimensions.displayHeight / videoDimensions.height;
-                        
-                        const left = block.bbox.x0 * scaleX;
-                        const top = block.bbox.y0 * scaleY;
-                        const width = (block.bbox.x1 - block.bbox.x0) * scaleX;
-                        const height = (block.bbox.y1 - block.bbox.y0) * scaleY;
-                        
-                        console.log(`Block ${index}: "${block.text}" at (${left.toFixed(0)}, ${top.toFixed(0)}) ${width.toFixed(0)}x${height.toFixed(0)}`);
-                        
-                        return (
-                          <Box
-                            key={index}
-                            onClick={() => handleOcrTextSelect(block)}
-                            sx={{
-                              position: 'absolute',
-                              left: `${left}px`,
-                              top: `${top}px`,
-                              width: `${width}px`,
-                              height: `${height}px`,
-                              border: '2px solid',
-                              borderColor: selectedOcrText.includes(block.text) ? '#4caf50' : '#ffcc00',
-                              backgroundColor: selectedOcrText.includes(block.text) 
-                                ? 'rgba(76, 175, 80, 0.3)' 
-                                : 'rgba(255, 204, 0, 0.2)',
-                              cursor: 'pointer',
-                              pointerEvents: 'auto',
-                              transition: 'all 0.2s',
-                              '&:hover': {
-                                borderColor: '#fff',
-                                backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                              },
-                              borderRadius: '2px',
-                              minWidth: '20px',
-                              minHeight: '12px',
-                            }}
-                          />
-                        );
-                      })}
-                    </Box>
+                    />
                   )}
                 </Box>
               </Box>
@@ -1470,7 +1468,7 @@ const BarcodeScanner: React.FC = () => {
               </Typography>
             )}
             
-            {ocrFrozen && ocrTextBlocks.length > 0 && (
+            {ocrFrozen && (
               <Box>
                 <Typography 
                   variant="body2" 
@@ -1478,22 +1476,28 @@ const BarcodeScanner: React.FC = () => {
                   align="center"
                   gutterBottom
                 >
-                  Tippen Sie auf die gewünschten Texte, um sie auszuwählen
+                  {selectedOcrText 
+                    ? 'Text erkannt! Übernehmen oder neuen Bereich auswählen.'
+                    : 'Ziehen Sie ein Rechteck um den Text, den Sie erkennen möchten'}
                 </Typography>
                 
-                {/* Ausgewählter Text Anzeige */}
+                {/* Erkannter Text Anzeige */}
                 {selectedOcrText && (
                   <Box sx={{ mt: 2, p: 1.5, bgcolor: 'grey.100', borderRadius: 1 }}>
                     <Typography variant="caption" color="text.secondary">
-                      Ausgewählter Text:
+                      Erkannter Text:
                     </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-                      <Chip 
-                        label={selectedOcrText}
-                        color="primary"
-                        onDelete={() => setSelectedOcrText('')}
-                      />
-                    </Box>
+                    <Typography 
+                      variant="body1" 
+                      sx={{ 
+                        mt: 0.5, 
+                        fontFamily: 'monospace',
+                        wordBreak: 'break-all',
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      {selectedOcrText}
+                    </Typography>
                   </Box>
                 )}
               </Box>
