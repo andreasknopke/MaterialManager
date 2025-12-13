@@ -273,7 +273,8 @@ const MaterialForm: React.FC = () => {
     console.log('=== MaterialForm GS1 Input ===');
     console.log('Eingegebener Barcode:', barcode);
     console.log('Barcode Länge:', barcode.length);
-    console.log('Barcode Hex:', Array.from(barcode).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' '));
+    const hexDump = Array.from(barcode).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+    console.log('Barcode Hex:', hexDump);
     
     setFormData({ ...formData, gs1_barcode: barcode });
     setGs1Warning(null);
@@ -288,6 +289,18 @@ const MaterialForm: React.FC = () => {
     if (isValidGS1Barcode(barcode)) {
       const parsed = parseGS1Barcode(barcode);
       console.log('Parsed Result in MaterialForm:', parsed);
+      
+      // Debug-Log ans Backend senden
+      fetch('/api/debug/gs1-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          barcode,
+          hexDump,
+          parsedResult: parsed,
+          source: 'MaterialForm.handleGS1BarcodeChange'
+        })
+      }).catch(err => console.log('Debug log failed:', err));
       setGs1Data(parsed);
 
       // Auto-Fill Felder

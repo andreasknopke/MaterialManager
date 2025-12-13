@@ -74,6 +74,31 @@ app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// GS1 Debug Logging Endpoint
+app.post('/api/debug/gs1-log', (req: Request, res: Response) => {
+  const { barcode, hexDump, parsedResult, source } = req.body;
+  
+  console.log('\n========================================');
+  console.log('=== GS1 BARCODE DEBUG LOG ===');
+  console.log('========================================');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Source:', source || 'unknown');
+  console.log('----------------------------------------');
+  console.log('RAW BARCODE:');
+  console.log(barcode);
+  console.log('----------------------------------------');
+  console.log('BARCODE LÄNGE:', barcode?.length);
+  console.log('----------------------------------------');
+  console.log('HEX DUMP (jedes Zeichen):');
+  console.log(hexDump);
+  console.log('----------------------------------------');
+  console.log('PARSED RESULT:');
+  console.log(JSON.stringify(parsedResult, null, 2));
+  console.log('========================================\n');
+  
+  res.json({ received: true });
+});
+
 // Error Handling Middleware
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);
