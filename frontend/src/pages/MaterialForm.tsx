@@ -240,17 +240,19 @@ const MaterialForm: React.FC = () => {
   const handleChange = (field: keyof MaterialFormData) => (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    setFormData({ ...formData, [field]: e.target.value });
+    const value = e.target.value;
     
     // Wenn der Schrank gewechselt wird, Fächer neu laden und compartment_id zurücksetzen
     if (field === 'cabinet_id') {
-      const newCabinetId = e.target.value;
-      if (newCabinetId) {
-        fetchCompartments(Number(newCabinetId));
+      const cabinetId = value ? Number(value) : '';
+      if (value) {
+        fetchCompartments(Number(value));
       } else {
         setCompartments([]);
       }
-      setFormData(prev => ({ ...prev, [field]: e.target.value, compartment_id: '' }));
+      setFormData(prev => ({ ...prev, cabinet_id: cabinetId, compartment_id: '' }));
+    } else {
+      setFormData({ ...formData, [field]: value });
     }
   };
 
