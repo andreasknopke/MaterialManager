@@ -132,25 +132,38 @@ function parseGS1Date(gs1Date: string): string | null {
  * @returns Geparste GS1-Daten
  */
 export function parseGS1Barcode(barcode: string): GS1Data {
+  console.log('=== GS1 PARSER DEBUG START ===');
+  console.log('Input Barcode:', barcode);
+  console.log('Input Länge:', barcode?.length);
+  console.log('Input Hex:', barcode ? Array.from(barcode).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ') : 'null');
+  
   if (!barcode) {
+    console.log('Barcode ist leer/null');
     return { raw: barcode };
   }
 
   // Alle Leerzeichen entfernen (Scanner fügt manchmal Leerzeichen ein)
   let cleaned = barcode.replace(/\s+/g, '');
+  console.log('Nach Leerzeichen-Entfernung:', cleaned);
   
   // Wenn der Barcode Klammern enthält, parse ihn direkt mit Klammern als Feldgrenzen
   // Dies ist die zuverlässigste Methode, da die Klammern exakte Feldgrenzen definieren
   if (cleaned.includes('(')) {
+    console.log('Klammern-Format erkannt, nutze parseGS1WithParentheses');
     const result = parseGS1WithParentheses(cleaned);
     if (result) {
+      console.log('Klammern-Parse Ergebnis:', JSON.stringify(result, null, 2));
+      console.log('=== GS1 PARSER DEBUG END ===');
       return result;
     }
   }
+  console.log('Kein Klammern-Format, nutze Raw-Parser');
   
   // Fallback: Parse ohne Klammern (raw GS1 format)
   const result: GS1Data = { raw: barcode };
   let normalized = cleaned;
+  
+  console.log('Vor Normalisierung:', normalized);
   
   // FNC1-Zeichen als Feldtrennzeichen markieren (Group Separator)
   // GS1 verwendet FNC1 (\x1D, ASCII 29) oder ~ als Trennzeichen zwischen variablen Feldern
@@ -159,10 +172,12 @@ export function parseGS1Barcode(barcode: string): GS1Data {
   // z.B. "x1d0108714729158608..." statt dem echten ASCII 29 Zeichen
   // Entferne "x1d" am Anfang (GS1-Präfix) und ersetze innerhalb durch GS-Zeichen
   if (normalized.toLowerCase().startsWith('x1d')) {
+    console.log('x1d Präfix entfernt');
     normalized = normalized.substring(3);
   }
   // Auch \x1d als literale Zeichenkette (4 Zeichen) behandeln
   if (normalized.toLowerCase().startsWith('\\x1d')) {
+    console.log('\\x1d Präfix entfernt');
     normalized = normalized.substring(4);
   }
   // x1d innerhalb des Strings durch echtes GS-Zeichen ersetzen (case-insensitive)
@@ -174,6 +189,7 @@ export function parseGS1Barcode(barcode: string): GS1Data {
   
   // AIM Symbology Identifier entfernen (]C1, ]E0, ]d2 etc.)
   if (normalized.startsWith(']')) {
+    console.log('AIM Symbology Identifier entfernt:', normalized.substring(0, 3));
     // Entferne ]XX am Anfang (3 Zeichen)
     normalized = normalized.substring(3);
   }
@@ -181,9 +197,20 @@ export function parseGS1Barcode(barcode: string): GS1Data {
   // Alternative FNC1-Darstellungen durch echtes GS-Zeichen ersetzen
   normalized = normalized.replace(/~|␝/g, '\x1D');
   
+  console.log('Nach Normalisierung:', normalized);
+  console.log('Nach Normalisierung Hex:', Array.from(normalized).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' '));
+  console.log('Normalisiert Länge:', normalized.length);
+  
   let position = 0;
+  let iterationCount = 0;
+  
+  console.log('--- Starte AI-Parsing Loop ---');
   
   while (position < normalized.length) {
+    iterationCount++;
+    console.log(`\n--- Iteration ${iterationCount}, Position ${position} ---`);
+    console.log('Verbleibender String:', normalized.substring(position));
+    
     // Nächsten AI (2-4 Zeichen) suchen
     let ai: string | null = null;
     let aiLength = 0;
@@ -191,33 +218,82 @@ export function parseGS1Barcode(barcode: string): GS1Data {
     // Versuche 4-stelligen, dann 3-stelligen, dann 2-stelligen AI
     for (let len = 4; len >= 2; len--) {
       const testAI = normalized.substring(position, position + len);
+      console.log(`  Teste AI Länge ${len}: "${testAI}"`);
       if (AI_PATTERNS[testAI]) {
         ai = testAI;
         aiLength = len;
+        console.log(`  -> AI gefunden: ${ai} (${AI_PATTERNS[ai].name})`);
         break;
       }
     }
     
     if (!ai) {
       // Kein bekannter AI gefunden, abbrechen
+      console.log('Kein bekannter AI gefunden, beende Loop');
       break;
     }
     
     position += aiLength;
     const pattern = AI_PATTERNS[ai];
+    console.log(`AI ${ai}: Erwartete Länge = ${pattern.length === null ? 'variabel' : pattern.length}`);
     
     let value: string;
     
     if (pattern.length !== null) {
-      // Feste Länge
-      value = normalized.substring(position, position + pattern.length);
-      position += pattern.length;
+      // Feste Länge - bei Datums-AIs (11, 17) auch kürzere Formate erlauben
+      // da manche Hersteller YYMM statt YYMMDD verwenden
+      const isDateAI = (ai === '11' || ai === '17');
+      console.log(`Feste Länge, isDateAI: ${isDateAI}`);
+      
+      if (isDateAI) {
+        // Bei Datums-AIs: Prüfe ob ein neuer AI vor der vollen Länge beginnt
+        let endPos = position;
+        const maxEndPos = Math.min(position + pattern.length, normalized.length);
+        console.log(`Datums-AI: Suche Ende von Position ${position} bis maximal ${maxEndPos}`);
+        
+        while (endPos < maxEndPos) {
+          // Erst ab Position 4 (Mindestlänge für YYMM) nach nächstem AI suchen
+          if (endPos >= position + 4) {
+            let foundNextAI = false;
+            for (let len = 2; len <= 4; len++) {
+              const testAI = normalized.substring(endPos, endPos + len);
+              if (AI_PATTERNS[testAI]) {
+                const aiPattern = AI_PATTERNS[testAI];
+                const remainingAfterAI = normalized.length - endPos - len;
+                
+                // Prüfe ob nach dem AI genug Daten folgen
+                if (aiPattern.length !== null && remainingAfterAI >= Math.min(aiPattern.length, 4)) {
+                  foundNextAI = true;
+                  break;
+                }
+                if (aiPattern.length === null && remainingAfterAI >= 1) {
+                  foundNextAI = true;
+                  break;
+                }
+              }
+            }
+            if (foundNextAI) break;
+          }
+          endPos++;
+        }
+        
+        value = normalized.substring(position, endPos);
+        console.log(`Datums-AI Wert extrahiert: "${value}" (Länge ${value.length})`);
+        position = endPos;
+      } else {
+        // Normale feste Länge (GTIN, SSCC etc.) - volle Länge verwenden
+        value = normalized.substring(position, position + pattern.length);
+        console.log(`Feste Länge Wert extrahiert: "${value}" (Länge ${value.length})`);
+        position += pattern.length;
+      }
     } else {
       // Variable Länge - bis zum GS-Zeichen, nächsten AI oder Ende
+      console.log(`Variable Länge AI ab Position ${position}`);
       let endPos = position;
       while (endPos < normalized.length) {
         // GS-Zeichen (FNC1) beendet das variable Feld
         if (normalized.charAt(endPos) === '\x1D') {
+          console.log(`GS-Zeichen gefunden an Position ${endPos}`);
           break;
         }
         // Prüfe ob an dieser Position ein neuer AI beginnt
@@ -239,6 +315,7 @@ export function parseGS1Barcode(barcode: string): GS1Data {
               continue;
             }
             
+            console.log(`  -> Nächster AI gefunden an Position ${endPos}: ${testAI}`);
             foundNextAI = true;
             break;
           }
@@ -247,6 +324,7 @@ export function parseGS1Barcode(barcode: string): GS1Data {
         endPos++;
       }
       value = normalized.substring(position, endPos);
+      console.log(`Variable Länge Wert extrahiert: "${value}" (Länge ${value.length})`);
       position = endPos;
       // GS-Zeichen überspringen falls vorhanden
       if (position < normalized.length && normalized.charAt(position) === '\x1D') {
@@ -275,7 +353,12 @@ export function parseGS1Barcode(barcode: string): GS1Data {
         result.serialNumber = value;
         break;
     }
+    console.log(`Aktuelles Ergebnis:`, JSON.stringify(result, null, 2));
   }
+  
+  console.log('\n=== FINALES ERGEBNIS ===');
+  console.log(JSON.stringify(result, null, 2));
+  console.log('=== GS1 PARSER DEBUG END ===');
   
   return result;
 }
