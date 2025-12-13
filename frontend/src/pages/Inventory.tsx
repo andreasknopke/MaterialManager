@@ -96,10 +96,10 @@ const Inventory: React.FC = () => {
     if (!selectedCabinet) return;
 
     try {
-      // Deaktiviere alle Materialien in diesem Schrank
-      for (const material of cabinetMaterials) {
-        await materialAPI.delete(material.id);
-      }
+      // Nutze den speziellen "clear" Endpoint, der:
+      // - Alle Materialien mit usage_type='correction' protokolliert
+      // - Die Fächerstruktur erhält
+      await cabinetAPI.clear(selectedCabinet.id);
       
       setSuccess(`Schrank "${selectedCabinet.name}" wurde geleert!`);
       setClearDialogOpen(false);

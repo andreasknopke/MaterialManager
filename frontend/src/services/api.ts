@@ -47,6 +47,7 @@ export const cabinetAPI = {
   createCompartment: (cabinetId: number, data: any) => api.post(`/cabinets/${cabinetId}/compartments`, data),
   updateCompartment: (cabinetId: number, compartmentId: number, data: any) => api.put(`/cabinets/${cabinetId}/compartments/${compartmentId}`, data),
   deleteCompartment: (cabinetId: number, compartmentId: number) => api.delete(`/cabinets/${cabinetId}/compartments/${compartmentId}`),
+  clear: (id: number) => api.post(`/cabinets/${id}/clear`),
   create: (data: any) => api.post('/cabinets', data),
   update: (id: number, data: any) => api.put(`/cabinets/${id}`, data),
   delete: (id: number) => api.delete(`/cabinets/${id}`),

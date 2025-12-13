@@ -439,4 +439,89 @@ router.get('/:cabinetId/compartments/:compartmentId/materials', async (req: Requ
   }
 });
 
+// POST Schrank leeren (alle Materialien mit correction protokollieren)
+// Fächerstruktur bleibt erhalten!
+router.post('/:id/clear', async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const cabinetId = req.params.id;
+    
+    // Prüfe Zugriff auf den Schrank
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      const [cabinetCheck] = await connection.query<RowDataPacket[]>(
+        'SELECT id, name FROM cabinets WHERE id = ? AND unit_id = ?',
+        [cabinetId, req.user.departmentId]
+      );
+      if (cabinetCheck.length === 0) {
+        await connection.rollback();
+        connection.release();
+        return res.status(403).json({ error: 'Schrank nicht gefunden oder kein Zugriff' });
+      }
+    }
+    
+    // Hole Schrankname für Protokollierung
+    const [cabinetInfo] = await connection.query<RowDataPacket[]>(
+      'SELECT name FROM cabinets WHERE id = ?',
+      [cabinetId]
+    );
+    
+    if (cabinetInfo.length === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({ error: 'Schrank nicht gefunden' });
+    }
+    
+    const cabinetName = cabinetInfo[0].name;
+    
+    // Hole alle aktiven Materialien im Schrank mit Bestand > 0
+    const [materials] = await connection.query<RowDataPacket[]>(
+      'SELECT id, current_stock, unit_id FROM materials WHERE cabinet_id = ? AND active = TRUE AND current_stock > 0',
+      [cabinetId]
+    );
+    
+    const userId = req.user?.id;
+    const userName = req.user?.fullName || req.user?.username || 'Unbekannt';
+    
+    // Protokolliere jede Entnahme als Korrektur
+    for (const material of materials) {
+      await connection.query(
+        `INSERT INTO material_transactions 
+         (material_id, transaction_type, usage_type, quantity, previous_stock, new_stock, notes, user_id, user_name, unit_id)
+         VALUES (?, 'out', 'correction', ?, ?, 0, ?, ?, ?, ?)`,
+        [
+          material.id, 
+          material.current_stock, 
+          material.current_stock, 
+          `Korrektur: Schrank "${cabinetName}" geleert (Inventur)`,
+          userId, 
+          userName, 
+          material.unit_id
+        ]
+      );
+    }
+    
+    // Deaktiviere alle Materialien im Schrank und setze Bestand auf 0
+    const [result] = await connection.query<ResultSetHeader>(
+      'UPDATE materials SET active = FALSE, current_stock = 0 WHERE cabinet_id = ? AND active = TRUE',
+      [cabinetId]
+    );
+    
+    await connection.commit();
+    
+    res.json({ 
+      message: `Schrank "${cabinetName}" erfolgreich geleert`,
+      deactivatedCount: result.affectedRows
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Fehler beim Leeren des Schranks:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  } finally {
+    connection.release();
+  }
+});
+
 export default router;
