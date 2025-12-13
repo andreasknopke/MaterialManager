@@ -27,7 +27,7 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Inventory as InventoryIcon,
+  Search as SearchIcon,
   RemoveCircleOutline as RemoveIcon,
   Receipt as ReceiptIcon,
   Print as PrintIcon,
@@ -126,9 +126,9 @@ const Dashboard: React.FC = () => {
     navigate('/materials/new');
   };
 
-  // Inventur: Zum Barcode Scanner
-  const handleInventory = () => {
-    navigate('/scanner');
+  // Suche: Zur Suchseite
+  const handleSearch = () => {
+    navigate('/search');
   };
 
   // Entnahme: Prüfen ob Interventionsmodus gefragt werden soll
@@ -244,12 +244,12 @@ const Dashboard: React.FC = () => {
       disabled: false,
     },
     {
-      id: 'inventory',
-      title: 'Inventur',
-      subtitle: 'Bestand prüfen & scannen',
-      icon: <InventoryIcon sx={{ fontSize: 80 }} />,
+      id: 'search',
+      title: 'Suche',
+      subtitle: 'LOT, Verfall, Kategorie',
+      icon: <SearchIcon sx={{ fontSize: 80 }} />,
       color: '#2196f3',
-      onClick: handleInventory,
+      onClick: handleSearch,
       disabled: false,
     },
     {

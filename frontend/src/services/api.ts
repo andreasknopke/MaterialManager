@@ -57,6 +57,7 @@ export const materialAPI = {
   getAll: (params?: any) => api.get('/materials', { params }),
   getById: (id: number) => api.get(`/materials/${id}`),
   getTransactions: (id: number) => api.get(`/materials/${id}/transactions`),
+  search: (params: { lot_number?: string; expiry_months?: number; query?: string; category_id?: number }) => api.post('/materials/search', params),
   create: (data: any) => api.post('/materials', data),
   update: (id: number, data: any) => api.put(`/materials/${id}`, data),
   delete: (id: number) => api.delete(`/materials/${id}`),

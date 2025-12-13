@@ -9,6 +9,58 @@ const router = Router();
 // Alle Routes benötigen Authentifizierung
 router.use(authenticate);
 
+// POST erweiterte Suche für Materialien
+router.post('/search', async (req: Request, res: Response) => {
+  try {
+    const { lot_number, expiry_months, query: searchQuery, category_id } = req.body;
+    
+    let sql = 'SELECT * FROM v_materials_overview WHERE active = TRUE';
+    const params: any[] = [];
+    
+    // Department-Filter hinzufügen
+    const departmentFilter = getDepartmentFilter(req, '');
+    if (departmentFilter.whereClause) {
+      sql += ` AND ${departmentFilter.whereClause}`;
+      params.push(...departmentFilter.params);
+    }
+    
+    // Chargen-Suche (LOT)
+    if (lot_number) {
+      sql += ' AND lot_number LIKE ?';
+      params.push(`%${lot_number}%`);
+    }
+    
+    // Verfallsdatum-Suche
+    if (expiry_months !== undefined) {
+      const futureDate = new Date();
+      futureDate.setMonth(futureDate.getMonth() + expiry_months);
+      sql += ' AND expiry_date IS NOT NULL AND expiry_date <= ?';
+      params.push(futureDate.toISOString().split('T')[0]);
+    }
+    
+    // Freitext-Suche
+    if (searchQuery) {
+      sql += ' AND (name LIKE ? OR description LIKE ? OR article_number LIKE ? OR notes LIKE ?)';
+      const searchParam = `%${searchQuery}%`;
+      params.push(searchParam, searchParam, searchParam, searchParam);
+    }
+    
+    // Kategorie-Suche
+    if (category_id) {
+      sql += ' AND category_id = ?';
+      params.push(category_id);
+    }
+    
+    sql += ' ORDER BY expiry_date ASC, name ASC';
+    
+    const [rows] = await pool.query<RowDataPacket[]>(sql, params);
+    res.json(rows);
+  } catch (error) {
+    console.error('Fehler bei der Suche:', error);
+    res.status(500).json({ error: 'Suchfehler' });
+  }
+});
+
 // GET alle Materialien mit erweiterten Informationen
 router.get('/', async (req: Request, res: Response) => {
   try {

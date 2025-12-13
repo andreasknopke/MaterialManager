@@ -17,6 +17,7 @@ import BarcodeScanner from './pages/BarcodeScanner';
 import Reports from './pages/Reports';
 import Statistics from './pages/Statistics';
 import Inventory from './pages/Inventory';
+import Search from './pages/Search';
 import Admin from './pages/Admin';
 import Units from './pages/Units';
 import Users from './pages/Users';
@@ -147,6 +148,16 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <Inventory />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/search"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <Search />
                 </Layout>
               </ProtectedRoute>
             }
