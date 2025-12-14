@@ -201,8 +201,17 @@ const BarcodeScanner: React.FC = () => {
 
   // Auto-open camera if navigated from dashboard or scanning cabinet (nur wenn Kamera aktiviert)
   useEffect(() => {
-    const state = location.state as { autoOpenCamera?: boolean; scanCabinet?: boolean; returnTo?: string; removalMode?: boolean } | null;
-    if ((state?.autoOpenCamera || state?.scanCabinet) && scannerSettings.cameraEnabled) {
+    const state = location.state as { 
+      autoOpenCamera?: boolean; 
+      scanCabinet?: boolean; 
+      returnTo?: string; 
+      removalMode?: boolean;
+      returnToMaterialForm?: boolean;
+      scanMode?: 'gs1' | 'qr';
+    } | null;
+    
+    // Auto-Open für verschiedene Szenarien
+    if ((state?.autoOpenCamera || state?.scanCabinet || state?.returnToMaterialForm) && scannerSettings.cameraEnabled) {
       console.log('Auto-opening camera:', state);
       setCameraOpen(true);
     }
@@ -318,8 +327,34 @@ const BarcodeScanner: React.FC = () => {
                     // Stream stoppen
                     stream.getTracks().forEach(track => track.stop());
                     
+                    // Check if we're scanning for MaterialForm
+                    const state = location.state as { 
+                      scanCabinet?: boolean; 
+                      returnTo?: string;
+                      returnToMaterialForm?: boolean;
+                      scanMode?: 'gs1' | 'qr';
+                      materialId?: string;
+                    } | null;
+                    
+                    if (state?.returnToMaterialForm) {
+                      console.log('Rückkehr zu MaterialForm mit Code:', scannedCode);
+                      setCameraOpen(false);
+                      setScanLineColor('red');
+                      // Zurück zur MaterialForm navigieren
+                      const returnPath = state.materialId 
+                        ? `/materials/${state.materialId}/edit` 
+                        : '/materials/new';
+                      navigate(returnPath, {
+                        state: {
+                          fromScanner: true,
+                          scannedCode: scannedCode,
+                          scanMode: state.scanMode,
+                        }
+                      });
+                      return;
+                    }
+                    
                     // Check if we're scanning a cabinet QR code
-                    const state = location.state as { scanCabinet?: boolean; returnTo?: string } | null;
                     if (state?.scanCabinet) {
                       try {
                         const cabinetData = JSON.parse(scannedCode);
