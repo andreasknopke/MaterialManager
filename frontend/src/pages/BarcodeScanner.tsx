@@ -522,11 +522,6 @@ const BarcodeScanner: React.FC = () => {
     
     console.log('freezeForOCR: Start');
     
-    // Video-Stream pausieren
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.enabled = false);
-    }
-    
     // Canvas erstellen und aktuelles Video-Frame erfassen
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -535,6 +530,14 @@ const BarcodeScanner: React.FC = () => {
     }
     
     const video = videoRef.current;
+    
+    // Prüfe ob Video bereit ist
+    if (video.readyState < 2) {
+      console.log('freezeForOCR: Video noch nicht bereit, warte...');
+      setError('Video noch nicht bereit. Bitte erneut versuchen.');
+      return;
+    }
+    
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
@@ -546,9 +549,15 @@ const BarcodeScanner: React.FC = () => {
     
     ctx.drawImage(video, 0, 0);
     
-    // Bild als Data-URL speichern
-    const imageData = canvas.toDataURL('image/png');
+    // Bild als Data-URL speichern (JPEG für bessere iOS-Kompatibilität)
+    const imageData = canvas.toDataURL('image/jpeg', 0.9);
     console.log('freezeForOCR: Image captured, size:', imageData.length);
+    
+    if (imageData.length < 1000) {
+      console.error('freezeForOCR: Bild zu klein, wahrscheinlich fehlgeschlagen');
+      setError('Bild konnte nicht erfasst werden. Bitte erneut versuchen.');
+      return;
+    }
     
     // Dimensionen für Skalierung speichern BEVOR ocrFrozen gesetzt wird
     const dims = {
@@ -558,6 +567,9 @@ const BarcodeScanner: React.FC = () => {
       displayHeight: video.clientHeight,
     };
     console.log('freezeForOCR: Dimensions:', dims);
+    
+    // WICHTIG: Auf iOS NICHT den Stream pausieren, nur das Bild speichern
+    // Das Video läuft im Hintergrund weiter, wird aber durch das Bild verdeckt
     setVideoDimensions(dims);
     
     // Jetzt erst frozen setzen - damit wird das Bild angezeigt
@@ -800,16 +812,20 @@ const BarcodeScanner: React.FC = () => {
     setFrozenImageData('');
     setOcrLoading(false);
     setOcrProgress(0);
+    setError('');
+    setSuccess('');
     
-    // Video-Stream wieder aktivieren
+    // Da wir den Stream nicht mehr pausieren, müssen wir nur die States zurücksetzen
+    // Der Video-Stream läuft bereits im Hintergrund weiter
+    
+    // Prüfe ob Stream noch aktiv ist
     if (streamRef.current && videoRef.current) {
-      // Prüfen ob Tracks noch aktiv sind
       const tracks = streamRef.current.getTracks();
       const allEnded = tracks.every(track => track.readyState === 'ended');
       
       if (allEnded) {
         console.log('Stream beendet, fordere neuen an...');
-        // Neuen Stream anfordern
+        // Neuen Stream anfordern - iOS benötigt playsinline und muted
         try {
           const newStream = await navigator.mediaDevices.getUserMedia({
             video: { 
@@ -820,19 +836,17 @@ const BarcodeScanner: React.FC = () => {
           });
           streamRef.current = newStream;
           videoRef.current.srcObject = newStream;
+          // iOS erfordert muted für autoplay
+          videoRef.current.muted = true;
+          videoRef.current.playsInline = true;
           await videoRef.current.play();
           console.log('Neuer Stream gestartet');
         } catch (err) {
           console.error('Fehler beim Neustarten des Streams:', err);
+          setError('Kamera konnte nicht neu gestartet werden. Bitte Dialog schließen und erneut öffnen.');
         }
-      } else {
-        // Tracks reaktivieren
-        tracks.forEach(track => {
-          track.enabled = true;
-        });
-        videoRef.current.srcObject = streamRef.current;
-        videoRef.current.play().catch(err => console.error('Video play error:', err));
       }
+      // Kein else nötig - Stream läuft bereits
     }
   };
 
@@ -1556,10 +1570,17 @@ const BarcodeScanner: React.FC = () => {
                       objectFit: 'contain',
                       display: 'block',
                       pointerEvents: 'none',
+                      backgroundColor: '#000',
                     }}
                     onLoad={(e) => {
                       const img = e.target as HTMLImageElement;
                       console.log('Frozen image loaded:', img.clientWidth, 'x', img.clientHeight, 'natural:', img.naturalWidth, 'x', img.naturalHeight);
+                    }}
+                    onError={(e) => {
+                      console.error('Frozen image failed to load');
+                      setError('Bild konnte nicht geladen werden. Bitte erneut versuchen.');
+                      setOcrFrozen(false);
+                      setFrozenImageData('');
                     }}
                   />
                   
