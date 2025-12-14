@@ -584,18 +584,54 @@ const BarcodeScanner: React.FC = () => {
     try {
       const img = frozenImageRef.current;
       
-      // Skalierung berechnen: Anzeige -> Originalbild
-      const scaleX = img.naturalWidth / img.clientWidth;
-      const scaleY = img.naturalHeight / img.clientHeight;
+      // Bei object-fit: contain wird das Bild zentriert und hat ggf. schwarze Balken
+      // Wir müssen die tatsächliche Position und Größe des Bildes im Container berechnen
+      const containerWidth = img.clientWidth;
+      const containerHeight = img.clientHeight;
+      const naturalWidth = img.naturalWidth;
+      const naturalHeight = img.naturalHeight;
+      
+      // Berechne die tatsächliche angezeigte Größe des Bildes (nach contain-Skalierung)
+      const containerAspect = containerWidth / containerHeight;
+      const imageAspect = naturalWidth / naturalHeight;
+      
+      let displayedWidth: number;
+      let displayedHeight: number;
+      let offsetX: number;
+      let offsetY: number;
+      
+      if (imageAspect > containerAspect) {
+        // Bild ist breiter als Container -> volle Breite, zentriert vertikal
+        displayedWidth = containerWidth;
+        displayedHeight = containerWidth / imageAspect;
+        offsetX = 0;
+        offsetY = (containerHeight - displayedHeight) / 2;
+      } else {
+        // Bild ist höher als Container -> volle Höhe, zentriert horizontal
+        displayedHeight = containerHeight;
+        displayedWidth = containerHeight * imageAspect;
+        offsetX = (containerWidth - displayedWidth) / 2;
+        offsetY = 0;
+      }
+      
+      // Skalierung berechnen: Angezeigtes Bild -> Originalbild
+      const scaleX = naturalWidth / displayedWidth;
+      const scaleY = naturalHeight / displayedHeight;
+      
+      // Auswahl-Koordinaten relativ zum angezeigten Bild (nicht Container) berechnen
+      const adjustedX = selectionRect.x - offsetX;
+      const adjustedY = selectionRect.y - offsetY;
       
       // Ausgewählten Bereich im Original-Koordinatensystem
-      const cropX = Math.round(selectionRect.x * scaleX);
-      const cropY = Math.round(selectionRect.y * scaleY);
-      const cropWidth = Math.round(selectionRect.width * scaleX);
-      const cropHeight = Math.round(selectionRect.height * scaleY);
+      const cropX = Math.max(0, Math.round(adjustedX * scaleX));
+      const cropY = Math.max(0, Math.round(adjustedY * scaleY));
+      const cropWidth = Math.min(naturalWidth - cropX, Math.round(selectionRect.width * scaleX));
+      const cropHeight = Math.min(naturalHeight - cropY, Math.round(selectionRect.height * scaleY));
       
       console.log('OCR Selection:', { 
         display: selectionRect, 
+        imageInContainer: { offsetX, offsetY, displayedWidth, displayedHeight },
+        adjusted: { adjustedX, adjustedY },
         original: { cropX, cropY, cropWidth, cropHeight },
         scale: { scaleX, scaleY }
       });
@@ -659,6 +695,36 @@ const BarcodeScanner: React.FC = () => {
     
     // Text bereinigen (Zeilenumbrüche und mehrfache Leerzeichen entfernen)
     const cleanedText = selectedOcrText.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // Prüfen ob wir von MaterialForm kommen und zurück navigieren sollen
+    const state = location.state as { 
+      returnToMaterialForm?: boolean;
+      scanMode?: 'gs1' | 'qr';
+      materialId?: string;
+    } | null;
+    
+    if (state?.returnToMaterialForm) {
+      console.log('OCR: Rückkehr zu MaterialForm mit Text:', cleanedText);
+      setCameraOpen(false);
+      setOcrFrozen(false);
+      setSelectionRect(null);
+      setSelectedOcrText('');
+      
+      // Zurück zur MaterialForm navigieren
+      const returnPath = state.materialId 
+        ? `/materials/${state.materialId}/edit` 
+        : '/materials/new';
+      navigate(returnPath, {
+        state: {
+          fromScanner: true,
+          scannedCode: cleanedText,
+          scanMode: state.scanMode,
+        }
+      });
+      return;
+    }
+    
+    // Normal im BarcodeScanner bleiben
     setBarcode(cleanedText);
     setCameraOpen(false);
     setSuccess('Text übernommen');
