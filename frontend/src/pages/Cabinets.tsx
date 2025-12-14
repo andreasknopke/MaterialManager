@@ -63,7 +63,13 @@ interface InfosheetMaterial {
   category_name: string | null;
   total_stock: number;
   item_count: number;
-  custom_fields: CustomField[];
+  is_consignment: boolean;
+  shape_name: string | null;
+  shaft_length: string | null;
+  device_length: string | null;
+  device_diameter: string | null;
+  french_size: string | null;
+  guidewire_acceptance: string | null;
 }
 
 interface InfosheetCompartment extends Compartment {
@@ -504,30 +510,79 @@ const Cabinets: React.FC = () => {
                                   }}
                                 >
                                   {/* Kategorie als Hauptüberschrift */}
-                                  <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                    {material.category_name || 'Ohne Kategorie'}
-                                  </Typography>
-
-                                  {/* Custom Fields / Eigenschaften */}
-                                  {material.custom_fields && material.custom_fields.length > 0 ? (
-                                    <Box sx={{ ml: 2 }}>
-                                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                        {material.custom_fields.map((field, fieldIdx) => (
-                                          <Chip
-                                            key={fieldIdx}
-                                            label={`${field.field_label}: ${field.field_value}`}
-                                            size="small"
-                                            variant="outlined"
-                                            sx={{ fontSize: '0.75rem' }}
-                                          />
-                                        ))}
-                                      </Box>
-                                    </Box>
-                                  ) : (
-                                    <Typography variant="body2" color="text.secondary" sx={{ ml: 2, fontStyle: 'italic' }}>
-                                      Keine Eigenschaften definiert
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                                      {material.category_name || 'Ohne Kategorie'}
                                     </Typography>
-                                  )}
+                                    {material.is_consignment && (
+                                      <Chip 
+                                        label="Konsignationsware" 
+                                        size="small"
+                                        color="warning"
+                                        sx={{ height: '20px', fontSize: '0.7rem' }}
+                                      />
+                                    )}
+                                  </Box>
+
+                                  {/* Device-Eigenschaften */}
+                                  <Box sx={{ ml: 2 }}>
+                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                      {material.shape_name && (
+                                        <Chip
+                                          label={`Form: ${material.shape_name}`}
+                                          size="small"
+                                          variant="outlined"
+                                          sx={{ fontSize: '0.75rem' }}
+                                        />
+                                      )}
+                                      {material.shaft_length && (
+                                        <Chip
+                                          label={`Schaftlänge: ${material.shaft_length}`}
+                                          size="small"
+                                          variant="outlined"
+                                          sx={{ fontSize: '0.75rem' }}
+                                        />
+                                      )}
+                                      {material.device_length && (
+                                        <Chip
+                                          label={`Device-Länge: ${material.device_length}`}
+                                          size="small"
+                                          variant="outlined"
+                                          sx={{ fontSize: '0.75rem' }}
+                                        />
+                                      )}
+                                      {material.device_diameter && (
+                                        <Chip
+                                          label={`Device-Durchmesser: ${material.device_diameter}`}
+                                          size="small"
+                                          variant="outlined"
+                                          sx={{ fontSize: '0.75rem' }}
+                                        />
+                                      )}
+                                      {material.french_size && (
+                                        <Chip
+                                          label={`French-Size: ${material.french_size}`}
+                                          size="small"
+                                          variant="outlined"
+                                          sx={{ fontSize: '0.75rem' }}
+                                        />
+                                      )}
+                                      {material.guidewire_acceptance && (
+                                        <Chip
+                                          label={`Guidewire-Acceptance: ${material.guidewire_acceptance}`}
+                                          size="small"
+                                          variant="outlined"
+                                          sx={{ fontSize: '0.75rem' }}
+                                        />
+                                      )}
+                                    </Box>
+                                    {!material.shape_name && !material.shaft_length && !material.device_length && 
+                                     !material.device_diameter && !material.french_size && !material.guidewire_acceptance && (
+                                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                        Keine Eigenschaften definiert
+                                      </Typography>
+                                    )}
+                                  </Box>
                                 </Box>
                               ))}
                             </Box>

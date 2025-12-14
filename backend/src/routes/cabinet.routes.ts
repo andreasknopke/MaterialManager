@@ -146,7 +146,7 @@ router.get('/:id/infosheet', async (req: Request, res: Response) => {
       [req.params.id]
     );
 
-    // Für jedes Fach: Hole Materialien gruppiert nach GTIN mit Custom Fields
+    // Für jedes Fach: Hole Materialien gruppiert nach GTIN mit Device-Eigenschaften
     const compartmentsWithMaterials = await Promise.all(
       compartments.map(async (comp: any) => {
         // Hole Materialien gruppiert nach GTIN (article_number)
@@ -158,44 +158,40 @@ router.get('/:id/infosheet', async (req: Request, res: Response) => {
              cat.name AS category_name,
              SUM(m.current_stock) AS total_stock,
              COUNT(*) AS item_count,
-             MIN(m.id) AS first_material_id
+             MIN(m.id) AS first_material_id,
+             MAX(m.is_consignment) AS is_consignment,
+             s.name AS shape_name,
+             m.shaft_length,
+             m.device_length,
+             m.device_diameter,
+             m.french_size,
+             m.guidewire_acceptance
            FROM materials m
            LEFT JOIN categories cat ON m.category_id = cat.id
+           LEFT JOIN shapes s ON m.shape_id = s.id
            WHERE m.compartment_id = ? AND m.active = TRUE
-           GROUP BY m.article_number, m.name, m.size, cat.name
+           GROUP BY m.article_number, m.name, m.size, cat.name, s.name, m.shaft_length, m.device_length, m.device_diameter, m.french_size, m.guidewire_acceptance
            ORDER BY cat.name, m.name`,
           [comp.id]
         );
 
-        // Für jede Materialgruppe: Hole Custom Fields vom ersten Material
-        const materialsWithFields = await Promise.all(
-          materials.map(async (mat: any) => {
-            const [customFields] = await pool.query<RowDataPacket[]>(
-              `SELECT 
-                 fc.field_label,
-                 mcf.field_value
-               FROM material_custom_fields mcf
-               JOIN field_configurations fc ON mcf.field_config_id = fc.id
-               WHERE mcf.material_id = ? AND fc.active = TRUE AND mcf.field_value IS NOT NULL AND mcf.field_value != ''
-               ORDER BY fc.display_order`,
-              [mat.first_material_id]
-            );
-
-            return {
-              article_number: mat.article_number,
-              name: mat.name,
-              size: mat.size,
-              category_name: mat.category_name,
-              total_stock: mat.total_stock,
-              item_count: mat.item_count,
-              custom_fields: customFields
-            };
-          })
-        );
-
         return {
           ...comp,
-          materials: materialsWithFields
+          materials: materials.map((mat: any) => ({
+            article_number: mat.article_number,
+            name: mat.name,
+            size: mat.size,
+            category_name: mat.category_name,
+            total_stock: mat.total_stock,
+            item_count: mat.item_count,
+            is_consignment: mat.is_consignment === 1,
+            shape_name: mat.shape_name,
+            shaft_length: mat.shaft_length,
+            device_length: mat.device_length,
+            device_diameter: mat.device_diameter,
+            french_size: mat.french_size,
+            guidewire_acceptance: mat.guidewire_acceptance
+          }))
         };
       })
     );
