@@ -51,6 +51,25 @@ interface CompartmentMaterial {
   item_count: number;
 }
 
+interface CustomField {
+  field_label: string;
+  field_value: string;
+}
+
+interface InfosheetMaterial {
+  article_number: string | null;
+  name: string;
+  size: string | null;
+  category_name: string | null;
+  total_stock: number;
+  item_count: number;
+  custom_fields: CustomField[];
+}
+
+interface InfosheetCompartment extends Compartment {
+  materials: InfosheetMaterial[];
+}
+
 const Cabinets: React.FC = () => {
   const [cabinets, setCabinets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +78,8 @@ const Cabinets: React.FC = () => {
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [selectedCabinet, setSelectedCabinet] = useState<any>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [infosheetCompartments, setInfosheetCompartments] = useState<InfosheetCompartment[]>([]);
+  const [infosheetLoading, setInfosheetLoading] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -259,6 +280,8 @@ const Cabinets: React.FC = () => {
 
   const handleShowQR = async (cabinet: any) => {
     setSelectedCabinet(cabinet);
+    setInfosheetLoading(true);
+    
     // Generate QR code with cabinet data
     const qrData = JSON.stringify({
       type: 'CABINET',
@@ -277,9 +300,17 @@ const Cabinets: React.FC = () => {
         }
       });
       setQrCodeUrl(url);
+      
+      // Lade Fächer mit Materialien und Custom Fields
+      const response = await cabinetAPI.getInfosheet(cabinet.id);
+      setInfosheetCompartments(response.data.compartments || []);
+      
       setQrDialogOpen(true);
     } catch (error) {
       console.error('Fehler beim Generieren des QR-Codes:', error);
+      setInfosheetCompartments([]);
+    } finally {
+      setInfosheetLoading(false);
     }
   };
 
@@ -393,27 +424,144 @@ const Cabinets: React.FC = () => {
       <Dialog 
         open={qrDialogOpen} 
         onClose={() => setQrDialogOpen(false)}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
       >
         <DialogTitle>
-          QR-Code für Schrank: {selectedCabinet?.name}
+          Infoblatt: {selectedCabinet?.name}
         </DialogTitle>
         <DialogContent>
           <Box display="flex" flexDirection="column" alignItems="center" gap={2} py={2}>
-            <div ref={printRef} style={{ padding: '20px', textAlign: 'center', backgroundColor: 'white' }}>
+            <div ref={printRef} style={{ padding: '30px', backgroundColor: 'white', width: '100%', fontFamily: 'Arial, sans-serif' }}>
               {qrCodeUrl && (
                 <>
-                  <Typography variant="h6" gutterBottom>
-                    {selectedCabinet?.name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    {selectedCabinet?.location}
-                  </Typography>
-                  <img src={qrCodeUrl} alt="QR Code" style={{ width: '100%', maxWidth: '400px' }} />
-                  <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                    Scannen Sie diesen Code beim Erfassen von Material
-                  </Typography>
+                  {/* Header mit QR-Code */}
+                  <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #333', pb: 3 }}>
+                    <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: '#333' }}>
+                      {selectedCabinet?.name}
+                    </Typography>
+                    <Typography variant="h6" color="text.secondary" gutterBottom>
+                      {selectedCabinet?.location}
+                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+                      <img src={qrCodeUrl} alt="QR Code" style={{ width: '200px', height: '200px' }} />
+                    </Box>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      Scannen Sie diesen Code beim Erfassen von Material
+                    </Typography>
+                  </Box>
+
+                  {/* Fächer und Inhalt */}
+                  {infosheetLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : infosheetCompartments.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                      Keine Fächer vorhanden
+                    </Typography>
+                  ) : (
+                    <Box>
+                      <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', mb: 3, color: '#333' }}>
+                        Fächer und Inhalt
+                      </Typography>
+                      
+                      {infosheetCompartments.map((compartment, idx) => (
+                        <Box key={compartment.id} sx={{ mb: 4, pageBreakInside: 'avoid' }}>
+                          {/* Fachname */}
+                          <Typography 
+                            variant="h6" 
+                            sx={{ 
+                              fontWeight: 'bold', 
+                              backgroundColor: '#f5f5f5', 
+                              padding: '8px 12px',
+                              borderLeft: '4px solid #1976d2',
+                              mb: 2
+                            }}
+                          >
+                            {compartment.name}
+                            {compartment.description && (
+                              <Typography variant="body2" component="span" sx={{ ml: 2, fontWeight: 'normal', color: '#666' }}>
+                                ({compartment.description})
+                              </Typography>
+                            )}
+                          </Typography>
+
+                          {/* Materialien im Fach */}
+                          {compartment.materials.length === 0 ? (
+                            <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontStyle: 'italic' }}>
+                              Leer
+                            </Typography>
+                          ) : (
+                            <Box sx={{ ml: 2 }}>
+                              {compartment.materials.map((material, matIdx) => (
+                                <Box 
+                                  key={`${material.article_number}-${matIdx}`} 
+                                  sx={{ 
+                                    mb: 2, 
+                                    pb: 2, 
+                                    borderBottom: matIdx < compartment.materials.length - 1 ? '1px solid #e0e0e0' : 'none'
+                                  }}
+                                >
+                                  {/* Materialname und Kategorie */}
+                                  <Box sx={{ display: 'flex', alignItems: 'baseline', mb: 0.5 }}>
+                                    <Typography variant="body1" sx={{ fontWeight: 'bold', mr: 1 }}>
+                                      {material.name}
+                                    </Typography>
+                                    {material.category_name && (
+                                      <Chip 
+                                        label={material.category_name} 
+                                        size="small" 
+                                        sx={{ height: '20px', fontSize: '0.7rem' }}
+                                      />
+                                    )}
+                                  </Box>
+
+                                  {/* Artikel-Infos */}
+                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1, ml: 1 }}>
+                                    {material.article_number && (
+                                      <Typography variant="body2" color="text.secondary">
+                                        <strong>GTIN:</strong> {material.article_number}
+                                      </Typography>
+                                    )}
+                                    {material.size && (
+                                      <Typography variant="body2" color="text.secondary">
+                                        • <strong>Größe:</strong> {material.size}
+                                      </Typography>
+                                    )}
+                                    <Typography variant="body2" color="text.secondary">
+                                      • <strong>Bestand:</strong> {material.total_stock}
+                                      {material.item_count > 1 && ` (${material.item_count} Einträge)`}
+                                    </Typography>
+                                  </Box>
+
+                                  {/* Custom Fields */}
+                                  {material.custom_fields && material.custom_fields.length > 0 && (
+                                    <Box sx={{ ml: 1, mt: 1 }}>
+                                      <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666' }}>
+                                        Eigenschaften:
+                                      </Typography>
+                                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
+                                        {material.custom_fields.map((field, fieldIdx) => (
+                                          <Chip
+                                            key={fieldIdx}
+                                            label={`${field.field_label}: ${field.field_value}`}
+                                            size="small"
+                                            variant="outlined"
+                                            sx={{ fontSize: '0.75rem' }}
+                                          />
+                                        ))}
+                                      </Box>
+                                    </Box>
+                                  )}
+                                </Box>
+                              ))}
+                            </Box>
+                          )}
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
                 </>
               )}
             </div>

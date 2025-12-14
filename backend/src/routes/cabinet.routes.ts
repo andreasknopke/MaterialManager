@@ -114,6 +114,102 @@ router.get('/:id/materials', async (req: Request, res: Response) => {
   }
 });
 
+// GET Schrank-Infoblatt (Fächer mit Materialien und Custom Fields)
+router.get('/:id/infosheet', async (req: Request, res: Response) => {
+  try {
+    // Prüfe Zugriff auf den Schrank
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
+        [req.params.id, req.user.departmentId]
+      );
+      if (cabinetCheck.length === 0) {
+        return res.status(403).json({ error: 'Schrank nicht gefunden oder kein Zugriff' });
+      }
+    }
+
+    // Hole Schrank-Infos
+    const [cabinetRows] = await pool.query<RowDataPacket[]>(
+      'SELECT * FROM cabinets WHERE id = ?',
+      [req.params.id]
+    );
+
+    if (cabinetRows.length === 0) {
+      return res.status(404).json({ error: 'Schrank nicht gefunden' });
+    }
+
+    const cabinet = cabinetRows[0];
+
+    // Hole alle Fächer des Schranks
+    const [compartments] = await pool.query<RowDataPacket[]>(
+      'SELECT * FROM compartments WHERE cabinet_id = ? ORDER BY position, name',
+      [req.params.id]
+    );
+
+    // Für jedes Fach: Hole Materialien gruppiert nach GTIN mit Custom Fields
+    const compartmentsWithMaterials = await Promise.all(
+      compartments.map(async (comp: any) => {
+        // Hole Materialien gruppiert nach GTIN (article_number)
+        const [materials] = await pool.query<RowDataPacket[]>(
+          `SELECT 
+             m.article_number,
+             m.name,
+             m.size,
+             cat.name AS category_name,
+             SUM(m.current_stock) AS total_stock,
+             COUNT(*) AS item_count,
+             MIN(m.id) AS first_material_id
+           FROM materials m
+           LEFT JOIN categories cat ON m.category_id = cat.id
+           WHERE m.compartment_id = ? AND m.active = TRUE
+           GROUP BY m.article_number, m.name, m.size, cat.name
+           ORDER BY cat.name, m.name`,
+          [comp.id]
+        );
+
+        // Für jede Materialgruppe: Hole Custom Fields vom ersten Material
+        const materialsWithFields = await Promise.all(
+          materials.map(async (mat: any) => {
+            const [customFields] = await pool.query<RowDataPacket[]>(
+              `SELECT 
+                 fc.field_label,
+                 mcf.field_value
+               FROM material_custom_fields mcf
+               JOIN field_configurations fc ON mcf.field_config_id = fc.id
+               WHERE mcf.material_id = ? AND fc.active = TRUE AND mcf.field_value IS NOT NULL AND mcf.field_value != ''
+               ORDER BY fc.display_order`,
+              [mat.first_material_id]
+            );
+
+            return {
+              article_number: mat.article_number,
+              name: mat.name,
+              size: mat.size,
+              category_name: mat.category_name,
+              total_stock: mat.total_stock,
+              item_count: mat.item_count,
+              custom_fields: customFields
+            };
+          })
+        );
+
+        return {
+          ...comp,
+          materials: materialsWithFields
+        };
+      })
+    );
+
+    res.json({
+      cabinet,
+      compartments: compartmentsWithMaterials
+    });
+  } catch (error) {
+    console.error('Fehler beim Abrufen des Schrank-Infoblatts:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 // POST neuer Schrank
 router.post('/', async (req: Request, res: Response) => {
   const { name, location, description, capacity } = req.body;

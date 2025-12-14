@@ -42,6 +42,7 @@ export const cabinetAPI = {
   getAll: () => api.get('/cabinets'),
   getById: (id: number) => api.get(`/cabinets/${id}`),
   getMaterials: (id: number) => api.get(`/cabinets/${id}/materials`),
+  getInfosheet: (id: number) => api.get(`/cabinets/${id}/infosheet`),
   getCompartments: (id: number) => api.get(`/cabinets/${id}/compartments`),
   getCompartmentMaterials: (cabinetId: number, compartmentId: number) => api.get(`/cabinets/${cabinetId}/compartments/${compartmentId}/materials`),
   createCompartment: (cabinetId: number, data: any) => api.post(`/cabinets/${cabinetId}/compartments`, data),
