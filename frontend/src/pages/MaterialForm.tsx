@@ -658,30 +658,19 @@ const MaterialForm: React.FC = () => {
       }
       
       if (state.scanMode === 'gs1') {
-        // GS1-Barcode verarbeiten
+        // GS1-Barcode verarbeiten - über handleGS1BarcodeChange für Lookup
         const scannedCode = state.scannedCode!;
-        const gs1 = parseGS1Barcode(scannedCode);
-        console.log('GS1 geparst:', gs1);
         
-        if (gs1) {
-          setGs1Data(gs1);
-          // Alle Felder in einem Update setzen
-          setFormData(prev => ({
-            ...prev,
-            ...(restoredData || {}),
-            gs1_barcode: scannedCode,
-            article_number: gs1.gtin || prev.article_number,
-            lot_number: gs1.batchNumber || gs1.serialNumber || prev.lot_number,
-            expiry_date: gs1.expiryDate || prev.expiry_date,
-          }));
-        } else {
-          // Kein GS1, aber trotzdem den Code speichern
-          setFormData(prev => ({
-            ...prev,
-            ...(restoredData || {}),
-            gs1_barcode: scannedCode,
-          }));
+        // Zuerst wiederhergestellte Daten setzen (falls vorhanden)
+        if (restoredData) {
+          setFormData(prev => ({ ...prev, ...restoredData }));
         }
+        
+        // Dann handleGS1BarcodeChange aufrufen - das triggert Parsing UND Lookup
+        // Verzögert, damit restoredData-State angewendet wurde
+        setTimeout(() => {
+          handleGS1BarcodeChange({ target: { value: scannedCode } } as React.ChangeEvent<HTMLInputElement>);
+        }, 100);
       } else if (state.scanMode === 'qr') {
         // QR-Code für Fach verarbeiten
         if (restoredData) {
