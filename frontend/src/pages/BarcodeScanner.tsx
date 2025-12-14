@@ -300,9 +300,26 @@ const BarcodeScanner: React.FC = () => {
             
             // ZXing Scanner nur im Barcode-Modus starten
             if (scanModeRef.current === 'barcode') {
-              // GS1-Modus aktivieren: FNC1 wird als ASCII 29 (Group Separator) ausgegeben
+              // Prüfe ob GS1-Modus aktiviert werden soll
+              // GS1 ist Standard für Material-Scans, aber deaktiviert für Patienten-ID und Schrank-QR
+              const locState = location.state as { 
+                scanPatientBarcode?: boolean; 
+                scanCabinet?: boolean;
+                assumeGS1?: boolean;
+              } | null;
+              
+              // GS1-Modus: aktiviert außer bei Patienten-Barcode oder Schrank-QR-Scan
+              const shouldAssumeGS1 = locState?.assumeGS1 !== false && 
+                                      !locState?.scanPatientBarcode && 
+                                      !locState?.scanCabinet;
+              
               const hints = new Map();
-              hints.set(DecodeHintType.ASSUME_GS1, true);
+              if (shouldAssumeGS1) {
+                hints.set(DecodeHintType.ASSUME_GS1, true);
+                console.log('GS1-Modus aktiviert (Material-Scan)');
+              } else {
+                console.log('GS1-Modus deaktiviert (Patienten-ID oder QR-Code)');
+              }
               
               const codeReader = new BrowserMultiFormatReader(hints);
               codeReaderRef.current = codeReader;
