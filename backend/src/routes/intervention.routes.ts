@@ -4,6 +4,13 @@ import { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 const router = Router();
 
+// Hilfsfunktion: ISO-Datum zu MySQL-Datetime konvertieren
+const toMySQLDatetime = (isoString: string | Date | null): string => {
+  if (!isoString) return new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const date = new Date(isoString);
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+};
+
 // Interface für Protokoll-Item
 interface ProtocolItem {
   materialName: string;
@@ -153,7 +160,7 @@ router.post('/', async (req: Request, res: Response) => {
       [
         patient_id,
         patient_name || null,
-        started_at || new Date(),
+        toMySQLDatetime(started_at),
         items.length,
         notes || null,
         user_id
@@ -175,7 +182,7 @@ router.post('/', async (req: Request, res: Response) => {
           item.lotNumber || null,
           item.gtin || null,
           item.quantity || 1,
-          item.timestamp || new Date()
+          toMySQLDatetime(item.timestamp)
         ]
       );
     }
