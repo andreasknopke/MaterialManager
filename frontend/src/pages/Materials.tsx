@@ -151,11 +151,6 @@ const Materials: React.FC = () => {
       minWidth: 150, 
       flex: 1,
       renderCell: (params) => {
-        // Workaround: Nicht-Konsignationsware hat fälschlicherweise "0" am Ende
-        const displayName = params.row.is_consignment 
-          ? params.row.name 
-          : String(params.row.name || '').slice(0, -1);
-        
         return (
           <Box sx={{ 
             display: 'flex', 
@@ -166,14 +161,22 @@ const Materials: React.FC = () => {
             pl: params.row.is_consignment ? 1 : 0,
             ml: params.row.is_consignment ? -1 : 0,
           }}>
-            {displayName}
-            {params.row.is_consignment && (
+            {params.row.name}
+            {params.row.is_consignment ? (
               <Chip 
                 label="K" 
                 size="small" 
                 color="error" 
                 sx={{ ml: 1, height: 18, fontSize: '0.7rem', minWidth: 20 }}
                 title="Konsignationsware"
+              />
+            ) : (
+              <Chip 
+                label="B" 
+                size="small" 
+                color="success" 
+                sx={{ ml: 1, height: 18, fontSize: '0.7rem', minWidth: 20 }}
+                title="Besitzware"
               />
             )}
             {groupIdentical && params.row.grouped_count > 1 && (
