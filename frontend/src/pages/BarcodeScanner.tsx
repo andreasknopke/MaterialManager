@@ -281,16 +281,17 @@ const BarcodeScanner: React.FC = () => {
               }, 100);
             }
             
-            // ZXing Scanner mit Standard-Einstellungen
-            const codeReader = new BrowserMultiFormatReader();
-            codeReaderRef.current = codeReader;
-            
-            console.log('Starte Barcode-Erkennung...');
-            scanLoopRef.current = true;
-            
-            // Kontinuierliches Scanning direkt vom Stream
-            const scanLoop = async () => {
-              while (scanLoopRef.current && videoRef.current && scanModeRef.current === 'barcode') {
+            // ZXing Scanner nur im Barcode-Modus starten
+            if (scanModeRef.current === 'barcode') {
+              const codeReader = new BrowserMultiFormatReader();
+              codeReaderRef.current = codeReader;
+              
+              console.log('Starte Barcode-Erkennung...');
+              scanLoopRef.current = true;
+              
+              // Kontinuierliches Scanning direkt vom Stream
+              const scanLoop = async () => {
+                while (scanLoopRef.current && videoRef.current && scanModeRef.current === 'barcode') {
                 try {
                   const result = await codeReader.decodeOnce(videoRef.current);
                   
@@ -362,9 +363,8 @@ const BarcodeScanner: React.FC = () => {
               }
             };
             
-            // Nur im Barcode-Modus automatisch scannen
-            if (scanModeRef.current === 'barcode') {
-              scanLoop();
+            // Scan-Loop starten
+            scanLoop();
             }
           }
         } catch (err: any) {
@@ -578,8 +578,8 @@ const BarcodeScanner: React.FC = () => {
       
       console.log('OCR Canvas erstellt:', cropWidth, 'x', cropHeight);
       
-      // OCR durchführen
-      const worker = await Tesseract.createWorker('eng+deu', undefined, {
+      // OCR durchführen - ohne Sprachmodell für bessere Zahlenerkennung
+      const worker = await Tesseract.createWorker('eng', undefined, {
         logger: (m) => {
           if (m.status === 'recognizing text') {
             setOcrProgress(Math.round(m.progress * 100));
@@ -587,9 +587,15 @@ const BarcodeScanner: React.FC = () => {
         },
       });
       
+      // PSM 7 = Single line, nur Zahlen und Buchstaben
+      await worker.setParameters({
+        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-/. ',
+      });
+      
       const result = await worker.recognize(canvas);
       await worker.terminate();
       
+      // Nur erkannte Zeichen zurückgeben, keine Interpretation
       const recognizedText = result.data.text.trim();
       console.log('OCR Ergebnis:', recognizedText, 'Confidence:', result.data.confidence);
       
@@ -1519,16 +1525,6 @@ const BarcodeScanner: React.FC = () => {
           {/* Barcode-Modus Aktionen */}
           {scanMode === 'barcode' && (
             <>
-              <Button 
-                onClick={performOCR} 
-                variant="outlined" 
-                color="secondary"
-                fullWidth
-                disabled={ocrLoading}
-                startIcon={<TextFieldsIcon />}
-              >
-                {ocrLoading ? 'OCR läuft...' : 'OCR versuchen (Zahlen unter Barcode)'}
-              </Button>
               <Button onClick={() => {
                 setCameraOpen(false);
                 resetOcr();
