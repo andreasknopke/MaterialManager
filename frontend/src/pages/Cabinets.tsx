@@ -521,48 +521,80 @@ const Cabinets: React.FC = () => {
                                     {/* Materialien dieser Kategorie */}
                                     <Box sx={{ ml: 2 }}>
                                       {materials.map((material: any, matIdx: number) => (
-                                        <Box key={`${material.article_number}-${matIdx}`} sx={{ mb: 0.5 }}>
-                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                            <Typography variant="body2" sx={{ fontWeight: 'normal' }}>
-                                              -
-                                            </Typography>
+                                        <Box key={`${material.article_number}-${matIdx}`} sx={{ mb: 0.5, display: 'flex', alignItems: 'flex-start' }}>
+                                          <Typography variant="body2" sx={{ fontWeight: 'normal', mr: 1, minWidth: '10px' }}>
+                                            -
+                                          </Typography>
+                                          <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', alignItems: 'center' }}>
                                             {material.shape_name && (
-                                              <Typography variant="body2">
-                                                Form: {material.shape_name}
-                                              </Typography>
+                                              <>
+                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                                                  Form:
+                                                </Typography>
+                                                <Typography variant="body2">
+                                                  {material.shape_name}
+                                                </Typography>
+                                              </>
                                             )}
                                             {material.shaft_length && (
-                                              <Typography variant="body2">
-                                                Schaftlänge: {material.shaft_length}
-                                              </Typography>
+                                              <>
+                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                                                  Schaftlänge:
+                                                </Typography>
+                                                <Typography variant="body2">
+                                                  {material.shaft_length}
+                                                </Typography>
+                                              </>
                                             )}
                                             {material.device_length && (
-                                              <Typography variant="body2">
-                                                Device-Länge: {material.device_length}
-                                              </Typography>
+                                              <>
+                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                                                  Device-Länge:
+                                                </Typography>
+                                                <Typography variant="body2">
+                                                  {material.device_length}
+                                                </Typography>
+                                              </>
                                             )}
                                             {material.device_diameter && (
-                                              <Typography variant="body2">
-                                                Device-Durchmesser: {material.device_diameter}
-                                              </Typography>
+                                              <>
+                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                                                  Device-Durchmesser:
+                                                </Typography>
+                                                <Typography variant="body2">
+                                                  {material.device_diameter}
+                                                </Typography>
+                                              </>
                                             )}
                                             {material.french_size && (
-                                              <Typography variant="body2">
-                                                French-Size: {material.french_size}
-                                              </Typography>
+                                              <>
+                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                                                  French-Size:
+                                                </Typography>
+                                                <Typography variant="body2">
+                                                  {material.french_size}
+                                                </Typography>
+                                              </>
                                             )}
                                             {material.guidewire_acceptance && (
-                                              <Typography variant="body2">
-                                                Guidewire-Acceptance: {material.guidewire_acceptance}
-                                              </Typography>
+                                              <>
+                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                                                  Guidewire-Acceptance:
+                                                </Typography>
+                                                <Typography variant="body2">
+                                                  {material.guidewire_acceptance}
+                                                </Typography>
+                                              </>
                                             )}
                                             {material.is_consignment && (
-                                              <Chip 
-                                                label="Konsignationsware" 
-                                                size="small"
-                                                color="warning"
-                                                sx={{ height: '18px', fontSize: '0.7rem' }}
-                                              />
+                                              <>
+                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                                                  Konsignationsware:
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ color: 'warning.main' }}>
+                                                  Ja
+                                                </Typography>
+                                              </>
                                             )}
                                           </Box>
                                         </Box>
