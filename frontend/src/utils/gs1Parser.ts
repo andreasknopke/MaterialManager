@@ -259,29 +259,49 @@ export function parseGS1Barcode(barcode: string): GS1Data {
         const maxEndPos = Math.min(position + pattern.length, normalized.length);
         console.log(`Datums-AI: Suche Ende von Position ${position} bis maximal ${maxEndPos}`);
         
-        // Prüfe explizit an Position+4 ob dort ein bekannter AI beginnt
-        let endPos = maxEndPos; // Default: volle Länge
+        // Default: volle Länge (6 Zeichen für YYMMDD)
+        let endPos = maxEndPos;
         
-        // Prüfe ob an Position+4 ein gültiger AI beginnt (YYMM Format)
-        if (position + 4 < normalized.length) {
-          for (let len = 2; len <= 4; len++) {
-            const testAI = normalized.substring(position + 4, position + 4 + len);
-            console.log(`  Prüfe YYMM-Ende: AI "${testAI}" an Position ${position + 4}`);
-            if (AI_PATTERNS[testAI]) {
-              const aiPattern = AI_PATTERNS[testAI];
-              const remainingAfterAI = normalized.length - (position + 4) - len;
-              console.log(`  -> AI ${testAI} gefunden, remaining: ${remainingAfterAI}`);
-              
-              // Prüfe ob nach dem AI genug Daten folgen
-              if (aiPattern.length !== null && remainingAfterAI >= Math.min(aiPattern.length, 4)) {
-                console.log(`  -> Beende Datums-AI nach 4 Zeichen (YYMM Format)`);
-                endPos = position + 4;
-                break;
-              }
-              if (aiPattern.length === null && remainingAfterAI >= 1) {
-                console.log(`  -> Beende Datums-AI nach 4 Zeichen (YYMM Format)`);
-                endPos = position + 4;
-                break;
+        // YYMM-Heuristik NUR wenn wir nicht genug Zeichen für volles Datum haben
+        // ODER wenn an Position+6 ein nicht-Datums-AI beginnt
+        const hasFullDate = (normalized.length >= position + 6);
+        
+        if (!hasFullDate && position + 4 <= normalized.length) {
+          // Nicht genug Zeichen für volles Datum - prüfe YYMM
+          console.log(`  Nicht genug Zeichen für YYMMDD, prüfe YYMM`);
+          endPos = position + 4;
+        } else if (hasFullDate) {
+          // Prüfe ob an Position+6 ein gültiger AI beginnt
+          // Wenn ja, verwende volles 6-stelliges Datum
+          // Prüfe auch an Position+4, aber NUR wenn der gefundene AI KEIN Datums-AI ist
+          // (um zu verhindern, dass "17" im Datum als AI interpretiert wird)
+          if (position + 4 < normalized.length) {
+            for (let len = 2; len <= 4; len++) {
+              const testAI = normalized.substring(position + 4, position + 4 + len);
+              console.log(`  Prüfe YYMM-Ende: AI "${testAI}" an Position ${position + 4}`);
+              if (AI_PATTERNS[testAI]) {
+                // WICHTIG: Wenn der gefundene AI ein Datums-AI (11 oder 17) ist,
+                // ignoriere ihn - das ist wahrscheinlich Teil des Datums!
+                if (testAI === '11' || testAI === '17') {
+                  console.log(`  -> "${testAI}" ist ein Datums-AI, ignoriere (wahrscheinlich Teil des Datums)`);
+                  continue;
+                }
+                
+                const aiPattern = AI_PATTERNS[testAI];
+                const remainingAfterAI = normalized.length - (position + 4) - len;
+                console.log(`  -> AI ${testAI} gefunden, remaining: ${remainingAfterAI}`);
+                
+                // Prüfe ob nach dem AI genug Daten folgen
+                if (aiPattern.length !== null && remainingAfterAI >= Math.min(aiPattern.length, 4)) {
+                  console.log(`  -> Beende Datums-AI nach 4 Zeichen (YYMM Format)`);
+                  endPos = position + 4;
+                  break;
+                }
+                if (aiPattern.length === null && remainingAfterAI >= 1) {
+                  console.log(`  -> Beende Datums-AI nach 4 Zeichen (YYMM Format)`);
+                  endPos = position + 4;
+                  break;
+                }
               }
             }
           }
