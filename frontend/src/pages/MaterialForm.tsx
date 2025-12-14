@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -29,14 +29,18 @@ import {
   ArrowBack as ArrowBackIcon,
   Save as SaveIcon,
   QrCodeScanner as QrCodeScannerIcon,
+  CameraAlt as CameraIcon,
   Clear as ClearIcon,
   Edit as EditIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { materialAPI, cabinetAPI, categoryAPI, companyAPI, unitAPI, shapeAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
 import { useAuth } from '../contexts/AuthContext';
+import { getScannerSettings } from './Admin';
+import { BrowserMultiFormatReader } from '@zxing/library';
 
 // Debounce Timer für GS1 Debug Logging und GTIN-Suche
 let gs1DebugTimer: ReturnType<typeof setTimeout> | null = null;
@@ -129,6 +133,17 @@ const MaterialForm: React.FC = () => {
   // Fach-QR-Code Status
   const [compartmentQrInput, setCompartmentQrInput] = useState<string>('');
   const [compartmentQrData, setCompartmentQrData] = useState<any>(null);
+  
+  // Scanner-Einstellung
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  
+  // Kamera-Scanner Dialog
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerMode, setScannerMode] = useState<'gs1' | 'qr'>('gs1'); // Was wird gescannt?
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  const scanLoopRef = useRef<boolean>(false);
 
   const [formData, setFormData] = useState<MaterialFormData>({
     name: '',
@@ -162,6 +177,10 @@ const MaterialForm: React.FC = () => {
     console.log('MaterialForm useEffect triggered');
     console.log('isNew in useEffect:', isNew);
     console.log('id in useEffect:', id);
+    
+    // Scanner-Einstellung laden
+    const settings = getScannerSettings();
+    setCameraEnabled(settings.cameraEnabled);
     
     fetchDropdownData();
     
@@ -606,6 +625,105 @@ const MaterialForm: React.FC = () => {
     setCompartmentQrData(null);
   };
 
+  // Kamera-Scanner öffnen
+  const openScanner = (mode: 'gs1' | 'qr') => {
+    setScannerMode(mode);
+    setScannerOpen(true);
+  };
+
+  // Kamera-Scanner schließen
+  const closeScanner = () => {
+    scanLoopRef.current = false;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (codeReaderRef.current) {
+      codeReaderRef.current = null;
+    }
+    setScannerOpen(false);
+  };
+
+  // Scanner starten wenn Dialog öffnet
+  useEffect(() => {
+    if (!scannerOpen) return;
+
+    const startScanner = async () => {
+      // Warte auf Video-Element
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      if (!videoRef.current) {
+        console.error('Video-Element nicht verfügbar');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        
+        streamRef.current = stream;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+
+        const codeReader = new BrowserMultiFormatReader();
+        codeReaderRef.current = codeReader;
+        scanLoopRef.current = true;
+
+        // Scan-Loop
+        const scanLoop = async () => {
+          while (scanLoopRef.current && videoRef.current) {
+            try {
+              const result = await codeReader.decodeOnce(videoRef.current);
+              if (result) {
+                const scannedCode = result.getText();
+                console.log('Scanner erkannt:', scannedCode);
+                
+                if (scannerMode === 'gs1') {
+                  // GS1-Barcode verarbeiten
+                  setFormData(prev => ({ ...prev, gs1_barcode: scannedCode }));
+                  // GS1-Parser triggern
+                  handleGS1BarcodeChange({ target: { value: scannedCode } } as React.ChangeEvent<HTMLInputElement>);
+                } else {
+                  // QR-Code für Fach verarbeiten
+                  setCompartmentQrInput(scannedCode);
+                  handleCompartmentQrChange({ target: { value: scannedCode } } as React.ChangeEvent<HTMLInputElement>);
+                }
+                
+                closeScanner();
+                return;
+              }
+            } catch (err: any) {
+              if (err.name !== 'NotFoundException') {
+                console.error('Scan-Fehler:', err);
+              }
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        };
+        
+        scanLoop();
+      } catch (err: any) {
+        console.error('Kamera-Fehler:', err);
+        setError('Kamera-Zugriff fehlgeschlagen: ' + err.message);
+        closeScanner();
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      scanLoopRef.current = false;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [scannerOpen, scannerMode]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -712,13 +830,22 @@ const MaterialForm: React.FC = () => {
                       <QrCodeScannerIcon color="secondary" />
                     </InputAdornment>
                   ),
-                  endAdornment: compartmentQrInput && (
+                  endAdornment: (
                     <InputAdornment position="end">
-                      <Tooltip title="Fach-Daten löschen">
-                        <IconButton onClick={clearCompartmentQrData} size="small">
-                          <ClearIcon />
-                        </IconButton>
-                      </Tooltip>
+                      {cameraEnabled && (
+                        <Tooltip title="Kamera-Scanner öffnen">
+                          <IconButton onClick={() => openScanner('qr')} size="small" color="primary">
+                            <CameraIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {compartmentQrInput && (
+                        <Tooltip title="Fach-Daten löschen">
+                          <IconButton onClick={clearCompartmentQrData} size="small">
+                            <ClearIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </InputAdornment>
                   ),
                 }}
@@ -751,13 +878,22 @@ const MaterialForm: React.FC = () => {
                       <QrCodeScannerIcon />
                     </InputAdornment>
                   ),
-                  endAdornment: formData.gs1_barcode && (
+                  endAdornment: (
                     <InputAdornment position="end">
-                      <Tooltip title="GS1-Daten löschen">
-                        <IconButton onClick={clearGS1Data} size="small">
-                          <ClearIcon />
-                        </IconButton>
-                      </Tooltip>
+                      {cameraEnabled && (
+                        <Tooltip title="Kamera-Scanner öffnen">
+                          <IconButton onClick={() => openScanner('gs1')} size="small" color="primary">
+                            <CameraIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {formData.gs1_barcode && (
+                        <Tooltip title="GS1-Daten löschen">
+                          <IconButton onClick={clearGS1Data} size="small">
+                            <ClearIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </InputAdornment>
                   ),
                 }}
@@ -1346,6 +1482,59 @@ const MaterialForm: React.FC = () => {
         <DialogActions>
           <Button onClick={() => setShapeDialogOpen(false)}>
             Schließen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Kamera-Scanner Dialog */}
+      <Dialog 
+        open={scannerOpen} 
+        onClose={closeScanner}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CameraIcon />
+            {scannerMode === 'gs1' ? 'GS1-Barcode scannen' : 'Fach-QR-Code scannen'}
+          </Box>
+          <IconButton onClick={closeScanner} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, position: 'relative', overflow: 'hidden' }}>
+          <Box sx={{ 
+            width: '100%', 
+            position: 'relative',
+            backgroundColor: '#000',
+            minHeight: 300,
+          }}>
+            <video
+              ref={videoRef}
+              style={{
+                width: '100%',
+                maxHeight: '400px',
+                objectFit: 'contain',
+                backgroundColor: '#000',
+              }}
+              playsInline
+              muted
+            />
+          </Box>
+          <Typography 
+            variant="body2" 
+            color="text.secondary" 
+            align="center"
+            sx={{ p: 2 }}
+          >
+            {scannerMode === 'gs1' 
+              ? 'Halten Sie den GS1-Barcode vor die Kamera'
+              : 'Halten Sie den Fach-QR-Code vor die Kamera'}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={closeScanner} variant="outlined" fullWidth>
+            Abbrechen
           </Button>
         </DialogActions>
       </Dialog>
