@@ -244,11 +244,14 @@ const BarcodeScanner: React.FC = () => {
         try {
           // Explizit Kamera-Berechtigung anfordern
           console.log('Fordere Kamera-Zugriff an...');
+          
+          // Höhere Auflösung für OCR-Modus
+          const isOcrMode = scanModeRef.current === 'ocr';
           const stream = await navigator.mediaDevices.getUserMedia({
             video: { 
               facingMode: 'environment',
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
+              width: { ideal: isOcrMode ? 1920 : 1280 },
+              height: { ideal: isOcrMode ? 1080 : 720 }
             }
           });
           
@@ -589,7 +592,7 @@ const BarcodeScanner: React.FC = () => {
       
       // PSM 7 = Single line, nur Zahlen und Buchstaben
       await worker.setParameters({
-        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-/. ',
+        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz()-/. ',
       });
       
       const result = await worker.recognize(canvas);
