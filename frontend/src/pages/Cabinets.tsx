@@ -500,91 +500,77 @@ const Cabinets: React.FC = () => {
                             </Typography>
                           ) : (
                             <Box sx={{ ml: 2 }}>
-                              {compartment.materials.map((material, matIdx) => (
-                                <Box 
-                                  key={`${material.article_number}-${matIdx}`} 
-                                  sx={{ 
-                                    mb: 1.5, 
-                                    pb: 1.5, 
-                                    borderBottom: matIdx < compartment.materials.length - 1 ? '1px solid #e0e0e0' : 'none'
-                                  }}
-                                >
-                                  {/* Kategorie als Hauptüberschrift */}
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                                      {material.category_name || 'Ohne Kategorie'} -
-                                    </Typography>
-                                    {material.is_consignment && (
-                                      <Chip 
-                                        label="Konsignationsware" 
-                                        size="small"
-                                        color="warning"
-                                        sx={{ height: '20px', fontSize: '0.7rem' }}
-                                      />
-                                    )}
-                                  </Box>
+                              {(() => {
+                                // Gruppiere Materialien nach Kategorie
+                                const materialsByCategory = compartment.materials.reduce((acc: any, material) => {
+                                  const category = material.category_name || 'Ohne Kategorie';
+                                  if (!acc[category]) {
+                                    acc[category] = [];
+                                  }
+                                  acc[category].push(material);
+                                  return acc;
+                                }, {});
 
-                                  {/* Device-Eigenschaften */}
-                                  <Box sx={{ ml: 2 }}>
-                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                      {material.shape_name && (
-                                        <Chip
-                                          label={`Form: ${material.shape_name}`}
-                                          size="small"
-                                          variant="outlined"
-                                          sx={{ fontSize: '0.75rem' }}
-                                        />
-                                      )}
-                                      {material.shaft_length && (
-                                        <Chip
-                                          label={`Schaftlänge: ${material.shaft_length}`}
-                                          size="small"
-                                          variant="outlined"
-                                          sx={{ fontSize: '0.75rem' }}
-                                        />
-                                      )}
-                                      {material.device_length && (
-                                        <Chip
-                                          label={`Device-Länge: ${material.device_length}`}
-                                          size="small"
-                                          variant="outlined"
-                                          sx={{ fontSize: '0.75rem' }}
-                                        />
-                                      )}
-                                      {material.device_diameter && (
-                                        <Chip
-                                          label={`Device-Durchmesser: ${material.device_diameter}`}
-                                          size="small"
-                                          variant="outlined"
-                                          sx={{ fontSize: '0.75rem' }}
-                                        />
-                                      )}
-                                      {material.french_size && (
-                                        <Chip
-                                          label={`French-Size: ${material.french_size}`}
-                                          size="small"
-                                          variant="outlined"
-                                          sx={{ fontSize: '0.75rem' }}
-                                        />
-                                      )}
-                                      {material.guidewire_acceptance && (
-                                        <Chip
-                                          label={`Guidewire-Acceptance: ${material.guidewire_acceptance}`}
-                                          size="small"
-                                          variant="outlined"
-                                          sx={{ fontSize: '0.75rem' }}
-                                        />
-                                      )}
+                                return Object.entries(materialsByCategory).map(([category, materials]: [string, any], catIdx) => (
+                                  <Box key={catIdx} sx={{ mb: 2 }}>
+                                    {/* Kategorie als Überschrift */}
+                                    <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                      {category}
+                                    </Typography>
+
+                                    {/* Materialien dieser Kategorie */}
+                                    <Box sx={{ ml: 2 }}>
+                                      {materials.map((material: any, matIdx: number) => (
+                                        <Box key={`${material.article_number}-${matIdx}`} sx={{ mb: 0.5 }}>
+                                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                            <Typography variant="body2" sx={{ fontWeight: 'normal' }}>
+                                              -
+                                            </Typography>
+                                            {material.shape_name && (
+                                              <Typography variant="body2">
+                                                Form: {material.shape_name}
+                                              </Typography>
+                                            )}
+                                            {material.shaft_length && (
+                                              <Typography variant="body2">
+                                                Schaftlänge: {material.shaft_length}
+                                              </Typography>
+                                            )}
+                                            {material.device_length && (
+                                              <Typography variant="body2">
+                                                Device-Länge: {material.device_length}
+                                              </Typography>
+                                            )}
+                                            {material.device_diameter && (
+                                              <Typography variant="body2">
+                                                Device-Durchmesser: {material.device_diameter}
+                                              </Typography>
+                                            )}
+                                            {material.french_size && (
+                                              <Typography variant="body2">
+                                                French-Size: {material.french_size}
+                                              </Typography>
+                                            )}
+                                            {material.guidewire_acceptance && (
+                                              <Typography variant="body2">
+                                                Guidewire-Acceptance: {material.guidewire_acceptance}
+                                              </Typography>
+                                            )}
+                                            {material.is_consignment && (
+                                              <Chip 
+                                                label="Konsignationsware" 
+                                                size="small"
+                                                color="warning"
+                                                sx={{ height: '18px', fontSize: '0.7rem' }}
+                                              />
+                                            )}
+                                          </Box>
+                                        </Box>
+                                      ))}
                                     </Box>
-                                    {!material.shape_name && !material.shaft_length && !material.device_length && 
-                                     !material.device_diameter && !material.french_size && !material.guidewire_acceptance && (
-                                      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                                        Keine Eigenschaften definiert
-                                      </Typography>
-                                    )}
                                   </Box>
-                                </Box>
-                              ))}
+                                ));
+                              })()}
                             </Box>
                           )}
                         </Box>
