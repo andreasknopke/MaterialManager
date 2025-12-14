@@ -150,7 +150,6 @@ const Materials: React.FC = () => {
       headerName: 'Bezeichnung', 
       minWidth: 150, 
       flex: 1,
-      valueGetter: (params) => params.row.name,
       renderCell: (params) => (
         <Box sx={{ 
           display: 'flex', 
@@ -161,7 +160,7 @@ const Materials: React.FC = () => {
           pl: params.row.is_consignment ? 1 : 0,
           ml: params.row.is_consignment ? -1 : 0,
         }}>
-          {params.value}
+          {params.row.name}
           {params.row.is_consignment && (
             <Chip 
               label="K" 
