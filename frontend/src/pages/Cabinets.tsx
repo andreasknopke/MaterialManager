@@ -514,91 +514,40 @@ const Cabinets: React.FC = () => {
                                 return Object.entries(materialsByCategory).map(([category, materials]: [string, any], catIdx) => (
                                   <Box key={catIdx} sx={{ mb: 2 }}>
                                     {/* Kategorie als Überschrift */}
-                                    <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                    <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 0.5 }}>
                                       {category}
                                     </Typography>
 
                                     {/* Materialien dieser Kategorie */}
-                                    <Box sx={{ ml: 2 }}>
-                                      {materials.map((material: any, matIdx: number) => (
-                                        <Box key={`${material.article_number}-${matIdx}`} sx={{ mb: 0.5, display: 'flex', alignItems: 'flex-start' }}>
-                                          <Typography variant="body2" sx={{ fontWeight: 'normal', mr: 1, minWidth: '10px' }}>
-                                            -
-                                          </Typography>
-                                          <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', alignItems: 'center' }}>
-                                            {material.shape_name && (
-                                              <>
-                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
-                                                  Form:
-                                                </Typography>
-                                                <Typography variant="body2">
-                                                  {material.shape_name}
-                                                </Typography>
-                                              </>
-                                            )}
-                                            {material.shaft_length && (
-                                              <>
-                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
-                                                  Schaftlänge:
-                                                </Typography>
-                                                <Typography variant="body2">
-                                                  {material.shaft_length}
-                                                </Typography>
-                                              </>
-                                            )}
-                                            {material.device_length && (
-                                              <>
-                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
-                                                  Device-Länge:
-                                                </Typography>
-                                                <Typography variant="body2">
-                                                  {material.device_length}
-                                                </Typography>
-                                              </>
-                                            )}
-                                            {material.device_diameter && (
-                                              <>
-                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
-                                                  Device-Durchmesser:
-                                                </Typography>
-                                                <Typography variant="body2">
-                                                  {material.device_diameter}
-                                                </Typography>
-                                              </>
-                                            )}
-                                            {material.french_size && (
-                                              <>
-                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
-                                                  French-Size:
-                                                </Typography>
-                                                <Typography variant="body2">
-                                                  {material.french_size}
-                                                </Typography>
-                                              </>
-                                            )}
-                                            {material.guidewire_acceptance && (
-                                              <>
-                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
-                                                  Guidewire-Acceptance:
-                                                </Typography>
-                                                <Typography variant="body2">
-                                                  {material.guidewire_acceptance}
-                                                </Typography>
-                                              </>
-                                            )}
-                                            {material.is_consignment && (
-                                              <>
-                                                <Typography variant="body2" sx={{ fontWeight: 'bold', textAlign: 'right' }}>
-                                                  Konsignationsware:
-                                                </Typography>
-                                                <Typography variant="body2" sx={{ color: 'warning.main' }}>
-                                                  Ja
-                                                </Typography>
-                                              </>
-                                            )}
+                                    <Box component="ul" sx={{ ml: 2, mt: 0, mb: 0, pl: 2 }}>
+                                      {materials.map((material: any, matIdx: number) => {
+                                        // Sammle alle Eigenschaften in einem Array
+                                        const properties: string[] = [];
+                                        
+                                        if (material.shape_name) properties.push(`Form: ${material.shape_name}`);
+                                        if (material.shaft_length) properties.push(`Schaftlänge: ${material.shaft_length}`);
+                                        if (material.device_length) properties.push(`Device-Länge: ${material.device_length}`);
+                                        if (material.device_diameter) properties.push(`Device-Durchmesser: ${material.device_diameter}`);
+                                        if (material.french_size) properties.push(`French-Size: ${material.french_size}`);
+                                        if (material.guidewire_acceptance) properties.push(`Guidewire-Acceptance: ${material.guidewire_acceptance}`);
+                                        if (material.is_consignment) properties.push('Konsignationsware');
+                                        
+                                        return (
+                                          <Box component="li" key={`${material.article_number}-${matIdx}`} sx={{ mb: 0.3 }}>
+                                            <Typography 
+                                              variant="body2" 
+                                              component="span"
+                                              sx={{ 
+                                                fontFamily: 'monospace',
+                                                whiteSpace: 'pre',
+                                                fontSize: '0.85rem'
+                                              }}
+                                            >
+                                              {properties.join('\t')}
+                                            </Typography>
                                           </Box>
-                                        </Box>
-                                      ))}
+                                        );
+                                      })}
                                     </Box>
                                   </Box>
                                 ));
