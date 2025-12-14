@@ -304,11 +304,51 @@ const BarcodeScanner: React.FC = () => {
               console.log('Starte Barcode-Erkennung...');
               scanLoopRef.current = true;
               
-              // Kontinuierliches Scanning direkt vom Stream
+              // Canvas für Scan-Bereich-Ausschnitt erstellen
+              const cropCanvas = document.createElement('canvas');
+              const cropCtx = cropCanvas.getContext('2d');
+              
+              // Kontinuierliches Scanning nur im Scan-Bereich
               const scanLoop = async () => {
                 while (scanLoopRef.current && videoRef.current && scanModeRef.current === 'barcode') {
                 try {
-                  const result = await codeReader.decodeOnce(videoRef.current);
+                  const video = videoRef.current;
+                  
+                  // Scan-Bereich berechnen (85% der Breite, 25% der Höhe, zentriert)
+                  // Diese Werte müssen mit drawScanOverlay übereinstimmen!
+                  const videoWidth = video.videoWidth;
+                  const videoHeight = video.videoHeight;
+                  const scanAreaWidth = Math.round(videoWidth * 0.85);
+                  const scanAreaHeight = Math.round(videoHeight * 0.25);
+                  const scanAreaX = Math.round((videoWidth - scanAreaWidth) / 2);
+                  const scanAreaY = Math.round((videoHeight - scanAreaHeight) / 2);
+                  
+                  // Canvas auf Scan-Bereich-Größe setzen
+                  cropCanvas.width = scanAreaWidth;
+                  cropCanvas.height = scanAreaHeight;
+                  
+                  // Nur den Scan-Bereich auf Canvas zeichnen
+                  if (cropCtx) {
+                    cropCtx.drawImage(
+                      video,
+                      scanAreaX, scanAreaY, scanAreaWidth, scanAreaHeight, // Quellbereich
+                      0, 0, scanAreaWidth, scanAreaHeight // Zielbereich
+                    );
+                  }
+                  
+                  // ZXing auf dem zugeschnittenen Canvas scannen (als ImageData)
+                  // Canvas zu Data-URL konvertieren für ZXing (JPEG ist schneller als PNG)
+                  const imageUrl = cropCanvas.toDataURL('image/jpeg', 0.8);
+                  
+                  let result;
+                  try {
+                    result = await codeReader.decodeFromImageUrl(imageUrl);
+                  } catch (err: any) {
+                    // NotFoundException ist normal beim Scannen - ignorieren
+                    if (err.name !== 'NotFoundException') {
+                      throw err;
+                    }
+                  }
                   
                   if (result) {
                     const scannedCode = result.getText();

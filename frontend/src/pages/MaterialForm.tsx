@@ -445,9 +445,9 @@ const MaterialForm: React.FC = () => {
     const hexDump = Array.from(barcode).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
     console.log('Barcode Hex:', hexDump);
     
-    setFormData({ ...formData, gs1_barcode: barcode });
+    setFormData(prev => ({ ...prev, gs1_barcode: barcode }));
     setGs1Warning(null);
-    setGs1Data(null);
+    // gs1Data NICHT auf null setzen - wir wollen vorherige Daten behalten für Split-Barcodes
 
     if (!barcode) {
       return;
@@ -475,9 +475,22 @@ const MaterialForm: React.FC = () => {
           })
         }).catch(err => console.log('Debug log failed:', err));
       }, 500);
-      setGs1Data(parsed);
+      
+      // GS1-Daten zusammenführen (für Split-Barcodes)
+      // Neue Werte überschreiben nur wenn sie vorhanden sind
+      setGs1Data(prevGs1 => ({
+        ...prevGs1,
+        ...parsed,
+        // Nur überschreiben wenn der neue Wert vorhanden ist
+        gtin: parsed.gtin || prevGs1?.gtin,
+        batchNumber: parsed.batchNumber || prevGs1?.batchNumber,
+        expiryDate: parsed.expiryDate || prevGs1?.expiryDate,
+        serialNumber: parsed.serialNumber || prevGs1?.serialNumber,
+        raw: barcode, // Immer den letzten Barcode speichern
+      }));
 
       // Auto-Fill Felder aus dem gescannten Barcode
+      // Nur Felder aktualisieren die im aktuellen Scan vorhanden sind
       const updates: Partial<MaterialFormData> = {};
 
       if (parsed.gtin) {
@@ -495,7 +508,7 @@ const MaterialForm: React.FC = () => {
         updates.expiry_date = parsed.expiryDate;
       }
 
-      // Sofort die Barcode-Daten anwenden
+      // Sofort die Barcode-Daten anwenden (nur die neuen Felder)
       if (Object.keys(updates).length > 0) {
         setFormData(prev => ({ ...prev, ...updates }));
       }
