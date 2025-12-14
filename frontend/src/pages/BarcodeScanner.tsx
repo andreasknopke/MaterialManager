@@ -799,6 +799,10 @@ const BarcodeScanner: React.FC = () => {
       gs1Data = parseGS1Barcode(scannedCode);
       console.log('GS1 barcode parsed:', gs1Data);
       setScannedGS1Data(gs1Data);
+      
+      // Kurze Pause um sicherzustellen, dass der State aktualisiert wurde
+      // bevor API-Calls gestartet werden
+      await new Promise(resolve => setTimeout(resolve, 100));
     } else {
       console.log('Kein GS1-Barcode, behandle als einfachen Barcode');
       // Kein GS1-Barcode - direkt zur Material-Suche per Barcode
