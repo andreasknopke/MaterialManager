@@ -124,6 +124,10 @@ const MaterialForm: React.FC = () => {
   const [shapeLoading, setShapeLoading] = useState(false);
   const [shapeError, setShapeError] = useState<string | null>(null);
 
+  // Packung/Stück-Dialog
+  const [packDialogOpen, setPackDialogOpen] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<any>(null);
+
   // GS1-Parser Status
   const [gs1Data, setGs1Data] = useState<GS1Data | null>(null);
   const [gs1Warning, setGs1Warning] = useState<string | null>(null);
@@ -703,11 +707,54 @@ const MaterialForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Bei neuen Materialien mit Packung > 1: Dialog anzeigen
+    const packSize = parseInt(formData.size) || 1;
+    if (isNew && formData.unit === 'Packung' && packSize > 1) {
+      // Daten für späteren Speichervorgang vorbereiten
+      const dataToSend = {
+        ...formData,
+        category_id: formData.category_id || null,
+        company_id: formData.company_id || null,
+        cabinet_id: formData.cabinet_id || null,
+        compartment_id: formData.compartment_id || null,
+        expiry_date: formData.expiry_date || null,
+        cost: formData.cost ? parseFloat(formData.cost) : null,
+        // Device-Eigenschaften
+        shape_id: formData.shape_id || null,
+        shaft_length: formData.shaft_length || null,
+        device_length: formData.device_length || null,
+        device_diameter: formData.device_diameter || null,
+        french_size: formData.french_size || null,
+        guidewire_acceptance: formData.guidewire_acceptance || null,
+      };
+      
+      // GS1 Barcode als zusätzlichen Barcode hinzufügen, falls vorhanden
+      const barcodes = [];
+      if (formData.gs1_barcode && gs1Data) {
+        barcodes.push({
+          barcode: formData.gs1_barcode,
+          barcode_type: 'GS1-128',
+          is_primary: true,
+        });
+      }
+      
+      setPendingFormData({ ...dataToSend, barcodes, packSize });
+      setPackDialogOpen(true);
+      return;
+    }
+    
+    // Normales Speichern (einzelnes Material oder Bearbeitung)
+    await saveAsSingleItem();
+  };
+
+  // Speichert ein einzelnes Material (Packung oder Stück)
+  const saveAsSingleItem = async (overrideData?: any) => {
     setSaving(true);
     setError(null);
 
     try {
-      const dataToSend = {
+      const dataToSend = overrideData || {
         ...formData,
         category_id: formData.category_id || null,
         company_id: formData.company_id || null,
@@ -725,8 +772,8 @@ const MaterialForm: React.FC = () => {
       };
 
       // GS1 Barcode als zusätzlichen Barcode hinzufügen, falls vorhanden
-      const barcodes = [];
-      if (formData.gs1_barcode && gs1Data) {
+      const barcodes = overrideData?.barcodes || [];
+      if (!overrideData && formData.gs1_barcode && gs1Data) {
         barcodes.push({
           barcode: formData.gs1_barcode,
           barcode_type: 'GS1-128',
@@ -748,6 +795,52 @@ const MaterialForm: React.FC = () => {
       setError(err.response?.data?.error || 'Fehler beim Speichern des Materials');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Speichert als Packung (1 Eintrag)
+  const saveAsPackage = async () => {
+    setPackDialogOpen(false);
+    if (pendingFormData) {
+      await saveAsSingleItem(pendingFormData);
+    }
+    setPendingFormData(null);
+  };
+
+  // Speichert als einzelne Stücke (mehrere Einträge)
+  const saveAsIndividualItems = async () => {
+    setPackDialogOpen(false);
+    if (!pendingFormData) return;
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const { packSize, barcodes, ...baseData } = pendingFormData;
+      
+      // Für jedes Stück in der Packung einen Eintrag erstellen
+      const promises = [];
+      for (let i = 0; i < packSize; i++) {
+        const itemData = {
+          ...baseData,
+          unit: 'Stück',
+          size: '1',
+          // Barcode nur beim ersten Eintrag hinzufügen (um Duplikate zu vermeiden)
+          barcodes: i === 0 ? barcodes : [],
+        };
+        promises.push(materialAPI.create(itemData));
+      }
+      
+      await Promise.all(promises);
+      
+      setSuccess(`${packSize} einzelne Materialien erfolgreich erstellt!`);
+      setTimeout(() => navigate('/materials'), 1500);
+    } catch (err: any) {
+      console.error('Fehler beim Speichern:', err);
+      setError(err.response?.data?.error || 'Fehler beim Speichern der Materialien');
+    } finally {
+      setSaving(false);
+      setPendingFormData(null);
     }
   };
 
@@ -1459,6 +1552,80 @@ const MaterialForm: React.FC = () => {
         <DialogActions>
           <Button onClick={() => setShapeDialogOpen(false)}>
             Schließen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Packung/Stück Dialog */}
+      <Dialog
+        open={packDialogOpen}
+        onClose={() => setPackDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Wie möchten Sie die Packung speichern?
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Sie haben eine <strong>Packung mit {pendingFormData?.packSize || 0} Einheiten</strong> eingegeben.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Bei Materialien wie Drähten oder Kathetern ist es oft sinnvoll, jeden Artikel einzeln zu erfassen. 
+            So können Sie später einzelne Stücke aus dem Schrank entnehmen, ohne die ganze Packung zu entfernen.
+          </Typography>
+          
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Paper 
+              elevation={2} 
+              sx={{ 
+                p: 2, 
+                cursor: 'pointer',
+                border: '2px solid transparent',
+                transition: 'all 0.2s',
+                '&:hover': { 
+                  bgcolor: 'action.hover',
+                  borderColor: 'primary.main' 
+                }
+              }}
+              onClick={saveAsIndividualItems}
+            >
+              <Typography variant="subtitle1" fontWeight="bold" color="primary">
+                🔢 Als {pendingFormData?.packSize || 0} einzelne Stücke speichern
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Jedes Stück wird separat erfasst und kann einzeln entnommen werden.
+                Empfohlen für Verbrauchsmaterialien.
+              </Typography>
+            </Paper>
+            
+            <Paper 
+              elevation={2} 
+              sx={{ 
+                p: 2, 
+                cursor: 'pointer',
+                border: '2px solid transparent',
+                transition: 'all 0.2s',
+                '&:hover': { 
+                  bgcolor: 'action.hover',
+                  borderColor: 'secondary.main' 
+                }
+              }}
+              onClick={saveAsPackage}
+            >
+              <Typography variant="subtitle1" fontWeight="bold" color="secondary">
+                📦 Als 1 Packung speichern
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Die Packung wird als Ganzes erfasst. 
+                Geeignet für Materialien, die immer komplett entnommen werden.
+              </Typography>
+            </Paper>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPackDialogOpen(false)} color="inherit">
+            Abbrechen
           </Button>
         </DialogActions>
       </Dialog>
