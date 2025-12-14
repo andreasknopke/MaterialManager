@@ -643,46 +643,59 @@ const MaterialForm: React.FC = () => {
     if (state?.fromScanner && state?.scannedCode) {
       console.log('Zurück vom Scanner mit Code:', state.scannedCode, 'Mode:', state.scanMode);
       
+      // Zuerst Formular-Daten aus sessionStorage wiederherstellen
+      const savedFormData = sessionStorage.getItem('materialFormData');
+      let restoredData: MaterialFormData | null = null;
+      if (savedFormData) {
+        try {
+          restoredData = JSON.parse(savedFormData);
+          sessionStorage.removeItem('materialFormData');
+          sessionStorage.removeItem('materialFormScannerMode');
+          sessionStorage.removeItem('materialFormReturnPath');
+        } catch (e) {
+          console.error('Fehler beim Wiederherstellen der Formulardaten:', e);
+        }
+      }
+      
       if (state.scanMode === 'gs1') {
         // GS1-Barcode verarbeiten
-        setFormData(prev => ({ ...prev, gs1_barcode: state.scannedCode! }));
-        // Parser triggern
-        const gs1 = parseGS1Barcode(state.scannedCode!);
+        const scannedCode = state.scannedCode!;
+        const gs1 = parseGS1Barcode(scannedCode);
+        console.log('GS1 geparst:', gs1);
+        
         if (gs1) {
           setGs1Data(gs1);
-          // Felder automatisch ausfüllen
-          if (gs1.gtin) {
-            setFormData(prev => ({ ...prev, article_number: gs1.gtin! }));
-          }
-          if (gs1.batchNumber) {
-            setFormData(prev => ({ ...prev, lot_number: gs1.batchNumber! }));
-          }
-          if (gs1.expiryDate) {
-            setFormData(prev => ({ ...prev, expiry_date: gs1.expiryDate! }));
-          }
+          // Alle Felder in einem Update setzen
+          setFormData(prev => ({
+            ...prev,
+            ...(restoredData || {}),
+            gs1_barcode: scannedCode,
+            article_number: gs1.gtin || prev.article_number,
+            lot_number: gs1.batchNumber || gs1.serialNumber || prev.lot_number,
+            expiry_date: gs1.expiryDate || prev.expiry_date,
+          }));
+        } else {
+          // Kein GS1, aber trotzdem den Code speichern
+          setFormData(prev => ({
+            ...prev,
+            ...(restoredData || {}),
+            gs1_barcode: scannedCode,
+          }));
         }
       } else if (state.scanMode === 'qr') {
         // QR-Code für Fach verarbeiten
+        if (restoredData) {
+          setFormData(prev => ({ ...prev, ...restoredData }));
+        }
         setCompartmentQrInput(state.scannedCode!);
-        handleCompartmentQrChange({ target: { value: state.scannedCode! } } as React.ChangeEvent<HTMLInputElement>);
+        // Verzögert aufrufen, damit State aktualisiert ist
+        setTimeout(() => {
+          handleCompartmentQrChange({ target: { value: state.scannedCode! } } as React.ChangeEvent<HTMLInputElement>);
+        }, 100);
       }
       
       // State bereinigen
       window.history.replaceState({}, document.title);
-    }
-    
-    // Formular-Daten aus sessionStorage wiederherstellen
-    const savedFormData = sessionStorage.getItem('materialFormData');
-    if (savedFormData && state?.fromScanner) {
-      try {
-        const parsed = JSON.parse(savedFormData);
-        setFormData(prev => ({ ...prev, ...parsed }));
-        sessionStorage.removeItem('materialFormData');
-        sessionStorage.removeItem('materialFormScannerMode');
-        sessionStorage.removeItem('materialFormReturnPath');
-      } catch (e) {
-        console.error('Fehler beim Wiederherstellen der Formulardaten:', e);
-      }
     }
   }, [location.state]);
 
