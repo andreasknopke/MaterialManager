@@ -146,6 +146,14 @@ export function parseGS1Barcode(barcode: string): GS1Data {
   let cleaned = barcode.replace(/\s+/g, '');
   console.log('Nach Leerzeichen-Entfernung:', cleaned);
   
+  // Steuerzeichen am Anfang entfernen (FNC1 = ASCII 29, aber auch andere Steuerzeichen)
+  // Diese werden oft von Scannern als Prefix gesendet
+  while (cleaned.length > 0 && cleaned.charCodeAt(0) < 32) {
+    console.log('Steuerzeichen am Anfang entfernt: ASCII', cleaned.charCodeAt(0));
+    cleaned = cleaned.substring(1);
+  }
+  console.log('Nach Steuerzeichen-Entfernung:', cleaned);
+  
   // Wenn der Barcode Klammern enthält, parse ihn direkt mit Klammern als Feldgrenzen
   // Dies ist die zuverlässigste Methode, da die Klammern exakte Feldgrenzen definieren
   if (cleaned.includes('(')) {

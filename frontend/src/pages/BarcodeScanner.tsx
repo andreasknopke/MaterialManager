@@ -1329,6 +1329,10 @@ const BarcodeScanner: React.FC = () => {
               exclusive
               onChange={(_, newMode) => {
                 if (newMode) {
+                  // Barcode-Scanner stoppen beim Wechsel zu OCR
+                  if (newMode === 'ocr') {
+                    scanLoopRef.current = false;
+                  }
                   setScanMode(newMode);
                   resetOcr();
                 }
