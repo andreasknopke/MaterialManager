@@ -512,7 +512,7 @@ const Cabinets: React.FC = () => {
                                   {/* Kategorie als Hauptüberschrift */}
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                                     <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                                      {material.category_name || 'Ohne Kategorie'}
+                                      {material.category_name || 'Ohne Kategorie'} -
                                     </Typography>
                                     {material.is_consignment && (
                                       <Chip 
