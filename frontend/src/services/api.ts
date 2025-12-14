@@ -139,3 +139,25 @@ export const shapeAPI = {
   update: (id: number, data: any) => api.put(`/shapes/${id}`, data),
   delete: (id: number) => api.delete(`/shapes/${id}`),
 };
+
+// Interventionsprotokolle
+export const interventionAPI = {
+  getAll: (params?: { search?: string; from_date?: string; to_date?: string; limit?: number; offset?: number }) => 
+    api.get('/interventions', { params }),
+  getById: (id: number) => api.get(`/interventions/${id}`),
+  create: (data: { 
+    patient_id: string; 
+    patient_name?: string; 
+    started_at: string; 
+    notes?: string; 
+    items: Array<{
+      materialName: string;
+      articleNumber: string;
+      lotNumber: string;
+      gtin?: string;
+      quantity: number;
+      timestamp: string;
+    }>;
+  }) => api.post('/interventions', data),
+  delete: (id: number) => api.delete(`/interventions/${id}`),
+};

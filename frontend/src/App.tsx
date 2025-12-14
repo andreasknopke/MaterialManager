@@ -21,6 +21,7 @@ import Search from './pages/Search';
 import Admin from './pages/Admin';
 import Units from './pages/Units';
 import Users from './pages/Users';
+import InterventionProtocols from './pages/InterventionProtocols';
 
 function App() {
   return (
@@ -190,6 +191,16 @@ function App() {
               <ProtectedRoute requireAdmin>
                 <Layout>
                   <Users />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/interventions"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <InterventionProtocols />
                 </Layout>
               </ProtectedRoute>
             }

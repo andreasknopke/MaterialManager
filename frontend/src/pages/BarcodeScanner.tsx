@@ -1099,7 +1099,7 @@ const BarcodeScanner: React.FC = () => {
         addInterventionItem({
           materialName: materialItem.name,
           articleNumber: materialItem.article_number || '',
-          lotNumber: materialItem.lot_number || '',
+          lotNumber: materialItem.batch_number || materialItem.lot_number || scannedGS1Data?.batchNumber || '',
           quantity: 1,
           gtin: materialItem.gtin || scannedGS1Data?.gtin || '',
         });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -24,6 +24,9 @@ import {
   Alert,
   Divider,
   Tooltip,
+  TextField,
+  CircularProgress,
+  Snackbar,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -34,7 +37,10 @@ import {
   Close as CloseIcon,
   Delete as DeleteIcon,
   LocalHospital as HospitalIcon,
+  Save as SaveIcon,
+  QrCodeScanner as ScannerIcon,
 } from '@mui/icons-material';
+import { interventionAPI } from '../services/api';
 
 // Interventionsmodus State (wird in localStorage persistiert)
 export interface InterventionItem {
@@ -100,6 +106,14 @@ const Dashboard: React.FC = () => {
   const [showInterventionDialog, setShowInterventionDialog] = useState(false);
   const [showProtocolDialog, setShowProtocolDialog] = useState(false);
   const [showEndConfirmDialog, setShowEndConfirmDialog] = useState(false);
+  
+  // Patienten-Barcode für Speichern
+  const [patientBarcode, setPatientBarcode] = useState('');
+  const [patientName, setPatientName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const patientInputRef = useRef<HTMLInputElement>(null);
 
   // Aktualisiere Session-State wenn sich localStorage ändert
   useEffect(() => {
@@ -197,11 +211,13 @@ const Dashboard: React.FC = () => {
                 th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
                 th { background-color: #f5f5f5; }
                 .header { margin-bottom: 20px; }
+                .patient-info { margin: 10px 0; padding: 10px; background: #f0f0f0; }
                 .footer { margin-top: 30px; font-size: 11px; color: #666; }
                 .no-print { display: none !important; }
               </style>
             </head>
             <body>
+              ${patientBarcode ? `<div class="patient-info"><strong>Patient:</strong> ${patientBarcode}${patientName ? ` (${patientName})` : ''}</div>` : ''}
               ${printContent.innerHTML}
               <div class="footer">
                 Gedruckt am: ${new Date().toLocaleString('de-DE')}
@@ -212,6 +228,53 @@ const Dashboard: React.FC = () => {
         printWindow.document.close();
         printWindow.print();
       }
+    }
+  };
+
+  // Protokoll in Datenbank speichern
+  const handleSaveProtocol = async () => {
+    if (!patientBarcode.trim()) {
+      setSaveError('Bitte zuerst Patienten-Barcode scannen');
+      return;
+    }
+    
+    if (interventionSession.items.length === 0) {
+      setSaveError('Keine Entnahmen zum Speichern vorhanden');
+      return;
+    }
+    
+    setSaving(true);
+    setSaveError('');
+    
+    try {
+      await interventionAPI.create({
+        patient_id: patientBarcode.trim(),
+        patient_name: patientName.trim() || undefined,
+        started_at: interventionSession.startTime?.toISOString() || new Date().toISOString(),
+        items: interventionSession.items.map(item => ({
+          materialName: item.materialName,
+          articleNumber: item.articleNumber,
+          lotNumber: item.lotNumber,
+          gtin: item.gtin,
+          quantity: item.quantity,
+          timestamp: new Date(item.timestamp).toISOString(),
+        })),
+      });
+      
+      setSaveSuccess(true);
+      // Nach erfolgreichem Speichern: Session beenden
+      setTimeout(() => {
+        clearInterventionSession();
+        setInterventionSession({ active: false, startTime: null, items: [] });
+        setShowProtocolDialog(false);
+        setPatientBarcode('');
+        setPatientName('');
+        setSaveSuccess(false);
+      }, 2000);
+    } catch (err: any) {
+      setSaveError(err.response?.data?.error || 'Fehler beim Speichern');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -478,9 +541,58 @@ const Dashboard: React.FC = () => {
 
           <Divider sx={{ my: 3 }} />
 
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Gesamtanzahl Entnahmen: <strong>{interventionSession.items.length}</strong>
           </Typography>
+
+          {/* Patienten-Barcode Bereich */}
+          <Paper sx={{ p: 2, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ScannerIcon fontSize="small" />
+              Patienten-Barcode scannen zum Speichern
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, mt: 1, flexDirection: { xs: 'column', sm: 'row' } }}>
+              <TextField
+                inputRef={patientInputRef}
+                size="small"
+                placeholder="Patienten-Barcode scannen..."
+                value={patientBarcode}
+                onChange={(e) => setPatientBarcode(e.target.value)}
+                autoFocus
+                sx={{ 
+                  flex: 2, 
+                  bgcolor: 'white', 
+                  borderRadius: 1,
+                  '& .MuiOutlinedInput-root': { bgcolor: 'white' }
+                }}
+                InputProps={{
+                  startAdornment: <ScannerIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                }}
+              />
+              <TextField
+                size="small"
+                placeholder="Name (optional)"
+                value={patientName}
+                onChange={(e) => setPatientName(e.target.value)}
+                sx={{ 
+                  flex: 1, 
+                  bgcolor: 'white', 
+                  borderRadius: 1,
+                  '& .MuiOutlinedInput-root': { bgcolor: 'white' }
+                }}
+              />
+            </Box>
+            {saveError && (
+              <Alert severity="error" sx={{ mt: 1 }}>
+                {saveError}
+              </Alert>
+            )}
+            {saveSuccess && (
+              <Alert severity="success" sx={{ mt: 1 }}>
+                Protokoll erfolgreich gespeichert!
+              </Alert>
+            )}
+          </Paper>
         </DialogContent>
         <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
           <Button 
@@ -491,13 +603,21 @@ const Dashboard: React.FC = () => {
           >
             Intervention beenden
           </Button>
-          <Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button 
+              onClick={handleSaveProtocol} 
+              variant="contained" 
+              color="success"
+              startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+              disabled={!patientBarcode.trim() || interventionSession.items.length === 0 || saving}
+            >
+              Speichern
+            </Button>
             <Button 
               onClick={handlePrint} 
               variant="contained" 
               startIcon={<PrintIcon />}
               disabled={interventionSession.items.length === 0}
-              sx={{ mr: 1 }}
             >
               Drucken
             </Button>

@@ -35,6 +35,7 @@ import {
   Lock as LockIcon,
   People as PeopleIcon,
   Analytics as AnalyticsIcon,
+  LocalHospital as HospitalIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import ChangePasswordDialog from './ChangePasswordDialog';
@@ -87,6 +88,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { text: 'Materialien', icon: <InventoryIcon />, path: '/materials' },
     { text: 'Schränke', icon: <StorageIcon />, path: '/cabinets' },
     { text: 'Inventur', icon: <ChecklistIcon />, path: '/inventory' },
+    { text: 'Interventionen', icon: <HospitalIcon />, path: '/interventions' },
     { text: 'Einheiten', icon: <BusinessIcon />, path: '/units' },
     { text: 'Kategorien', icon: <CategoryIcon />, path: '/categories' },
     { text: 'Firmen', icon: <BusinessIcon />, path: '/companies' },
