@@ -64,9 +64,14 @@ router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
          m.cabinet_id,
          c.name as cabinet_name,
          m.article_number,
+         m.article_number as gtin,
+         cat.name as category_name,
+         comp.name as company_name,
          COUNT(*) as item_count
        FROM materials m
        LEFT JOIN cabinets c ON m.cabinet_id = c.id
+       LEFT JOIN categories cat ON m.category_id = cat.id
+       LEFT JOIN companies comp ON m.company_id = comp.id
        WHERE m.article_number = ? AND m.active = TRUE AND m.current_stock > 0`;
     
     const params: any[] = [req.params.gtin];
@@ -77,7 +82,7 @@ router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
       params.push(lot);
     }
     
-    query += ` GROUP BY m.cabinet_id, m.lot_number, m.name, m.article_number, c.name
+    query += ` GROUP BY m.cabinet_id, m.lot_number, m.name, m.article_number, c.name, cat.name, comp.name
        ORDER BY MIN(m.expiry_date) ASC, MIN(m.created_at) ASC`;
     
     // Materialien mit gleicher GTIN, Schrank und Charge zusammenfassen
@@ -321,6 +326,77 @@ router.post('/material/:materialId/remove', async (req: Request, res: Response) 
   } catch (error) {
     await connection.rollback();
     console.error('Fehler bei der Material-Entnahme:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Datenbankfehler' });
+  } finally {
+    connection.release();
+  }
+});
+
+// POST Bestand hinzufügen (Entnahme rückgängig machen)
+router.post('/material/:materialId/add', async (req: Request, res: Response) => {
+  const materialIdParam = req.params.materialId;
+  const { quantity, user_name, notes } = req.body;
+  
+  if (!quantity || quantity < 1) {
+    return res.status(400).json({ error: 'Gültige Menge ist erforderlich' });
+  }
+  
+  // Unterstütze komma-separierte IDs - nehme nur die erste ID
+  const materialIds = materialIdParam.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+  
+  if (materialIds.length === 0) {
+    return res.status(400).json({ error: 'Keine gültige Material-ID angegeben' });
+  }
+  
+  // Nur erste ID verwenden für Rückgängig-Aktion
+  const materialId = materialIds[0];
+  
+  const connection = await pool.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    // Material laden
+    const [materials] = await connection.query<RowDataPacket[]>(
+      'SELECT id, current_stock, name, active FROM materials WHERE id = ?',
+      [materialId]
+    );
+    
+    if (materials.length === 0) {
+      throw new Error('Material nicht gefunden');
+    }
+    
+    const material = materials[0];
+    const previousStock = material.current_stock;
+    const newStock = previousStock + quantity;
+    
+    // Bestand und aktiv Status aktualisieren
+    await connection.query(
+      'UPDATE materials SET current_stock = ?, active = TRUE WHERE id = ?',
+      [newStock, materialId]
+    );
+    
+    // Transaktion aufzeichnen
+    await connection.query(
+      `INSERT INTO material_transactions 
+       (material_id, transaction_type, usage_type, quantity, previous_stock, new_stock, notes, user_name)
+       VALUES (?, 'in', 'undo_removal', ?, ?, ?, ?, ?)`,
+      [materialId, quantity, previousStock, newStock, notes || 'Entnahme rückgängig', user_name || 'System']
+    );
+    
+    await connection.commit();
+    
+    res.json({
+      message: 'Bestand erfolgreich hinzugefügt',
+      material_id: materialId,
+      material_name: material.name,
+      previous_stock: previousStock,
+      new_stock: newStock,
+      quantity_added: quantity
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Fehler beim Hinzufügen des Bestands:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Datenbankfehler' });
   } finally {
     connection.release();

@@ -1277,6 +1277,41 @@ const BarcodeScanner: React.FC = () => {
     }
   };
 
+  // Entnahme rückgängig machen (+1 zum Bestand)
+  const handleUndoRemoval = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!material) {
+      setError('Kein Material ausgewählt');
+      return;
+    }
+
+    try {
+      // Verwende material_ids (aggregiert) oder id (einzeln)
+      const materialIdToUse = material.material_ids || material.id;
+      
+      // +1 zum Bestand hinzufügen (Wareneingang)
+      const response = await barcodeAPI.addStock(materialIdToUse, {
+        quantity: 1,
+        user_name: 'System',
+        notes: 'Entnahme rückgängig gemacht',
+      });
+      
+      const data = response.data;
+      setSuccess(`Entnahme rückgängig gemacht. Neuer Bestand: ${data.new_stock}`);
+      
+      // Material-Daten aktualisieren
+      setMaterial({
+        ...material,
+        current_stock: data.new_stock,
+        active: true
+      });
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fehler beim Rückgängig machen');
+    }
+  };
+
   const handleScanOut = async () => {
     setError('');
     setSuccess('');
@@ -1503,6 +1538,28 @@ const BarcodeScanner: React.FC = () => {
                     {material.name}
                   </Typography>
 
+                  {(material.gtin || material.article_number || scannedGS1Data?.gtin) && (
+                    <>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                        GTIN
+                      </Typography>
+                      <Typography variant="body1" gutterBottom>
+                        {material.gtin || material.article_number || scannedGS1Data?.gtin}
+                      </Typography>
+                    </>
+                  )}
+
+                  {(material.batch_number || material.lot_number || scannedGS1Data?.batchNumber) && (
+                    <>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                        Batch/LOT
+                      </Typography>
+                      <Typography variant="body1" gutterBottom>
+                        {material.batch_number || material.lot_number || scannedGS1Data?.batchNumber}
+                      </Typography>
+                    </>
+                  )}
+
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                     Kategorie
                   </Typography>
@@ -1515,13 +1572,6 @@ const BarcodeScanner: React.FC = () => {
                   </Typography>
                   <Typography variant="body1" gutterBottom>
                     {material.company_name || '-'}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    Aktueller Bestand
-                  </Typography>
-                  <Typography variant="h5" color={material.active ? 'primary' : 'error'} gutterBottom>
-                    {material.current_stock} {!material.active && '(Deaktiviert)'}
                   </Typography>
 
                   {material.active ? (
@@ -1551,12 +1601,12 @@ const BarcodeScanner: React.FC = () => {
                     <Button
                       fullWidth
                       variant="contained"
-                      color="success"
-                      startIcon={<ReactivateIcon />}
-                      onClick={handleReactivate}
+                      color="warning"
+                      startIcon={<AddIcon />}
+                      onClick={handleUndoRemoval}
                       sx={{ mt: 2 }}
                     >
-                      Material reaktivieren
+                      Entnahme rückgängig (+1)
                     </Button>
                   )}
                 </Box>

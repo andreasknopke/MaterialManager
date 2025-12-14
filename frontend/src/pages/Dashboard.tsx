@@ -576,7 +576,7 @@ const Dashboard: React.FC = () => {
               Patienten-Barcode scannen zum Speichern
             </Typography>
             
-            <Box sx={{ display: 'flex', gap: 1, mt: 1, flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'flex-start' }}>
+            <Box sx={{ display: 'flex', gap: 1, mt: 1, flexDirection: 'column' }}>
               <TextField
                 size="small"
                 placeholder="Patienten-Barcode scannen..."
@@ -584,31 +584,25 @@ const Dashboard: React.FC = () => {
                 onChange={(e) => setPatientBarcode(e.target.value)}
                 autoFocus
                 sx={{ 
-                  flex: 2, 
                   bgcolor: 'white', 
                   borderRadius: 1,
                   '& .MuiOutlinedInput-root': { bgcolor: 'white' }
                 }}
                 InputProps={{
                   startAdornment: <ScannerIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                  endAdornment: (
+                    <IconButton onClick={scanPatientBarcode} size="small" color="primary">
+                      <CameraIcon />
+                    </IconButton>
+                  ),
                 }}
               />
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={scanPatientBarcode}
-                startIcon={<CameraIcon />}
-                sx={{ minWidth: 120 }}
-              >
-                Scannen
-              </Button>
               <TextField
                 size="small"
-                placeholder="Name (optional)"
+                placeholder="Patienten-Name (optional)"
                 value={patientName}
                 onChange={(e) => setPatientName(e.target.value)}
                 sx={{ 
-                  flex: 1, 
                   bgcolor: 'white', 
                   borderRadius: 1,
                   '& .MuiOutlinedInput-root': { bgcolor: 'white' }
@@ -627,22 +621,24 @@ const Dashboard: React.FC = () => {
             )}
           </Paper>
         </DialogContent>
-        <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
+        <DialogActions sx={{ p: 2, flexDirection: { xs: 'column', sm: 'row' }, gap: 1, alignItems: 'stretch' }}>
           <Button 
             onClick={endInterventionMode} 
             color="error" 
             variant="outlined"
             startIcon={<CloseIcon />}
+            sx={{ order: { xs: 4, sm: 0 } }}
           >
-            Intervention beenden
+            Beenden
           </Button>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end', flex: 1 }}>
             <Button 
               onClick={handleSaveProtocol} 
               variant="contained" 
               color="success"
               startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
               disabled={!patientBarcode.trim() || interventionSession.items.length === 0 || saving}
+              sx={{ flex: { xs: 1, sm: 'none' }, minWidth: { xs: '45%', sm: 'auto' } }}
             >
               Speichern
             </Button>
@@ -651,10 +647,11 @@ const Dashboard: React.FC = () => {
               variant="contained" 
               startIcon={<PrintIcon />}
               disabled={interventionSession.items.length === 0}
+              sx={{ flex: { xs: 1, sm: 'none' }, minWidth: { xs: '45%', sm: 'auto' } }}
             >
               Drucken
             </Button>
-            <Button onClick={() => setShowProtocolDialog(false)} variant="outlined">
+            <Button onClick={() => setShowProtocolDialog(false)} variant="outlined" sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
               Schließen
             </Button>
           </Box>
