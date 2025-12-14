@@ -498,50 +498,20 @@ const Cabinets: React.FC = () => {
                                 <Box 
                                   key={`${material.article_number}-${matIdx}`} 
                                   sx={{ 
-                                    mb: 2, 
-                                    pb: 2, 
+                                    mb: 1.5, 
+                                    pb: 1.5, 
                                     borderBottom: matIdx < compartment.materials.length - 1 ? '1px solid #e0e0e0' : 'none'
                                   }}
                                 >
-                                  {/* Materialname und Kategorie */}
-                                  <Box sx={{ display: 'flex', alignItems: 'baseline', mb: 0.5 }}>
-                                    <Typography variant="body1" sx={{ fontWeight: 'bold', mr: 1 }}>
-                                      {material.name}
-                                    </Typography>
-                                    {material.category_name && (
-                                      <Chip 
-                                        label={material.category_name} 
-                                        size="small" 
-                                        sx={{ height: '20px', fontSize: '0.7rem' }}
-                                      />
-                                    )}
-                                  </Box>
+                                  {/* Kategorie als Hauptüberschrift */}
+                                  <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                    {material.category_name || 'Ohne Kategorie'}
+                                  </Typography>
 
-                                  {/* Artikel-Infos */}
-                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1, ml: 1 }}>
-                                    {material.article_number && (
-                                      <Typography variant="body2" color="text.secondary">
-                                        <strong>GTIN:</strong> {material.article_number}
-                                      </Typography>
-                                    )}
-                                    {material.size && (
-                                      <Typography variant="body2" color="text.secondary">
-                                        • <strong>Größe:</strong> {material.size}
-                                      </Typography>
-                                    )}
-                                    <Typography variant="body2" color="text.secondary">
-                                      • <strong>Bestand:</strong> {material.total_stock}
-                                      {material.item_count > 1 && ` (${material.item_count} Einträge)`}
-                                    </Typography>
-                                  </Box>
-
-                                  {/* Custom Fields */}
-                                  {material.custom_fields && material.custom_fields.length > 0 && (
-                                    <Box sx={{ ml: 1, mt: 1 }}>
-                                      <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#666' }}>
-                                        Eigenschaften:
-                                      </Typography>
-                                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 0.5 }}>
+                                  {/* Custom Fields / Eigenschaften */}
+                                  {material.custom_fields && material.custom_fields.length > 0 ? (
+                                    <Box sx={{ ml: 2 }}>
+                                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                                         {material.custom_fields.map((field, fieldIdx) => (
                                           <Chip
                                             key={fieldIdx}
@@ -553,6 +523,10 @@ const Cabinets: React.FC = () => {
                                         ))}
                                       </Box>
                                     </Box>
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary" sx={{ ml: 2, fontStyle: 'italic' }}>
+                                      Keine Eigenschaften definiert
+                                    </Typography>
                                   )}
                                 </Box>
                               ))}
