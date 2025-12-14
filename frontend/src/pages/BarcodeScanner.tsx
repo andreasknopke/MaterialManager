@@ -98,6 +98,10 @@ const BarcodeScanner: React.FC = () => {
   const interventionSession = getInterventionSession();
   const isInterventionMode = interventionSession.active;
   
+  // Entnahme-Modus (wenn über Dashboard "Entnahme" gestartet)
+  const locationState = location.state as { removalMode?: boolean } | null;
+  const isRemovalMode = locationState?.removalMode || isInterventionMode;
+  
   // Neuer State für GTIN-Auswahl-Dialog
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [scannedGS1Data, setScannedGS1Data] = useState<GS1Data | null>(null);
@@ -208,10 +212,12 @@ const BarcodeScanner: React.FC = () => {
       removalMode?: boolean;
       returnToMaterialForm?: boolean;
       scanMode?: 'gs1' | 'qr';
+      scanPatientBarcode?: boolean;
+      assumeGS1?: boolean;
     } | null;
     
     // Auto-Open für verschiedene Szenarien
-    if ((state?.autoOpenCamera || state?.scanCabinet || state?.returnToMaterialForm) && scannerSettings.cameraEnabled) {
+    if ((state?.autoOpenCamera || state?.scanCabinet || state?.returnToMaterialForm || state?.scanPatientBarcode) && scannerSettings.cameraEnabled) {
       console.log('Auto-opening camera:', state);
       setCameraOpen(true);
     }
@@ -952,6 +958,24 @@ const BarcodeScanner: React.FC = () => {
     console.log('=== handleScannedBarcode START ===');
     console.log('scannedCode:', scannedCode);
     
+    // Prüfe ob wir im Patienten-Barcode-Scan-Modus sind
+    const locState = location.state as { 
+      scanPatientBarcode?: boolean; 
+      returnTo?: string;
+      assumeGS1?: boolean;
+    } | null;
+    
+    if (locState?.scanPatientBarcode) {
+      console.log('Patient-Barcode-Modus: Barcode zurückgeben zum Dashboard');
+      // Kamera stoppen und zurück navigieren mit dem gescannten Barcode
+      setCameraOpen(false);
+      navigate(locState.returnTo || '/', { 
+        state: { scannedPatientBarcode: scannedCode },
+        replace: true 
+      });
+      return;
+    }
+    
     setError('');
     setMaterial(null);
     setNotFound(false);
@@ -989,6 +1013,8 @@ const BarcodeScanner: React.FC = () => {
     // GTIN aus GS1-Daten extrahieren
     if (gs1Data?.gtin) {
       console.log('GTIN gefunden im Barcode:', gs1Data.gtin);
+      console.log('Batch/LOT im Barcode:', gs1Data.batchNumber);
+      
       try {
         // Prüfe ob GTIN bekannt ist
         console.log('Rufe searchGTIN API auf...');
@@ -998,32 +1024,60 @@ const BarcodeScanner: React.FC = () => {
         if (gtinResponse.data.found) {
           setGtinMasterData(gtinResponse.data.masterData);
           
-          // Hole alle Materialien mit dieser GTIN (für Entnahme) - separat behandeln
+          // Hole alle Materialien mit dieser GTIN (für Entnahme)
+          // Wenn Batch/LOT vorhanden, nach der genauen Charge suchen
           try {
             console.log('Rufe searchMaterialsByGTIN API auf...');
-            const materialsResponse = await barcodeAPI.searchMaterialsByGTIN(gs1Data.gtin);
+            const materialsResponse = await barcodeAPI.searchMaterialsByGTIN(gs1Data.gtin, gs1Data.batchNumber);
             console.log('Materials API Response:', materialsResponse.data);
+            
             if (materialsResponse.data.materials && materialsResponse.data.materials.length > 0) {
-              setExistingMaterials(materialsResponse.data.materials);
+              const materials = materialsResponse.data.materials;
+              setExistingMaterials(materials);
+              
+              // AUTOMATISCHE ENTNAHME: Wenn genau 1 Material gefunden und im Entnahme-Modus
+              if (materials.length === 1 && isRemovalMode) {
+                console.log('Genau 1 Material gefunden - automatische Entnahme');
+                // Direkt ausbuchen ohne Dialog
+                await handleAutoRemoval(materials[0]);
+                return;
+              }
+              
+              // Bei mehreren Materialien: Dialog öffnen
+              console.log(`${materials.length} Materialien gefunden - Dialog öffnen`);
+              setActionDialogOpen(true);
+            } else if (!isRemovalMode) {
+              // Keine Materialien mit Bestand, aber nicht im Entnahme-Modus
+              setActionDialogOpen(true);
+            } else {
+              // Im Entnahme-Modus, aber kein Material mit Bestand
+              setError('Kein Material mit Bestand für diese GTIN/LOT gefunden');
             }
           } catch (matErr: any) {
-            console.log('Materials API Fehler (ignoriert):', matErr.message);
-            // Fehler bei Materials-API ignorieren, Dialog trotzdem öffnen
+            console.log('Materials API Fehler:', matErr.message);
+            if (!isRemovalMode) {
+              setActionDialogOpen(true);
+            } else {
+              setError('Fehler bei der Suche nach Materialien');
+            }
           }
-          
-          // Dialog öffnen: Entnahme oder Hinzufügen?
-          console.log('Öffne Action Dialog...');
-          setActionDialogOpen(true);
         } else {
           // GTIN API erfolgreich aber nicht gefunden
           console.log('GTIN nicht in Datenbank gefunden');
-          handleAddNewMaterialWithGS1(scannedCode, gs1Data);
+          if (!isRemovalMode) {
+            handleAddNewMaterialWithGS1(scannedCode, gs1Data);
+          } else {
+            setError('GTIN nicht bekannt - Material nicht im System');
+          }
         }
       } catch (err: any) {
-        // GTIN nicht bekannt (404) - direkt zum Hinzufügen
+        // GTIN nicht bekannt (404)
         console.log('GTIN API Fehler:', err.response?.status, err.message);
-        console.log('GTIN nicht bekannt, direkt zum Hinzufügen');
-        handleAddNewMaterialWithGS1(scannedCode, gs1Data);
+        if (!isRemovalMode) {
+          handleAddNewMaterialWithGS1(scannedCode, gs1Data);
+        } else {
+          setError('GTIN nicht bekannt - Material nicht im System');
+        }
       }
     } else {
       console.log('Kein GTIN im geparsten Barcode');
@@ -1072,6 +1126,56 @@ const BarcodeScanner: React.FC = () => {
         fromScanner: true,
       }
     });
+  };
+
+  // Automatische Entnahme bei eindeutigem Fund (1 Material mit GTIN+LOT)
+  const handleAutoRemoval = async (materialItem: any) => {
+    setError('');
+    setSuccess('');
+    
+    try {
+      // Verwende material_ids (aggregiert) oder id (einzeln)
+      const materialIdToUse = materialItem.material_ids || materialItem.id;
+      
+      // Direkte Entnahme über Material-ID(s)
+      const response = await barcodeAPI.removeMaterial(materialIdToUse, {
+        quantity: 1,
+        user_name: 'System',
+        notes: 'Automatische GTIN+LOT Entnahme',
+        usage_type: isInterventionMode ? 'patient_use' : 'destock',
+      });
+      
+      const data = response.data;
+      
+      // Im Interventionsmodus: Entnahme protokollieren
+      if (isInterventionMode) {
+        addInterventionItem({
+          materialName: materialItem.name,
+          articleNumber: materialItem.article_number || '',
+          lotNumber: materialItem.batch_number || materialItem.lot_number || scannedGS1Data?.batchNumber || '',
+          quantity: 1,
+          gtin: materialItem.article_number || scannedGS1Data?.gtin || '',
+        });
+      }
+      
+      if (data.deactivated) {
+        setSuccess(`✓ Automatisch entnommen: 1x "${materialItem.name}" (LOT: ${materialItem.batch_number || '-'}). Material vollständig entnommen.${isInterventionMode ? ' ✓ Protokolliert' : ''}`);
+      } else {
+        setSuccess(`✓ Automatisch entnommen: 1x "${materialItem.name}" (LOT: ${materialItem.batch_number || '-'}). Neuer Bestand: ${data.new_stock}${isInterventionMode ? ' ✓ Protokolliert' : ''}`);
+      }
+      
+      // Material für Anzeige setzen (aktualisiert)
+      setMaterial({
+        ...materialItem,
+        current_stock: data.new_stock,
+        active: data.new_stock > 0
+      });
+      
+      // Barcode-Feld leeren für nächsten Scan
+      setBarcode('');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fehler bei automatischer Entnahme');
+    }
   };
 
   // Aus Dialog: Material direkt entnehmen
@@ -1819,7 +1923,7 @@ const BarcodeScanner: React.FC = () => {
             {existingMaterials.length > 0 && (
               <>
                 <Typography variant="body2" color="text.secondary">
-                  Entnahme aus vorhandenem Bestand:
+                  Entnahme aus vorhandenem Bestand ({existingMaterials.length} {existingMaterials.length === 1 ? 'Variante' : 'Varianten'}):
                 </Typography>
                 {existingMaterials.map((mat) => (
                   <Button
@@ -1828,17 +1932,24 @@ const BarcodeScanner: React.FC = () => {
                     color="secondary"
                     startIcon={<RemoveIcon />}
                     onClick={() => handleSelectForRemoval(mat)}
-                    sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
+                    sx={{ justifyContent: 'flex-start', textAlign: 'left', py: 1.5 }}
                   >
-                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                      <Typography variant="body2">
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', width: '100%' }}>
+                      <Typography variant="body2" fontWeight="medium">
                         {mat.cabinet_name || 'Ohne Schrank'} - Bestand: {mat.current_stock}
                       </Typography>
-                      {mat.batch_number && (
-                        <Typography variant="caption" color="text.secondary">
-                          Charge: {mat.batch_number}
-                        </Typography>
-                      )}
+                      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                        {mat.batch_number && (
+                          <Typography variant="caption" color="text.secondary">
+                            LOT: <strong>{mat.batch_number}</strong>
+                          </Typography>
+                        )}
+                        {mat.expiry_date && (
+                          <Typography variant="caption" color={new Date(mat.expiry_date) < new Date() ? 'error.main' : 'text.secondary'}>
+                            Verfall: <strong>{new Date(mat.expiry_date).toLocaleDateString('de-DE')}</strong>
+                          </Typography>
+                        )}
+                      </Box>
                     </Box>
                   </Button>
                 ))}

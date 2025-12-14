@@ -52,9 +52,9 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
 // Aggregiert nach Schrank und Charge (gleiche Charge im gleichen Schrank = 1 Eintrag)
 router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
   try {
-    // Materialien mit gleicher GTIN, Schrank und Charge zusammenfassen
-    const [materials] = await pool.query<RowDataPacket[]>(
-      `SELECT 
+    const { lot } = req.query; // Optional: Batch/Lot-Nummer für direkte Suche
+    
+    let query = `SELECT 
          GROUP_CONCAT(m.id) as material_ids,
          MIN(m.id) as id,
          m.name,
@@ -67,11 +67,21 @@ router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
          COUNT(*) as item_count
        FROM materials m
        LEFT JOIN cabinets c ON m.cabinet_id = c.id
-       WHERE m.article_number = ? AND m.active = TRUE AND m.current_stock > 0
-       GROUP BY m.cabinet_id, m.lot_number, m.name, m.article_number, c.name
-       ORDER BY MIN(m.expiry_date) ASC, MIN(m.created_at) ASC`,
-      [req.params.gtin]
-    );
+       WHERE m.article_number = ? AND m.active = TRUE AND m.current_stock > 0`;
+    
+    const params: any[] = [req.params.gtin];
+    
+    // Wenn Batch/Lot angegeben, danach filtern
+    if (lot) {
+      query += ` AND m.lot_number = ?`;
+      params.push(lot);
+    }
+    
+    query += ` GROUP BY m.cabinet_id, m.lot_number, m.name, m.article_number, c.name
+       ORDER BY MIN(m.expiry_date) ASC, MIN(m.created_at) ASC`;
+    
+    // Materialien mit gleicher GTIN, Schrank und Charge zusammenfassen
+    const [materials] = await pool.query<RowDataPacket[]>(query, params);
     
     res.json({
       materials: materials,

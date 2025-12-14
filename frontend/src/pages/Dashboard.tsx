@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -26,7 +26,6 @@ import {
   Tooltip,
   TextField,
   CircularProgress,
-  Snackbar,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -39,6 +38,7 @@ import {
   LocalHospital as HospitalIcon,
   Save as SaveIcon,
   QrCodeScanner as ScannerIcon,
+  CameraAlt as CameraIcon,
 } from '@mui/icons-material';
 import { interventionAPI } from '../services/api';
 
@@ -102,6 +102,7 @@ export const clearInterventionSession = () => {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [interventionSession, setInterventionSession] = useState<InterventionSession>(getInterventionSession());
   const [showInterventionDialog, setShowInterventionDialog] = useState(false);
   const [showProtocolDialog, setShowProtocolDialog] = useState(false);
@@ -113,7 +114,17 @@ const Dashboard: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const patientInputRef = useRef<HTMLInputElement>(null);
+
+  // Prüfe ob ein Barcode vom Scanner zurückgegeben wurde
+  useEffect(() => {
+    const state = location.state as { scannedPatientBarcode?: string } | null;
+    if (state?.scannedPatientBarcode) {
+      setPatientBarcode(state.scannedPatientBarcode);
+      setShowProtocolDialog(true);
+      // State bereinigen
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // Aktualisiere Session-State wenn sich localStorage ändert
   useEffect(() => {
@@ -276,6 +287,19 @@ const Dashboard: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Patienten-Barcode scannen - navigiert zum Scanner
+  const scanPatientBarcode = () => {
+    // Dialog schließen und zum Scanner navigieren
+    setShowProtocolDialog(false);
+    navigate('/scanner', { 
+      state: { 
+        scanPatientBarcode: true,
+        returnTo: '/',
+        assumeGS1: false  // Patient-Barcode ist KEIN GS1
+      } 
+    });
   };
 
   // Item aus Protokoll löschen
@@ -551,9 +575,9 @@ const Dashboard: React.FC = () => {
               <ScannerIcon fontSize="small" />
               Patienten-Barcode scannen zum Speichern
             </Typography>
-            <Box sx={{ display: 'flex', gap: 2, mt: 1, flexDirection: { xs: 'column', sm: 'row' } }}>
+            
+            <Box sx={{ display: 'flex', gap: 1, mt: 1, flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'flex-start' }}>
               <TextField
-                inputRef={patientInputRef}
                 size="small"
                 placeholder="Patienten-Barcode scannen..."
                 value={patientBarcode}
@@ -569,6 +593,15 @@ const Dashboard: React.FC = () => {
                   startAdornment: <ScannerIcon sx={{ mr: 1, color: 'text.secondary' }} />,
                 }}
               />
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={scanPatientBarcode}
+                startIcon={<CameraIcon />}
+                sx={{ minWidth: 120 }}
+              >
+                Scannen
+              </Button>
               <TextField
                 size="small"
                 placeholder="Name (optional)"
