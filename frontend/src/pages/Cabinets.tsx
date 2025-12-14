@@ -438,23 +438,42 @@ const Cabinets: React.FC = () => {
         </DialogTitle>
         <DialogContent>
           <Box display="flex" flexDirection="column" alignItems="center" gap={2} py={2}>
-            <div ref={printRef} style={{ padding: '30px', backgroundColor: 'white', width: '100%', fontFamily: 'Arial, sans-serif' }}>
+            <div 
+              ref={printRef} 
+              style={{ 
+                padding: '15px', 
+                backgroundColor: 'white', 
+                width: '210mm', 
+                minHeight: '297mm',
+                maxHeight: '297mm',
+                fontFamily: 'Arial, sans-serif',
+                fontSize: infosheetCompartments.length > 6 ? '9px' : infosheetCompartments.length > 4 ? '10px' : '11px',
+                overflow: 'hidden',
+                boxSizing: 'border-box'
+              }}
+            >
               {qrCodeUrl && (
                 <>
-                  {/* Header mit QR-Code */}
-                  <Box sx={{ textAlign: 'center', mb: 4, borderBottom: '2px solid #333', pb: 3 }}>
-                    <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', color: '#333' }}>
-                      {selectedCabinet?.name}
-                    </Typography>
-                    <Typography variant="h6" color="text.secondary" gutterBottom>
-                      {selectedCabinet?.location}
-                    </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-                      <img src={qrCodeUrl} alt="QR Code" style={{ width: '200px', height: '200px' }} />
+                  {/* Header mit QR-Code - kompakt */}
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    borderBottom: '2px solid #333', 
+                    pb: 1, 
+                    mb: 2 
+                  }}>
+                    <Box>
+                      <Typography sx={{ fontWeight: 'bold', fontSize: '1.4em', color: '#333' }}>
+                        {selectedCabinet?.name}
+                      </Typography>
+                      <Typography sx={{ fontSize: '1em', color: '#666' }}>
+                        {selectedCabinet?.location}
+                      </Typography>
                     </Box>
-                    <Typography variant="caption" display="block" color="text.secondary">
-                      Scannen Sie diesen Code beim Erfassen von Material
-                    </Typography>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <img src={qrCodeUrl} alt="QR Code" style={{ width: '60px', height: '60px' }} />
+                    </Box>
                   </Box>
 
                   {/* Fächer und Inhalt */}
@@ -463,43 +482,37 @@ const Cabinets: React.FC = () => {
                       <CircularProgress />
                     </Box>
                   ) : infosheetCompartments.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                    <Typography sx={{ fontSize: '1em', color: '#666', textAlign: 'center', py: 2 }}>
                       Keine Fächer vorhanden
                     </Typography>
                   ) : (
                     <Box>
-                      <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', mb: 3, color: '#333' }}>
-                        Fächer und Inhalt
-                      </Typography>
-                      
                       {infosheetCompartments.map((compartment, idx) => (
-                        <Box key={compartment.id} sx={{ mb: 4, pageBreakInside: 'avoid' }}>
+                        <Box key={compartment.id} sx={{ mb: 1.5 }}>
                           {/* Fachname */}
-                          <Typography 
-                            variant="h6" 
-                            sx={{ 
-                              fontWeight: 'bold', 
-                              backgroundColor: '#f5f5f5', 
-                              padding: '8px 12px',
-                              borderLeft: '4px solid #1976d2',
-                              mb: 2
-                            }}
-                          >
+                          <Box sx={{ 
+                            fontWeight: 'bold', 
+                            backgroundColor: '#f0f0f0', 
+                            padding: '3px 8px',
+                            borderLeft: '3px solid #1976d2',
+                            fontSize: '1.1em',
+                            mb: 0.5
+                          }}>
                             {compartment.name}
                             {compartment.description && (
-                              <Typography variant="body2" component="span" sx={{ ml: 2, fontWeight: 'normal', color: '#666' }}>
+                              <span style={{ marginLeft: '8px', fontWeight: 'normal', color: '#666', fontSize: '0.9em' }}>
                                 ({compartment.description})
-                              </Typography>
+                              </span>
                             )}
-                          </Typography>
+                          </Box>
 
                           {/* Materialien im Fach */}
                           {compartment.materials.length === 0 ? (
-                            <Typography variant="body2" color="text.secondary" sx={{ ml: 3, fontStyle: 'italic' }}>
+                            <Box sx={{ ml: 2, fontStyle: 'italic', color: '#999', fontSize: '0.9em' }}>
                               Leer
-                            </Typography>
+                            </Box>
                           ) : (
-                            <Box sx={{ ml: 2 }}>
+                            <Box sx={{ ml: 1 }}>
                               {(() => {
                                 // Gruppiere Materialien nach Kategorie
                                 const materialsByCategory = compartment.materials.reduce((acc: any, material) => {
@@ -512,40 +525,35 @@ const Cabinets: React.FC = () => {
                                 }, {});
 
                                 return Object.entries(materialsByCategory).map(([category, materials]: [string, any], catIdx) => (
-                                  <Box key={catIdx} sx={{ mb: 2 }}>
+                                  <Box key={catIdx} sx={{ mb: 0.5 }}>
                                     {/* Kategorie als Überschrift */}
-                                    <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                                    <Box sx={{ fontWeight: 'bold', fontSize: '1em' }}>
                                       {category}
-                                    </Typography>
+                                    </Box>
 
                                     {/* Materialien dieser Kategorie */}
-                                    <Box component="ul" sx={{ ml: 2, mt: 0, mb: 0, pl: 2 }}>
+                                    <Box component="ul" sx={{ m: 0, pl: 3, listStyleType: 'disc' }}>
                                       {materials.map((material: any, matIdx: number) => {
-                                        // Sammle alle Eigenschaften in einem Array
+                                        // Sammle alle Eigenschaften kompakt
                                         const properties: string[] = [];
                                         
                                         if (material.shape_name) properties.push(`Form: ${material.shape_name}`);
-                                        if (material.shaft_length) properties.push(`Schaftlänge: ${material.shaft_length}`);
-                                        if (material.device_length) properties.push(`Device-Länge: ${material.device_length}`);
-                                        if (material.device_diameter) properties.push(`Device-Durchmesser: ${material.device_diameter}`);
-                                        if (material.french_size) properties.push(`French-Size: ${material.french_size}`);
-                                        if (material.guidewire_acceptance) properties.push(`Guidewire-Acceptance: ${material.guidewire_acceptance}`);
-                                        if (material.is_consignment) properties.push('Konsignationsware');
+                                        if (material.shaft_length) properties.push(`Schaft: ${material.shaft_length}`);
+                                        if (material.device_length) properties.push(`Länge: ${material.device_length}`);
+                                        if (material.device_diameter) properties.push(`Ø: ${material.device_diameter}`);
+                                        if (material.french_size) properties.push(`Fr: ${material.french_size}`);
+                                        if (material.guidewire_acceptance) properties.push(`GW: ${material.guidewire_acceptance}`);
+                                        if (material.is_consignment) properties.push('K');
                                         
                                         return (
-                                          <Box component="li" key={`${material.article_number}-${matIdx}`} sx={{ mb: 0.3 }}>
-                                            <Typography 
-                                              variant="body2" 
-                                              component="span"
-                                              sx={{ 
-                                                fontFamily: 'monospace',
-                                                whiteSpace: 'pre',
-                                                fontSize: '0.85rem'
-                                              }}
-                                            >
-                                              {properties.join('\t')}
-                                            </Typography>
-                                          </Box>
+                                          <li key={`${material.article_number}-${matIdx}`} style={{ marginBottom: '1px' }}>
+                                            <span style={{ 
+                                              fontFamily: 'Arial, sans-serif',
+                                              fontSize: '0.95em'
+                                            }}>
+                                              {properties.join('   ')}
+                                            </span>
+                                          </li>
                                         );
                                       })}
                                     </Box>
