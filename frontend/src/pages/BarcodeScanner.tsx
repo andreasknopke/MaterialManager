@@ -41,7 +41,7 @@ import {
 } from '@mui/icons-material';
 import { barcodeAPI, materialAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
-import { BrowserMultiFormatReader } from '@zxing/library';
+import { BrowserMultiFormatReader, DecodeHintType } from '@zxing/library';
 import Tesseract from 'tesseract.js';
 import { getScannerSettings } from './Admin';
 import { getInterventionSession, addInterventionItem } from './Dashboard';
@@ -294,7 +294,11 @@ const BarcodeScanner: React.FC = () => {
             
             // ZXing Scanner nur im Barcode-Modus starten
             if (scanModeRef.current === 'barcode') {
-              const codeReader = new BrowserMultiFormatReader();
+              // GS1-Modus aktivieren: FNC1 wird als ASCII 29 (Group Separator) ausgegeben
+              const hints = new Map();
+              hints.set(DecodeHintType.ASSUME_GS1, true);
+              
+              const codeReader = new BrowserMultiFormatReader(hints);
               codeReaderRef.current = codeReader;
               
               console.log('Starte Barcode-Erkennung...');
