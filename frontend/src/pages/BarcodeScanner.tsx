@@ -457,6 +457,15 @@ const BarcodeScanner: React.FC = () => {
         cancelAnimationFrame(scanLineAnimationRef.current);
         scanLineAnimationRef.current = null;
       }
+      
+      // Barcode-Scanner stoppen im OCR-Modus
+      if (scanMode === 'ocr') {
+        console.log('Wechsel zu OCR-Modus: Barcode-Scanner stoppen');
+        scanLoopRef.current = false;
+        if (codeReaderRef.current) {
+          codeReaderRef.current.reset();
+        }
+      }
     }
   }, [scanMode, cameraOpen, ocrFrozen, drawScanOverlay]);
 
