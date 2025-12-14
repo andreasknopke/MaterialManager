@@ -266,6 +266,25 @@ const MaterialForm: React.FC = () => {
     }
   };
 
+  const fetchCompartments = async (cabinetId: number) => {
+    try {
+      const response = await cabinetAPI.getCompartments(cabinetId);
+      setCompartments(response.data || []);
+    } catch (err) {
+      console.error('Fehler beim Laden der Fächer:', err);
+      setCompartments([]);
+    }
+  };
+
+  // Effect: Fächer laden wenn cabinet_id sich ändert (auch bei Autofill/Template)
+  useEffect(() => {
+    if (formData.cabinet_id && typeof formData.cabinet_id === 'number') {
+      fetchCompartments(formData.cabinet_id);
+    } else {
+      setCompartments([]);
+    }
+  }, [formData.cabinet_id]);
+
   // Shape-Verwaltungs-Funktionen
   const openShapeDialog = async () => {
     setShapeDialogOpen(true);
@@ -412,29 +431,14 @@ const MaterialForm: React.FC = () => {
     }
   };
 
-  const fetchCompartments = async (cabinetId: number) => {
-    try {
-      const response = await cabinetAPI.getCompartments(cabinetId);
-      setCompartments(response.data || []);
-    } catch (err) {
-      console.error('Fehler beim Laden der Fächer:', err);
-      setCompartments([]);
-    }
-  };
-
   const handleChange = (field: keyof MaterialFormData) => (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const value = e.target.value;
     
-    // Wenn der Schrank gewechselt wird, Fächer neu laden und compartment_id zurücksetzen
+    // Wenn der Schrank gewechselt wird, compartment_id zurücksetzen (Fächer werden durch useEffect geladen)
     if (field === 'cabinet_id') {
       const cabinetId = value ? Number(value) : '';
-      if (value) {
-        fetchCompartments(Number(value));
-      } else {
-        setCompartments([]);
-      }
       setFormData(prev => ({ ...prev, cabinet_id: cabinetId, compartment_id: '' }));
     } else {
       setFormData({ ...formData, [field]: value });
