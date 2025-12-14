@@ -300,11 +300,23 @@ export function parseGS1Barcode(barcode: string): GS1Data {
       // Variable Länge - bis zum GS-Zeichen, nächsten AI oder Ende
       console.log(`Variable Länge AI ${ai} ab Position ${position}`);
       
-      // SPEZIALFALL: AI 21 (Serial Number) ist typischerweise das LETZTE Feld
-      // Ohne FNC1-Trenner würden wir fälschlich AIs innerhalb der Seriennummer finden
-      // (z.B. "522191006" enthält "21" und "10" als Substrings)
-      // Daher: Bei AI 21 nur bei echtem GS-Zeichen stoppen, sonst bis zum Ende lesen
+      // SPEZIALFALL für variable AIs (10, 21):
+      // Diese Felder können intern Ziffernfolgen haben, die wie AIs aussehen
+      // z.B. LOT "250210A" enthält "21" und "10" als Substrings
+      // 
+      // GS1-Standard: FNC1 (ASCII 29) trennt variable Felder
+      // Ohne FNC1 können wir nicht sicher sagen, wo das Feld endet
+      // 
+      // Heuristik: 
+      // - Bei AI 21 (Serial): Fast immer das letzte Feld → bis Ende lesen
+      // - Bei AI 10 (Batch/Lot) NACH AI 17: Auch typischerweise letztes Feld
+      // - Nur bei echtem GS-Zeichen (ASCII 29) oder sicherem AI stoppen
       const isSerialAI = (ai === '21');
+      const isBatchAI = (ai === '10');
+      
+      // Batch/Lot nach Datum ist typischerweise das letzte Feld
+      // (Reihenfolge: 01-GTIN, 17-Datum, 10-LOT)
+      const isBatchAfterDate = isBatchAI && result.expiryDate;
       
       let endPos = position;
       while (endPos < normalized.length) {
@@ -317,6 +329,13 @@ export function parseGS1Barcode(barcode: string): GS1Data {
         // Bei Serial Number (AI 21): Keine AI-Suche innerhalb der Daten
         // Serial ist fast immer das letzte Feld im GS1-Barcode
         if (isSerialAI) {
+          endPos++;
+          continue;
+        }
+        
+        // Bei Batch/Lot (AI 10) nach Datum: Auch bis zum Ende lesen
+        // Dies verhindert, dass "21" in "250210A" als AI interpretiert wird
+        if (isBatchAfterDate) {
           endPos++;
           continue;
         }
@@ -338,6 +357,19 @@ export function parseGS1Barcode(barcode: string): GS1Data {
             // Für AIs mit variabler Länge: mindestens 1 Zeichen
             if (aiPattern.length === null && remainingAfterAI < 1) {
               continue;
+            }
+            
+            // Zusätzliche Prüfung: Wenn wir in AI 10 sind und "21" finden,
+            // prüfe ob der verbleibende Rest plausibel als Seriennummer aussieht
+            // Eine Seriennummer sollte typischerweise mindestens 5 Zeichen haben
+            if (ai === '10' && testAI === '21') {
+              const potentialSerial = normalized.substring(endPos + len);
+              // Wenn der verbleibende "Serial" Teil sehr kurz ist (< 5 Zeichen)
+              // und alphanumerisch endet, ist es wahrscheinlich Teil der LOT
+              if (potentialSerial.length < 5 && /[A-Za-z]$/.test(potentialSerial)) {
+                console.log(`  -> "21" in LOT gefunden, aber Rest "${potentialSerial}" zu kurz/alphanumerisch - überspringe`);
+                continue;
+              }
             }
             
             console.log(`  -> Nächster AI gefunden an Position ${endPos}: ${testAI}`);
