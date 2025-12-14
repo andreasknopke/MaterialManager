@@ -150,6 +150,7 @@ const Materials: React.FC = () => {
       headerName: 'Bezeichnung', 
       minWidth: 150, 
       flex: 1,
+      valueGetter: (params) => params.row.name,
       renderCell: (params) => (
         <Box sx={{ 
           display: 'flex', 
