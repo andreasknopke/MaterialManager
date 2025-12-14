@@ -245,13 +245,12 @@ const BarcodeScanner: React.FC = () => {
           // Explizit Kamera-Berechtigung anfordern
           console.log('Fordere Kamera-Zugriff an...');
           
-          // Höhere Auflösung für OCR-Modus
-          const isOcrMode = scanModeRef.current === 'ocr';
+          // Standard-Auflösung für beide Modi
           const stream = await navigator.mediaDevices.getUserMedia({
             video: { 
               facingMode: 'environment',
-              width: { ideal: isOcrMode ? 1920 : 1280 },
-              height: { ideal: isOcrMode ? 1080 : 720 }
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
             }
           });
           
