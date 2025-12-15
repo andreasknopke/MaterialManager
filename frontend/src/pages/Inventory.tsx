@@ -45,6 +45,21 @@ interface Material {
   min_stock: number;
   expiry_date: string;
   cabinet_id: number;
+  // Erweiterte Felder
+  article_number: string;
+  lot_number: string;
+  category_name: string;
+  company_name: string;
+  compartment_name: string;
+  size: string;
+  unit: string;
+  shape_name: string;
+  device_length: string;
+  device_diameter: string;
+  shaft_length: string;
+  french_size: string;
+  guidewire_acceptance: string;
+  is_consignment: boolean;
 }
 
 const Inventory: React.FC = () => {
@@ -240,41 +255,102 @@ const Inventory: React.FC = () => {
                   }}
                 >
                   <ListItemText
-                    primary={material.name}
-                    secondary={
-                      <Box>
-                        <Typography variant="body2" component="span">
-                          Bestand: {material.current_stock} 
-                          {material.current_stock < material.min_stock && (
-                            <Chip 
-                              label="Niedrig" 
-                              size="small" 
-                              color="warning" 
-                              sx={{ ml: 1 }} 
-                            />
-                          )}
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          {material.name}
                         </Typography>
-                        {material.expiry_date && (
-                          <Typography variant="body2" component="div" sx={{ mt: 0.5 }}>
-                            Ablauf: {new Date(material.expiry_date).toLocaleDateString('de-DE')}
-                            {isExpired(material.expiry_date) && (
-                              <Chip 
-                                label="Abgelaufen" 
-                                size="small" 
-                                color="error" 
-                                sx={{ ml: 1 }} 
-                              />
+                        {material.is_consignment && (
+                          <Chip label="K" size="small" color="info" title="Konsignation" />
+                        )}
+                        {material.category_name && (
+                          <Chip label={material.category_name} size="small" variant="outlined" />
+                        )}
+                      </Box>
+                    }
+                    secondary={
+                      <Box sx={{ mt: 1 }}>
+                        {/* Zeile 1: GTIN, LOT, Verfallsdatum */}
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 0.5 }}>
+                          {material.article_number && (
+                            <Typography variant="body2" component="span">
+                              <strong>GTIN:</strong> {material.article_number}
+                            </Typography>
+                          )}
+                          {material.lot_number && (
+                            <Typography variant="body2" component="span">
+                              <strong>LOT:</strong> {material.lot_number}
+                            </Typography>
+                          )}
+                          {material.expiry_date && (
+                            <Typography variant="body2" component="span">
+                              <strong>Ablauf:</strong> {new Date(material.expiry_date).toLocaleDateString('de-DE')}
+                              {isExpired(material.expiry_date) && (
+                                <Chip label="Abgelaufen" size="small" color="error" sx={{ ml: 0.5 }} />
+                              )}
+                              {isExpiringSoon(material.expiry_date) && !isExpired(material.expiry_date) && (
+                                <Chip label="Läuft ab" size="small" color="warning" sx={{ ml: 0.5 }} />
+                              )}
+                            </Typography>
+                          )}
+                        </Box>
+                        
+                        {/* Zeile 2: Device-Eigenschaften */}
+                        {(material.device_diameter || material.device_length || material.shaft_length || 
+                          material.french_size || material.guidewire_acceptance || material.shape_name) && (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 0.5 }}>
+                            {material.shape_name && (
+                              <Typography variant="body2" component="span">
+                                <strong>Form:</strong> {material.shape_name}
+                              </Typography>
                             )}
-                            {isExpiringSoon(material.expiry_date) && !isExpired(material.expiry_date) && (
-                              <Chip 
-                                label="Läuft ab" 
-                                size="small" 
-                                color="warning" 
-                                sx={{ ml: 1 }} 
-                              />
+                            {material.device_diameter && (
+                              <Typography variant="body2" component="span">
+                                <strong>Ø:</strong> {material.device_diameter}
+                              </Typography>
+                            )}
+                            {material.device_length && (
+                              <Typography variant="body2" component="span">
+                                <strong>Länge:</strong> {material.device_length}
+                              </Typography>
+                            )}
+                            {material.shaft_length && (
+                              <Typography variant="body2" component="span">
+                                <strong>Schaft:</strong> {material.shaft_length}
+                              </Typography>
+                            )}
+                            {material.french_size && (
+                              <Typography variant="body2" component="span">
+                                <strong>Fr:</strong> {material.french_size}{!String(material.french_size).toLowerCase().endsWith('f') ? 'F' : ''}
+                              </Typography>
+                            )}
+                            {material.guidewire_acceptance && (
+                              <Typography variant="body2" component="span">
+                                <strong>GW:</strong> {material.guidewire_acceptance}
+                              </Typography>
+                            )}
+                          </Box>
+                        )}
+                        
+                        {/* Zeile 3: Hersteller, Fach, Bestand */}
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                          {material.company_name && (
+                            <Typography variant="body2" component="span">
+                              <strong>Hersteller:</strong> {material.company_name}
+                            </Typography>
+                          )}
+                          {material.compartment_name && (
+                            <Typography variant="body2" component="span">
+                              <strong>Fach:</strong> {material.compartment_name}
+                            </Typography>
+                          )}
+                          <Typography variant="body2" component="span">
+                            <strong>Bestand:</strong> {material.current_stock}
+                            {material.min_stock > 0 && material.current_stock < material.min_stock && (
+                              <Chip label="Niedrig" size="small" color="warning" sx={{ ml: 0.5 }} />
                             )}
                           </Typography>
-                        )}
+                        </Box>
                       </Box>
                     }
                   />
