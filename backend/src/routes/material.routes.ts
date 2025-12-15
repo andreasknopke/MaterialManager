@@ -441,7 +441,35 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Material nicht gefunden' });
     }
     
-    res.json({ message: 'Material erfolgreich aktualisiert' });
+    // GTIN-Synchronisation: Wenn article_number (GTIN) vorhanden ist,
+    // aktualisiere alle anderen Materialien mit derselben GTIN
+    // (außer LOT, Verfallsdatum, Schrank/Fach, Bestand, Notizen, Aktiv-Status)
+    let updatedRelatedCount = 0;
+    if (article_number && article_number.trim() !== '') {
+      const [relatedResult] = await pool.query<ResultSetHeader>(
+        `UPDATE materials 
+         SET category_id = ?, company_id = ?, unit_id = ?, name = ?,
+             description = ?, size = ?, unit = ?, min_stock = ?,
+             cost = ?, shipping_container_code = ?, is_consignment = ?,
+             shape_id = ?, shaft_length = ?, device_length = ?, device_diameter = ?, french_size = ?, guidewire_acceptance = ?
+         WHERE article_number = ? AND id != ? AND active = TRUE`,
+        [
+          category_id, company_id, materialUnitId, name, description, size, unit,
+          min_stock, cost || null, shipping_container_code, is_consignment || false,
+          shape_id || null, shaft_length || null, device_length || null, device_diameter || null, french_size || null, guidewire_acceptance || null,
+          article_number, req.params.id
+        ]
+      );
+      updatedRelatedCount = relatedResult.affectedRows;
+      if (updatedRelatedCount > 0) {
+        console.log(`GTIN-Sync: ${updatedRelatedCount} weitere Materialien mit GTIN ${article_number} aktualisiert`);
+      }
+    }
+    
+    res.json({ 
+      message: 'Material erfolgreich aktualisiert',
+      relatedUpdated: updatedRelatedCount
+    });
   } catch (error) {
     console.error('Fehler beim Aktualisieren des Materials:', error);
     res.status(500).json({ error: 'Datenbankfehler' });

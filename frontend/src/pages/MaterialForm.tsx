@@ -790,8 +790,13 @@ const MaterialForm: React.FC = () => {
         setSuccess('Material erfolgreich erstellt!');
         setTimeout(() => navigate(`/materials/${response.data.id}`), 1500);
       } else {
-        await materialAPI.update(parseInt(id!), dataToSend);
-        setSuccess('Material erfolgreich aktualisiert!');
+        const response = await materialAPI.update(parseInt(id!), dataToSend);
+        const relatedUpdated = response.data?.relatedUpdated || 0;
+        if (relatedUpdated > 0) {
+          setSuccess(`Material erfolgreich aktualisiert! ${relatedUpdated} weitere Material${relatedUpdated === 1 ? '' : 'ien'} mit gleicher GTIN wurden ebenfalls angepasst.`);
+        } else {
+          setSuccess('Material erfolgreich aktualisiert!');
+        }
         setTimeout(() => navigate('/materials'), 1500);
       }
     } catch (err: any) {
