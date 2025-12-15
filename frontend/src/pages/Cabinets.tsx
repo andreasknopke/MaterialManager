@@ -534,24 +534,38 @@ const Cabinets: React.FC = () => {
                                     {/* Materialien dieser Kategorie */}
                                     <Box component="ul" sx={{ m: 0, pl: 3, listStyleType: 'disc' }}>
                                       {materials.map((material: any, matIdx: number) => {
-                                        // Sammle alle Eigenschaften kompakt
-                                        const properties: string[] = [];
+                                        // Sammle alle Eigenschaften in strukturierter Form für Tabellen-Layout
+                                        const properties: { label: string; value: string }[] = [];
                                         
-                                        if (material.shape_name) properties.push(`Form: ${material.shape_name}`);
-                                        if (material.shaft_length) properties.push(`Schaft: ${material.shaft_length}`);
-                                        if (material.device_length) properties.push(`Länge: ${material.device_length}`);
-                                        if (material.device_diameter) properties.push(`Ø: ${material.device_diameter}`);
-                                        if (material.french_size) properties.push(`Fr: ${material.french_size}`);
-                                        if (material.guidewire_acceptance) properties.push(`GW: ${material.guidewire_acceptance}`);
-                                        if (material.is_consignment) properties.push('K');
+                                        if (material.shape_name) properties.push({ label: 'Form', value: material.shape_name });
+                                        if (material.shaft_length) properties.push({ label: 'Schaft', value: material.shaft_length });
+                                        if (material.device_length) properties.push({ label: 'Länge', value: material.device_length });
+                                        if (material.device_diameter) properties.push({ label: 'Ø', value: material.device_diameter });
+                                        if (material.french_size) {
+                                          // French-Size: "F" anhängen wenn nicht bereits vorhanden
+                                          const frValue = String(material.french_size);
+                                          const frDisplay = frValue.toLowerCase().endsWith('f') ? frValue : `${frValue}F`;
+                                          properties.push({ label: 'Fr', value: frDisplay });
+                                        }
+                                        if (material.guidewire_acceptance) properties.push({ label: 'GW', value: material.guidewire_acceptance });
+                                        if (material.is_consignment) properties.push({ label: '', value: 'K' });
                                         
                                         return (
                                           <li key={`${material.article_number}-${matIdx}`} style={{ marginBottom: '1px' }}>
                                             <span style={{ 
-                                              fontFamily: 'Arial, sans-serif',
-                                              fontSize: '0.95em'
+                                              fontFamily: 'monospace',
+                                              fontSize: '0.95em',
+                                              display: 'inline-block'
                                             }}>
-                                              {properties.join('   ')}
+                                              {properties.map((prop, i) => (
+                                                <span key={i} style={{ 
+                                                  display: 'inline-block', 
+                                                  minWidth: prop.label ? '85px' : '20px',
+                                                  marginRight: '4px'
+                                                }}>
+                                                  {prop.label ? `${prop.label}: ${prop.value}` : prop.value}
+                                                </span>
+                                              ))}
                                             </span>
                                           </li>
                                         );
