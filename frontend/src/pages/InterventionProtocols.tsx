@@ -149,20 +149,32 @@ const InterventionProtocols: React.FC = () => {
   const handlePrint = () => {
     if (!selectedProtocol) return;
     
+    // Generiere UDI-Strings für QR-Codes (Format: (01)GTIN(21)LOT - ohne Verfallsdatum)
+    const generateUDI = (gtin: string, lot: string) => {
+      let udi = '';
+      if (gtin) udi += `(01)${gtin}`;
+      if (lot) udi += `(21)${lot}`;
+      return udi;
+    };
+    
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(`
         <html>
           <head>
             <title>Interventions-Protokoll ${selectedProtocol.patient_id}</title>
+            <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
             <style>
               body { font-family: Arial, sans-serif; padding: 20px; }
               h1 { font-size: 18px; margin-bottom: 10px; }
               .patient-info { margin: 10px 0; padding: 10px; background: #f0f0f0; }
               table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; vertical-align: middle; }
               th { background-color: #f5f5f5; }
               .footer { margin-top: 30px; font-size: 11px; color: #666; }
+              .qr-cell { text-align: center; width: 70px; }
+              .qr-cell img { width: 50px; height: 50px; }
+              .udi-text { font-size: 8px; color: #666; word-break: break-all; max-width: 60px; }
             </style>
           </head>
           <body>
@@ -182,28 +194,53 @@ const InterventionProtocols: React.FC = () => {
                   <th>Artikel-Nr.</th>
                   <th>LOT</th>
                   <th>Menge</th>
+                  <th>UDI</th>
                 </tr>
               </thead>
               <tbody>
-                ${protocolItems.map(item => `
+                ${protocolItems.map((item, idx) => {
+                  const udi = generateUDI(item.article_number || item.gtin || '', item.lot_number || '');
+                  return `
                   <tr>
                     <td>${new Date(item.taken_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</td>
                     <td>${item.material_name}</td>
                     <td>${item.article_number || '-'}</td>
                     <td>${item.lot_number || '-'}</td>
                     <td>${item.quantity}</td>
+                    <td class="qr-cell">
+                      ${udi ? `<div id="qr-${idx}"></div><div class="udi-text">${udi}</div>` : '-'}
+                    </td>
                   </tr>
-                `).join('')}
+                `}).join('')}
               </tbody>
             </table>
             <div class="footer">
               Gedruckt am: ${new Date().toLocaleString('de-DE')}
             </div>
+            <script>
+              // QR-Codes generieren nach dem Laden
+              window.onload = function() {
+                ${protocolItems.map((item, idx) => {
+                  const udi = generateUDI(item.article_number || item.gtin || '', item.lot_number || '');
+                  if (!udi) return '';
+                  return `
+                    try {
+                      var qr${idx} = qrcode(0, 'M');
+                      qr${idx}.addData('${udi}');
+                      qr${idx}.make();
+                      document.getElementById('qr-${idx}').innerHTML = qr${idx}.createImgTag(2, 0);
+                    } catch(e) { console.error('QR Error:', e); }
+                  `;
+                }).join('')}
+                
+                // Drucken nach kurzer Verzögerung (damit QR-Codes gerendert sind)
+                setTimeout(function() { window.print(); }, 300);
+              };
+            </script>
           </body>
         </html>
       `);
       printWindow.document.close();
-      printWindow.print();
     }
   };
 
