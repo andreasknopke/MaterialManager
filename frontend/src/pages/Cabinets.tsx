@@ -524,7 +524,33 @@ const Cabinets: React.FC = () => {
                                   return acc;
                                 }, {});
 
-                                return Object.entries(materialsByCategory).map(([category, materials]: [string, any], catIdx) => (
+                                return Object.entries(materialsByCategory).map(([category, materials]: [string, any], catIdx) => {
+                                  // Sortiere Materialien: Durchmesser → Devicelänge → Schaftlänge (jeweils aufsteigend)
+                                  const sortedMaterials = [...materials].sort((a: any, b: any) => {
+                                    // Hilfsfunktion: Extrahiert numerischen Wert aus String (z.B. "8mm" → 8)
+                                    const extractNumber = (val: any): number => {
+                                      if (!val) return Infinity; // Kein Wert = ans Ende
+                                      const match = String(val).match(/[\d.]+/);
+                                      return match ? parseFloat(match[0]) : Infinity;
+                                    };
+                                    
+                                    // 1. Nach Durchmesser sortieren
+                                    const diamA = extractNumber(a.device_diameter);
+                                    const diamB = extractNumber(b.device_diameter);
+                                    if (diamA !== diamB) return diamA - diamB;
+                                    
+                                    // 2. Nach Devicelänge sortieren
+                                    const lenA = extractNumber(a.device_length);
+                                    const lenB = extractNumber(b.device_length);
+                                    if (lenA !== lenB) return lenA - lenB;
+                                    
+                                    // 3. Nach Schaftlänge sortieren
+                                    const shaftA = extractNumber(a.shaft_length);
+                                    const shaftB = extractNumber(b.shaft_length);
+                                    return shaftA - shaftB;
+                                  });
+                                  
+                                  return (
                                   <Box key={catIdx} sx={{ mb: 0.5 }}>
                                     {/* Kategorie als Überschrift */}
                                     <Box sx={{ fontWeight: 'bold', fontSize: '1em' }}>
@@ -533,7 +559,7 @@ const Cabinets: React.FC = () => {
 
                                     {/* Materialien dieser Kategorie */}
                                     <Box component="ul" sx={{ m: 0, pl: 3, listStyleType: 'disc' }}>
-                                      {materials.map((material: any, matIdx: number) => {
+                                      {sortedMaterials.map((material: any, matIdx: number) => {
                                         // Sammle alle Eigenschaften in strukturierter Form für Tabellen-Layout
                                         const properties: { label: string; value: string }[] = [];
                                         
@@ -572,7 +598,7 @@ const Cabinets: React.FC = () => {
                                       })}
                                     </Box>
                                   </Box>
-                                ));
+                                )});
                               })()}
                             </Box>
                           )}
