@@ -256,53 +256,72 @@ export function parseGS1Barcode(barcode: string): GS1Data {
       if (isDateAI) {
         // Bei Datums-AIs: Prüfe ob ein neuer AI vor der vollen Länge beginnt
         // Manche Hersteller verwenden YYMM (4 Zeichen) statt YYMMDD (6 Zeichen)
+        // Problem: z.B. "(01)...(11)2507(17)280716(21)..." - hier ist "17" ein AI, nicht Teil des Datums!
         const maxEndPos = Math.min(position + pattern.length, normalized.length);
         console.log(`Datums-AI: Suche Ende von Position ${position} bis maximal ${maxEndPos}`);
         
         // Default: volle Länge (6 Zeichen für YYMMDD)
         let endPos = maxEndPos;
         
-        // YYMM-Heuristik NUR wenn wir nicht genug Zeichen für volles Datum haben
-        // ODER wenn an Position+6 ein nicht-Datums-AI beginnt
+        // Intelligente Heuristik für verkürzte Datums-AIs:
+        // Prüfe ob an Position+4 ein AI beginnt UND danach gültige Daten folgen
         const hasFullDate = (normalized.length >= position + 6);
         
         if (!hasFullDate && position + 4 <= normalized.length) {
-          // Nicht genug Zeichen für volles Datum - prüfe YYMM
-          console.log(`  Nicht genug Zeichen für YYMMDD, prüfe YYMM`);
-          endPos = position + 4;
+          // Nicht genug Zeichen für volles Datum - verwende was verfügbar ist
+          console.log(`  Nicht genug Zeichen für YYMMDD, verwende verfügbare ${normalized.length - position} Zeichen`);
+          endPos = normalized.length;
         } else if (hasFullDate) {
-          // Prüfe ob an Position+6 ein gültiger AI beginnt
-          // Wenn ja, verwende volles 6-stelliges Datum
-          // Prüfe auch an Position+4, aber NUR wenn der gefundene AI KEIN Datums-AI ist
-          // (um zu verhindern, dass "17" im Datum als AI interpretiert wird)
-          if (position + 4 < normalized.length) {
-            for (let len = 2; len <= 4; len++) {
-              const testAI = normalized.substring(position + 4, position + 4 + len);
-              console.log(`  Prüfe YYMM-Ende: AI "${testAI}" an Position ${position + 4}`);
-              if (AI_PATTERNS[testAI]) {
-                // WICHTIG: Wenn der gefundene AI ein Datums-AI (11 oder 17) ist,
-                // ignoriere ihn - das ist wahrscheinlich Teil des Datums!
-                if (testAI === '11' || testAI === '17') {
-                  console.log(`  -> "${testAI}" ist ein Datums-AI, ignoriere (wahrscheinlich Teil des Datums)`);
-                  continue;
-                }
-                
-                const aiPattern = AI_PATTERNS[testAI];
-                const remainingAfterAI = normalized.length - (position + 4) - len;
-                console.log(`  -> AI ${testAI} gefunden, remaining: ${remainingAfterAI}`);
-                
-                // Prüfe ob nach dem AI genug Daten folgen
-                if (aiPattern.length !== null && remainingAfterAI >= Math.min(aiPattern.length, 4)) {
-                  console.log(`  -> Beende Datums-AI nach 4 Zeichen (YYMM Format)`);
-                  endPos = position + 4;
-                  break;
-                }
-                if (aiPattern.length === null && remainingAfterAI >= 1) {
-                  console.log(`  -> Beende Datums-AI nach 4 Zeichen (YYMM Format)`);
-                  endPos = position + 4;
-                  break;
+          // Prüfe an Position+4 ob ein gültiger AI folgt
+          // Dies ermöglicht YYMM-Format (4 Zeichen) wenn danach ein AI mit gültigen Daten kommt
+          const fullDate = normalized.substring(position, position + 6);
+          console.log(`  Potentielles 6-stelliges Datum: "${fullDate}"`);
+          
+          // Prüfe ob Zeichen 4-5 ein bekannter AI sein könnten
+          const potentialAI = fullDate.substring(4, 6);
+          console.log(`  Zeichen 4-5 (potentieller AI): "${potentialAI}"`);
+          
+          if (AI_PATTERNS[potentialAI]) {
+            // Gefunden! Aber ist es wirklich ein AI oder Teil des Datums?
+            // Prüfe ob danach gültige Daten für diesen AI-Typ folgen
+            const afterAIPos = position + 6;
+            const afterAI = normalized.substring(afterAIPos);
+            console.log(`  Nach potentiellem AI ${potentialAI}: "${afterAI.substring(0, 15)}..."`);
+            
+            let isValidNextAI = false;
+            
+            if (potentialAI === '17' || potentialAI === '11') {
+              // Nächster AI ist auch ein Datums-AI - prüfe ob YYMMDD-Format gültig ist
+              if (afterAI.length >= 6) {
+                const yy = parseInt(afterAI.substring(0, 2), 10);
+                const mm = parseInt(afterAI.substring(2, 4), 10);
+                const dd = parseInt(afterAI.substring(4, 6), 10);
+                console.log(`  Parsing als Datum: YY=${yy}, MM=${mm}, DD=${dd}`);
+                // Plausibilitätsprüfung: Jahr 2020-2050, Monat 1-12, Tag 0-31
+                if (yy >= 20 && yy <= 50 && mm >= 1 && mm <= 12 && dd >= 0 && dd <= 31) {
+                  console.log(`  -> Gültiges Datum erkannt! AI ${potentialAI} ist ein echter AI.`);
+                  isValidNextAI = true;
                 }
               }
+            } else if (potentialAI === '21' || potentialAI === '10') {
+              // Variable-Länge AI (Serial, Batch) - muss mindestens 1 Zeichen Daten haben
+              if (afterAI.length >= 1) {
+                console.log(`  -> AI ${potentialAI} mit Daten erkannt`);
+                isValidNextAI = true;
+              }
+            } else {
+              // Andere AIs mit fester Länge
+              const nextPattern = AI_PATTERNS[potentialAI];
+              if (nextPattern.length !== null && afterAI.length >= nextPattern.length) {
+                isValidNextAI = true;
+              } else if (nextPattern.length === null && afterAI.length >= 1) {
+                isValidNextAI = true;
+              }
+            }
+            
+            if (isValidNextAI) {
+              console.log(`  -> Verwende 4-Zeichen-Datum (YYMM), AI ${potentialAI} folgt`);
+              endPos = position + 4;
             }
           }
         }
