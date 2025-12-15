@@ -804,19 +804,26 @@ const BarcodeScanner: React.FC = () => {
         },
       });
       
-      // Optimierte Parameter für Barcode/GS1-Text
+      // PSM 6 = Uniform block of text - für mehrzeilige GS1-Codes
+      // PSM 7 = Single line - nur wenn wirklich eine Zeile
       await worker.setParameters({
         tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz()-/. ',
-        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE, // PSM 7 = Single text line
-        preserve_interword_spaces: '0', // Leerzeichen zwischen Wörtern minimieren
+        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK, // PSM 6 = Uniform block (mehrzeilig)
+        preserve_interword_spaces: '0',
       });
       
       const result = await worker.recognize(canvas);
       await worker.terminate();
       
-      // Nur erkannte Zeichen zurückgeben, keine Interpretation
-      const recognizedText = result.data.text.trim();
-      console.log('OCR Ergebnis:', recognizedText, 'Confidence:', result.data.confidence);
+      // Roher erkannter Text
+      let recognizedText = result.data.text.trim();
+      console.log('OCR Rohergebnis:', recognizedText, 'Confidence:', result.data.confidence);
+      
+      // GS1 Multi-Line Post-Processing:
+      // 1. Barcode-Artefakte entfernen (|||, III, lll, etc.)
+      // 2. Zeilen zusammenfügen zu einem GS1-String
+      recognizedText = cleanOcrForGS1(recognizedText);
+      console.log('OCR Nach Bereinigung:', recognizedText);
       
       if (recognizedText) {
         setSelectedOcrText(recognizedText);
@@ -869,6 +876,63 @@ const BarcodeScanner: React.FC = () => {
     text = text.replace(/\s+.*$/, '');
     
     return text;
+  };
+
+  // OCR-Ergebnis für GS1 Multi-Line bereinigen
+  // Entfernt Barcode-Artefakte und fügt Zeilen zusammen
+  const cleanOcrForGS1 = (text: string): string => {
+    // 1. Barcode-Artefakte entfernen (Striche werden oft als | I l 1 erkannt)
+    // Entferne Sequenzen von 3+ ähnlichen Zeichen die wie Barcode-Striche aussehen
+    text = text.replace(/[|Il1]{3,}/g, '');
+    text = text.replace(/[!|]{3,}/g, '');
+    
+    // 2. Zeilen extrahieren und filtern
+    const lines = text.split(/[\r\n]+/).map(line => line.trim()).filter(line => line.length > 0);
+    
+    // 3. Nur Zeilen behalten die GS1-ähnliche Muster enthalten
+    // GS1 Pattern: (01), (10), (17), (21), (11), (30) etc. oder Zahlenfolgen
+    const gs1Lines: string[] = [];
+    for (const line of lines) {
+      // Zeile enthält GS1 AI in Klammern?
+      if (line.match(/\(\d{2}\)/)) {
+        gs1Lines.push(line);
+      }
+      // Zeile ist reine Zahlen mit Klammern?
+      else if (line.match(/^[\d()\-\/\.]+$/) && line.length >= 8) {
+        gs1Lines.push(line);
+      }
+      // Zeile enthält "01" gefolgt von Zahlen (ohne Klammern)?
+      else if (line.match(/^01\d{12,}/)) {
+        // Füge Klammern hinzu für Konsistenz
+        gs1Lines.push('(01)' + line.substring(2));
+      }
+    }
+    
+    // 4. Zeilen zusammenfügen
+    let result = gs1Lines.join('');
+    
+    // 5. Leerzeichen und unnötige Zeichen entfernen
+    result = result.replace(/\s+/g, '');
+    
+    // 6. Häufige OCR-Fehler korrigieren
+    // O -> 0 in Zahlenkontext (aber nicht in LOT-Nummern nach (10))
+    // Wir korrigieren nur vor dem ersten (10)
+    const lot10Index = result.indexOf('(10)');
+    if (lot10Index > 0) {
+      const beforeLot = result.substring(0, lot10Index).replace(/O/g, '0');
+      const afterLot = result.substring(lot10Index);
+      result = beforeLot + afterLot;
+    } else {
+      // Kein LOT, alles korrigieren
+      result = result.replace(/O/g, '0');
+    }
+    
+    // S -> 5, B -> 8 in reinen Zahlensequenzen (vor erstem Buchstaben-AI)
+    // Aber vorsichtig - LOT kann Buchstaben enthalten
+    
+    console.log('cleanOcrForGS1:', { original: text, lines, gs1Lines, result });
+    
+    return result;
   };
 
   // OCR-Auswahl bestätigen und als Barcode verwenden
