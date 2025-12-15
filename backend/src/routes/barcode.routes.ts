@@ -67,6 +67,7 @@ router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
          m.article_number as gtin,
          cat.name as category_name,
          comp.name as company_name,
+         MAX(m.is_consignment) as is_consignment,
          COUNT(*) as item_count
        FROM materials m
        LEFT JOIN cabinets c ON m.cabinet_id = c.id

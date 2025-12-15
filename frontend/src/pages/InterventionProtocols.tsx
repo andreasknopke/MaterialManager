@@ -42,6 +42,7 @@ interface ProtocolItem {
   gtin: string;
   quantity: number;
   taken_at: string;
+  is_consignment: boolean;
 }
 
 interface Protocol {
@@ -446,6 +447,7 @@ const InterventionProtocols: React.FC = () => {
                         <TableCell>Material</TableCell>
                         <TableCell>Artikel-Nr.</TableCell>
                         <TableCell>LOT</TableCell>
+                        <TableCell align="center">Kons.</TableCell>
                         <TableCell align="right">Menge</TableCell>
                       </TableRow>
                     </TableHead>
@@ -456,6 +458,11 @@ const InterventionProtocols: React.FC = () => {
                           <TableCell>{item.material_name}</TableCell>
                           <TableCell>{item.article_number || '-'}</TableCell>
                           <TableCell>{item.lot_number || '-'}</TableCell>
+                          <TableCell align="center">
+                            {item.is_consignment ? (
+                              <Chip label="K" size="small" color="info" title="Konsignation" />
+                            ) : '-'}
+                          </TableCell>
                           <TableCell align="right">{item.quantity}</TableCell>
                         </TableRow>
                       ))}

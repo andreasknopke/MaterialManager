@@ -1342,6 +1342,7 @@ const BarcodeScanner: React.FC = () => {
           lotNumber: materialItem.batch_number || materialItem.lot_number || scannedGS1Data?.batchNumber || '',
           quantity: 1,
           gtin: materialItem.article_number || scannedGS1Data?.gtin || '',
+          isConsignment: Boolean(materialItem.is_consignment),
         });
       }
       
@@ -1393,6 +1394,7 @@ const BarcodeScanner: React.FC = () => {
           lotNumber: materialItem.batch_number || materialItem.lot_number || scannedGS1Data?.batchNumber || '',
           quantity: 1,
           gtin: materialItem.gtin || scannedGS1Data?.gtin || '',
+          isConsignment: Boolean(materialItem.is_consignment),
         });
       }
       
@@ -1527,6 +1529,7 @@ const BarcodeScanner: React.FC = () => {
           lotNumber: material.lot_number || '',
           quantity: quantity,
           gtin: material.gtin || '',
+          isConsignment: Boolean(material.is_consignment),
         });
       }
       

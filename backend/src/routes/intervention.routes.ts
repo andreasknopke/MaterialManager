@@ -19,6 +19,7 @@ interface ProtocolItem {
   gtin?: string;
   quantity: number;
   timestamp: string;
+  isConsignment?: boolean;
 }
 
 // GET alle Interventionsprotokolle (mit Suche)
@@ -200,8 +201,8 @@ router.post('/', async (req: Request, res: Response) => {
     for (const item of items as ProtocolItem[]) {
       await connection.query(
         `INSERT INTO intervention_protocol_items 
-         (protocol_id, material_name, article_number, lot_number, gtin, quantity, taken_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (protocol_id, material_name, article_number, lot_number, gtin, quantity, is_consignment, taken_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           protocolId,
           item.materialName,
@@ -209,6 +210,7 @@ router.post('/', async (req: Request, res: Response) => {
           item.lotNumber || null,
           item.gtin || null,
           item.quantity || 1,
+          item.isConsignment ? 1 : 0,
           toMySQLDatetime(item.timestamp)
         ]
       );

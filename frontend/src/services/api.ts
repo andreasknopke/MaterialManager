@@ -159,6 +159,7 @@ export const interventionAPI = {
       gtin?: string;
       quantity: number;
       timestamp: string;
+      isConsignment?: boolean;
     }>;
   }) => api.post('/interventions', data),
   delete: (id: number) => api.delete(`/interventions/${id}`),

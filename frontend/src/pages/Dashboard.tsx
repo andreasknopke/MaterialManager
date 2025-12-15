@@ -51,6 +51,7 @@ export interface InterventionItem {
   lotNumber: string;
   quantity: number;
   gtin?: string;
+  isConsignment?: boolean;
 }
 
 export interface InterventionSession {
@@ -269,6 +270,7 @@ const Dashboard: React.FC = () => {
           gtin: item.gtin,
           quantity: item.quantity,
           timestamp: new Date(item.timestamp).toISOString(),
+          isConsignment: item.isConsignment || false,
         })),
       });
       
@@ -530,8 +532,8 @@ const Dashboard: React.FC = () => {
                     <TableRow>
                       <TableCell>Zeit</TableCell>
                       <TableCell>Material</TableCell>
-                      <TableCell>Artikel-Nr.</TableCell>
                       <TableCell>LOT</TableCell>
+                      <TableCell align="center">Kons.</TableCell>
                       <TableCell align="right">Menge</TableCell>
                       <TableCell align="center" className="no-print">Aktion</TableCell>
                     </TableRow>
@@ -540,9 +542,16 @@ const Dashboard: React.FC = () => {
                     {interventionSession.items.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell>{formatTime(item.timestamp)}</TableCell>
-                        <TableCell>{item.materialName}</TableCell>
-                        <TableCell>{item.articleNumber || '-'}</TableCell>
+                        <TableCell>
+                          {item.materialName}
+                          {item.articleNumber && <Typography variant="caption" display="block" color="text.secondary">{item.articleNumber}</Typography>}
+                        </TableCell>
                         <TableCell>{item.lotNumber || '-'}</TableCell>
+                        <TableCell align="center">
+                          {item.isConsignment ? (
+                            <Chip label="K" size="small" color="info" title="Konsignation" />
+                          ) : '-'}
+                        </TableCell>
                         <TableCell align="right">{item.quantity}</TableCell>
                         <TableCell align="center" className="no-print">
                           <Tooltip title="Entfernen">
