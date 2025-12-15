@@ -710,36 +710,92 @@ const BarcodeScanner: React.FC = () => {
       const adjustedX = selectionRect.x - offsetX;
       const adjustedY = selectionRect.y - offsetY;
       
-      // Ausgewählten Bereich im Original-Koordinatensystem
+      // Prüfe ob die Auswahl innerhalb des Bildbereichs liegt
+      if (adjustedX < 0 || adjustedY < 0 || 
+          adjustedX + selectionRect.width > displayedWidth ||
+          adjustedY + selectionRect.height > displayedHeight) {
+        console.warn('Auswahl liegt teilweise außerhalb des Bildes');
+      }
+      
+      // Ausgewählten Bereich im Original-Koordinatensystem (mit Begrenzung)
       const cropX = Math.max(0, Math.round(adjustedX * scaleX));
       const cropY = Math.max(0, Math.round(adjustedY * scaleY));
       const cropWidth = Math.min(naturalWidth - cropX, Math.round(selectionRect.width * scaleX));
       const cropHeight = Math.min(naturalHeight - cropY, Math.round(selectionRect.height * scaleY));
       
+      // Validierung: Mindestgröße für OCR
+      if (cropWidth < 20 || cropHeight < 10) {
+        throw new Error('Ausgewählter Bereich zu klein für OCR');
+      }
+      
       console.log('OCR Selection:', { 
-        display: selectionRect, 
-        imageInContainer: { offsetX, offsetY, displayedWidth, displayedHeight },
+        container: { containerWidth, containerHeight },
+        image: { naturalWidth, naturalHeight, displayedWidth, displayedHeight },
+        offset: { offsetX, offsetY },
+        selection: selectionRect, 
         adjusted: { adjustedX, adjustedY },
-        original: { cropX, cropY, cropWidth, cropHeight },
+        crop: { cropX, cropY, cropWidth, cropHeight },
         scale: { scaleX, scaleY }
       });
       
+      // Für bessere OCR: Bild hochskalieren (mindestens 2x, ideal 3x für kleine Texte)
+      const scaleFactor = Math.max(2, Math.min(4, 600 / cropHeight)); // Ziel: ~600px Höhe
+      const targetWidth = Math.round(cropWidth * scaleFactor);
+      const targetHeight = Math.round(cropHeight * scaleFactor);
+      
       // Canvas für den Ausschnitt erstellen
       const canvas = document.createElement('canvas');
-      canvas.width = cropWidth;
-      canvas.height = cropHeight;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
       const ctx = canvas.getContext('2d');
       
       if (!ctx) {
         throw new Error('Canvas-Context nicht verfügbar');
       }
       
-      // Ausschnitt zeichnen
-      ctx.drawImage(img, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+      // Bessere Bildqualität beim Skalieren
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       
-      console.log('OCR Canvas erstellt:', cropWidth, 'x', cropHeight);
+      // Ausschnitt zeichnen und hochskalieren
+      ctx.drawImage(img, cropX, cropY, cropWidth, cropHeight, 0, 0, targetWidth, targetHeight);
       
-      // OCR durchführen - ohne Sprachmodell für bessere Zahlenerkennung
+      // Bildverarbeitung: Kontrast erhöhen und Schwarz/Weiß-Konvertierung
+      const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+      const data = imageData.data;
+      
+      // Berechne Histogram für adaptive Schwellwert
+      let minLum = 255, maxLum = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        if (lum < minLum) minLum = lum;
+        if (lum > maxLum) maxLum = lum;
+      }
+      
+      // Kontrast stretchen und leicht aufhellen
+      const range = maxLum - minLum || 1;
+      for (let i = 0; i < data.length; i += 4) {
+        // Luminanz berechnen
+        const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        
+        // Kontrast stretchen (0-255)
+        let newLum = ((lum - minLum) / range) * 255;
+        
+        // Leichte Gammakorrektion für besseren Kontrast
+        newLum = Math.pow(newLum / 255, 0.8) * 255;
+        
+        // Grayscale mit erhöhtem Kontrast
+        data[i] = newLum;     // R
+        data[i + 1] = newLum; // G
+        data[i + 2] = newLum; // B
+        // Alpha bleibt
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+      
+      console.log('OCR Canvas erstellt:', targetWidth, 'x', targetHeight, '(skaliert von', cropWidth, 'x', cropHeight, ')');
+      
+      // OCR durchführen mit optimierten Einstellungen
       const worker = await Tesseract.createWorker('eng', undefined, {
         logger: (m) => {
           if (m.status === 'recognizing text') {
@@ -748,9 +804,11 @@ const BarcodeScanner: React.FC = () => {
         },
       });
       
-      // PSM 7 = Single line, nur Zahlen und Buchstaben
+      // Optimierte Parameter für Barcode/GS1-Text
       await worker.setParameters({
         tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz()-/. ',
+        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE, // PSM 7 = Single text line
+        preserve_interword_spaces: '0', // Leerzeichen zwischen Wörtern minimieren
       });
       
       const result = await worker.recognize(canvas);
@@ -762,9 +820,9 @@ const BarcodeScanner: React.FC = () => {
       
       if (recognizedText) {
         setSelectedOcrText(recognizedText);
-        setSuccess(`Text erkannt: "${recognizedText.substring(0, 50)}${recognizedText.length > 50 ? '...' : ''}"`);
+        setSuccess(`Text erkannt (${Math.round(result.data.confidence)}% sicher): "${recognizedText.substring(0, 50)}${recognizedText.length > 50 ? '...' : ''}"`);
       } else {
-        setError('Kein Text im ausgewählten Bereich erkannt. Versuchen Sie einen anderen Bereich.');
+        setError('Kein Text im ausgewählten Bereich erkannt. Versuchen Sie einen größeren Bereich oder bessere Beleuchtung.');
       }
     } catch (err: any) {
       console.error('OCR Fehler:', err);
