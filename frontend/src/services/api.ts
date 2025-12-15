@@ -144,7 +144,7 @@ export const shapeAPI = {
 
 // Interventionsprotokolle
 export const interventionAPI = {
-  getAll: (params?: { search?: string; from_date?: string; to_date?: string; limit?: number; offset?: number }) => 
+  getAll: (params?: { search?: string; from_date?: string; to_date?: string; gtin?: string; lot_number?: string; limit?: number; offset?: number }) => 
     api.get('/interventions', { params }),
   getById: (id: number) => api.get(`/interventions/${id}`),
   create: (data: { 

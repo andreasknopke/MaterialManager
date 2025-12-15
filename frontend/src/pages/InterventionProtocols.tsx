@@ -63,6 +63,8 @@ const InterventionProtocols: React.FC = () => {
   const [search, setSearch] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [gtinFilter, setGtinFilter] = useState('');
+  const [lotFilter, setLotFilter] = useState('');
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
@@ -85,6 +87,8 @@ const InterventionProtocols: React.FC = () => {
         search: search || undefined,
         from_date: fromDate || undefined,
         to_date: toDate || undefined,
+        gtin: gtinFilter || undefined,
+        lot_number: lotFilter || undefined,
         limit,
         offset: (page - 1) * limit,
       });
@@ -236,6 +240,24 @@ const InterventionProtocols: React.FC = () => {
                 </InputAdornment>
               ),
             }}
+          />
+          <TextField
+            label="GTIN / Artikelnr."
+            placeholder="GTIN..."
+            value={gtinFilter}
+            onChange={(e) => setGtinFilter(e.target.value)}
+            onKeyPress={handleKeyPress}
+            size="small"
+            sx={{ minWidth: 150 }}
+          />
+          <TextField
+            label="LOT-Nummer"
+            placeholder="LOT..."
+            value={lotFilter}
+            onChange={(e) => setLotFilter(e.target.value)}
+            onKeyPress={handleKeyPress}
+            size="small"
+            sx={{ minWidth: 150 }}
           />
           <TextField
             label="Von Datum"

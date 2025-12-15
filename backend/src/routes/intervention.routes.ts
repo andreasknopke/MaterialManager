@@ -24,15 +24,19 @@ interface ProtocolItem {
 // GET alle Interventionsprotokolle (mit Suche)
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { search, from_date, to_date, limit = 50, offset = 0 } = req.query;
+    const { search, from_date, to_date, gtin, lot_number, limit = 50, offset = 0 } = req.query;
+    
+    // Wenn nach GTIN oder LOT gefiltert wird, brauchen wir einen JOIN
+    const needsItemJoin = !!(gtin || lot_number);
     
     let sql = `
-      SELECT 
+      SELECT DISTINCT
         ip.*,
         u.username as created_by_name,
         (SELECT COUNT(*) FROM intervention_protocol_items WHERE protocol_id = ip.id) as item_count
       FROM intervention_protocols ip
       LEFT JOIN users u ON ip.created_by = u.id
+      ${needsItemJoin ? 'INNER JOIN intervention_protocol_items ipi ON ipi.protocol_id = ip.id' : ''}
       WHERE 1=1
     `;
     const params: any[] = [];
@@ -53,6 +57,18 @@ router.get('/', async (req: Request, res: Response) => {
       params.push(to_date);
     }
     
+    // Filter nach GTIN (article_number in intervention_protocol_items)
+    if (gtin) {
+      sql += ` AND ipi.article_number LIKE ?`;
+      params.push(`%${gtin}%`);
+    }
+    
+    // Filter nach LOT-Nummer
+    if (lot_number) {
+      sql += ` AND ipi.lot_number LIKE ?`;
+      params.push(`%${lot_number}%`);
+    }
+    
     sql += ` ORDER BY ip.started_at DESC LIMIT ? OFFSET ?`;
     params.push(Number(limit), Number(offset));
     
@@ -60,8 +76,9 @@ router.get('/', async (req: Request, res: Response) => {
     
     // Gesamtanzahl für Pagination
     let countSql = `
-      SELECT COUNT(*) as total
+      SELECT COUNT(DISTINCT ip.id) as total
       FROM intervention_protocols ip
+      ${needsItemJoin ? 'INNER JOIN intervention_protocol_items ipi ON ipi.protocol_id = ip.id' : ''}
       WHERE 1=1
     `;
     const countParams: any[] = [];
@@ -80,6 +97,16 @@ router.get('/', async (req: Request, res: Response) => {
     if (to_date) {
       countSql += ` AND DATE(ip.started_at) <= ?`;
       countParams.push(to_date);
+    }
+    
+    if (gtin) {
+      countSql += ` AND ipi.article_number LIKE ?`;
+      countParams.push(`%${gtin}%`);
+    }
+    
+    if (lot_number) {
+      countSql += ` AND ipi.lot_number LIKE ?`;
+      countParams.push(`%${lot_number}%`);
     }
     
     const [countResult] = await pool.query<RowDataPacket[]>(countSql, countParams);
