@@ -774,6 +774,45 @@ const BarcodeScanner: React.FC = () => {
     }
   };
 
+  // GS1-Text bereinigen: Zeichen vor (01) und nach dem GS1-Code entfernen
+  const cleanGS1Text = (text: string): string => {
+    // Suche nach dem Start des GS1-Codes: (01) oder 01 am Anfang einer Zahl
+    const gs1StartMatch = text.match(/\(01\)/);
+    if (gs1StartMatch && gs1StartMatch.index !== undefined) {
+      // Alles vor (01) entfernen
+      text = text.substring(gs1StartMatch.index);
+    }
+    
+    // Suche nach dem Ende des GS1-Codes:
+    // GS1 endet normalerweise vor einem Leerzeichen, das nicht Teil einer AI ist
+    // Typische AIs: (01), (10), (17), (21), (11), (30), etc.
+    // Suche nach Leerzeichen gefolgt von etwas das keine AI ist
+    const parts = text.split(/\s+/);
+    if (parts.length > 1) {
+      // Prüfe jeden Teil - behalte nur die die wie GS1 AIs aussehen
+      let gs1Parts: string[] = [];
+      for (const part of parts) {
+        // Teil sieht wie GS1 aus wenn er mit ( beginnt oder nur Ziffern/Klammern enthält
+        if (part.match(/^\(\d{2}\)/) || part.match(/^[\d()]+$/)) {
+          gs1Parts.push(part);
+        } else if (gs1Parts.length > 0) {
+          // Erstes Teil das nicht GS1 ist - aufhören
+          break;
+        }
+        // Ignoriere Text vor dem ersten GS1-Teil
+      }
+      if (gs1Parts.length > 0) {
+        text = gs1Parts.join('');
+      }
+    }
+    
+    // Entferne trailing Zeichen die keine GS1-Daten sind (Buchstaben am Ende ohne Klammer)
+    // z.B. "(01)12345678901234(10)LOT123ABC" ist OK, aber "(01)12345... XYZ" -> XYZ entfernen
+    text = text.replace(/\s+.*$/, '');
+    
+    return text;
+  };
+
   // OCR-Auswahl bestätigen und als Barcode verwenden
   const confirmOcrSelection = () => {
     if (!selectedOcrText.trim()) {
@@ -782,7 +821,7 @@ const BarcodeScanner: React.FC = () => {
     }
     
     // Text bereinigen (Zeilenumbrüche und mehrfache Leerzeichen entfernen)
-    const cleanedText = selectedOcrText.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+    let cleanedText = selectedOcrText.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
     
     // Prüfen ob wir von MaterialForm kommen und zurück navigieren sollen
     const state = location.state as { 
@@ -790,6 +829,15 @@ const BarcodeScanner: React.FC = () => {
       scanMode?: 'gs1' | 'qr';
       materialId?: string;
     } | null;
+    
+    // Bei GS1-Modus: Text zusätzlich bereinigen
+    if (state?.scanMode === 'gs1') {
+      const originalText = cleanedText;
+      cleanedText = cleanGS1Text(cleanedText);
+      if (cleanedText !== originalText) {
+        console.log('OCR GS1-Bereinigung:', originalText, '->', cleanedText);
+      }
+    }
     
     if (state?.returnToMaterialForm) {
       console.log('OCR: Rückkehr zu MaterialForm mit Text:', cleanedText);
