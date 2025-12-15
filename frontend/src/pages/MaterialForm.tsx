@@ -45,7 +45,7 @@ let gs1DebugTimer: ReturnType<typeof setTimeout> | null = null;
 let gtinSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Guidewire-Acceptance Optionen
-const GUIDEWIRE_OPTIONS = ['0.014in', '0.018in', '0.032in', '0.038in'];
+const GUIDEWIRE_OPTIONS = ['0.014in', '0.018in', '0.032in', '0.035in', '0.038in'];
 
 interface MaterialFormData {
   name: string;

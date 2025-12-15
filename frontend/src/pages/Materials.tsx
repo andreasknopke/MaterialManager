@@ -27,7 +27,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { materialAPI, categoryAPI, companyAPI, cabinetAPI, shapeAPI } from '../services/api';
 
 // Guidewire-Acceptance Optionen
-const GUIDEWIRE_OPTIONS = ['0.014in', '0.018in', '0.032in', '0.038in'];
+const GUIDEWIRE_OPTIONS = ['0.014in', '0.018in', '0.032in', '0.035in', '0.038in'];
 
 interface FilterState {
   category_id: string;
