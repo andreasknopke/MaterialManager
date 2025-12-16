@@ -949,14 +949,14 @@ const Cabinets: React.FC = () => {
                 alignItems: 'flex-start',
               }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '2px' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '2px' }}>
                     {compartmentCabinet?.name}
                   </div>
-                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1976d2' }}>
+                  <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#1976d2' }}>
                     {selectedCompartment?.name}
                   </div>
                   {compartmentCabinet?.location && (
-                    <div style={{ fontSize: '10px', color: '#666' }}>
+                    <div style={{ fontSize: '16px', color: '#666' }}>
                       {compartmentCabinet.location}
                     </div>
                   )}
@@ -965,7 +965,7 @@ const Cabinets: React.FC = () => {
                   <img 
                     src={compartmentQrCodeUrl} 
                     alt="QR Code" 
-                    style={{ width: '25mm', height: '25mm' }} 
+                    style={{ width: '30mm', height: '30mm' }} 
                   />
                 )}
               </div>
@@ -976,11 +976,11 @@ const Cabinets: React.FC = () => {
                   <CircularProgress size={20} />
                 </div>
               ) : compartmentMaterials.length === 0 ? (
-                <div style={{ fontSize: '10px', color: '#666', textAlign: 'center', padding: '10px' }}>
+                <div style={{ fontSize: '16px', color: '#666', textAlign: 'center', padding: '10px' }}>
                   Keine Materialien in diesem Fach
                 </div>
               ) : (
-                <div style={{ fontSize: '9px' }}>
+                <div style={{ fontSize: '16px' }}>
                   {groupMaterialsByName(compartmentMaterials).map((group, idx) => {
                     // Eigenschaften für Anzeige zusammenstellen
                     const props: string[] = [];
@@ -992,7 +992,7 @@ const Cabinets: React.FC = () => {
                     }
                     
                     return (
-                      <div key={idx} style={{ padding: '2px 0', borderBottom: '1px dotted #eee' }}>
+                      <div key={idx} style={{ padding: '3px 0', borderBottom: '1px dotted #eee' }}>
                         {group.name}
                         {props.length > 0 && (
                           <span style={{ color: '#666' }}> ({props.join(', ')})</span>
@@ -1113,14 +1113,14 @@ const Cabinets: React.FC = () => {
                           alignItems: 'flex-start',
                         }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '2px' }}>
+                            <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '2px' }}>
                               {allLabelsCabinet?.name}
                             </div>
-                            <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1976d2' }}>
+                            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1976d2' }}>
                               {label.compartment.name}
                             </div>
                             {allLabelsCabinet?.location && (
-                              <div style={{ fontSize: '9px', color: '#666' }}>
+                              <div style={{ fontSize: '14px', color: '#666' }}>
                                 {allLabelsCabinet.location}
                               </div>
                             )}
@@ -1128,17 +1128,17 @@ const Cabinets: React.FC = () => {
                           <img 
                             src={label.qrCodeUrl} 
                             alt="QR Code" 
-                            style={{ width: '20mm', height: '20mm' }} 
+                            style={{ width: '25mm', height: '25mm' }} 
                           />
                         </div>
                         
                         {/* Materialien-Liste */}
                         {label.materials.length === 0 ? (
-                          <div style={{ fontSize: '9px', color: '#666', textAlign: 'center', padding: '8px' }}>
+                          <div style={{ fontSize: '14px', color: '#666', textAlign: 'center', padding: '8px' }}>
                             Keine Materialien
                           </div>
                         ) : (
-                          <div style={{ fontSize: '8px' }}>
+                          <div style={{ fontSize: '14px' }}>
                             {groupMaterialsByName(label.materials).map((group, gIdx) => {
                               const props: string[] = [];
                               if (group.diameters.length > 0) {
@@ -1149,7 +1149,7 @@ const Cabinets: React.FC = () => {
                               }
                               
                               return (
-                                <div key={gIdx} style={{ padding: '1px 0', borderBottom: '1px dotted #eee' }}>
+                                <div key={gIdx} style={{ padding: '2px 0', borderBottom: '1px dotted #eee' }}>
                                   {group.name}
                                   {props.length > 0 && (
                                     <span style={{ color: '#666' }}> ({props.join(', ')})</span>
@@ -1165,7 +1165,7 @@ const Cabinets: React.FC = () => {
                           marginTop: '4px', 
                           paddingTop: '2px', 
                           borderTop: '1px solid #eee',
-                          fontSize: '7px', 
+                          fontSize: '12px', 
                           color: '#999',
                           textAlign: 'center',
                         }}>
