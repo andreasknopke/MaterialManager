@@ -78,6 +78,13 @@ interface InfosheetCompartment extends Compartment {
   materials: InfosheetMaterial[];
 }
 
+// Für Alle-Etiketten-Druck
+interface CompartmentLabel {
+  compartment: Compartment;
+  materials: CompartmentMaterial[];
+  qrCodeUrl: string;
+}
+
 // Hilfsfunktion: Zahlen zu Bereichen zusammenfassen (z.B. [6,7,8,10] → "6-8, 10")
 const formatNumberRanges = (values: number[]): string => {
   if (values.length === 0) return '';
@@ -200,6 +207,13 @@ const Cabinets: React.FC = () => {
   const [compartmentMaterials, setCompartmentMaterials] = useState<CompartmentMaterial[]>([]);
   const [compartmentMaterialsLoading, setCompartmentMaterialsLoading] = useState(false);
   const compartmentPrintRef = useRef<HTMLDivElement>(null);
+  
+  // Alle Fach-Etiketten drucken
+  const [allLabelsDialogOpen, setAllLabelsDialogOpen] = useState(false);
+  const [allLabels, setAllLabels] = useState<CompartmentLabel[]>([]);
+  const [allLabelsLoading, setAllLabelsLoading] = useState(false);
+  const [allLabelsCabinet, setAllLabelsCabinet] = useState<any>(null);
+  const allLabelsPrintRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchCabinets();
@@ -372,6 +386,65 @@ const Cabinets: React.FC = () => {
 
   const handlePrintCompartment = useReactToPrint({
     contentRef: compartmentPrintRef,
+  });
+
+  // Alle Fach-Etiketten eines Schranks laden und drucken
+  const handlePrintAllLabels = async (cabinet: any) => {
+    setAllLabelsCabinet(cabinet);
+    setAllLabelsLoading(true);
+    setAllLabelsDialogOpen(true);
+    
+    try {
+      // Fächer des Schranks laden
+      const compartmentsResponse = await cabinetAPI.getCompartments(cabinet.id);
+      const compartmentsList: Compartment[] = compartmentsResponse.data || [];
+      
+      // Für jedes Fach: QR-Code und Materialien laden
+      const labels: CompartmentLabel[] = [];
+      
+      for (const comp of compartmentsList) {
+        // QR-Code generieren
+        const qrData = JSON.stringify({
+          type: 'COMPARTMENT',
+          cabinetId: cabinet.id,
+          compartmentId: comp.id,
+          cabinetName: cabinet.name,
+          compartmentName: comp.name,
+        });
+        
+        const qrCodeUrl = await QRCode.toDataURL(qrData, {
+          width: 150,
+          margin: 1,
+          color: { dark: '#000000', light: '#FFFFFF' }
+        });
+        
+        // Materialien laden
+        let materials: CompartmentMaterial[] = [];
+        try {
+          const matResponse = await cabinetAPI.getCompartmentMaterials(cabinet.id, comp.id);
+          materials = matResponse.data.materials || [];
+        } catch {
+          // Ignorieren wenn keine Materialien
+        }
+        
+        labels.push({
+          compartment: comp,
+          materials,
+          qrCodeUrl,
+        });
+      }
+      
+      setAllLabels(labels);
+    } catch (error) {
+      console.error('Fehler beim Laden der Etiketten:', error);
+      setAllLabels([]);
+    } finally {
+      setAllLabelsLoading(false);
+    }
+  };
+
+  const handlePrintAllLabelsAction = useReactToPrint({
+    contentRef: allLabelsPrintRef,
   });
 
   const handleShowQR = async (cabinet: any) => {
@@ -830,6 +903,13 @@ const Cabinets: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions>
+          <Button 
+            onClick={() => handlePrintAllLabels(compartmentCabinet)} 
+            startIcon={<PrintIcon />}
+            disabled={compartments.length === 0}
+          >
+            Alle Etiketten drucken
+          </Button>
           <Button onClick={() => setCompartmentDialogOpen(false)}>Schließen</Button>
         </DialogActions>
       </Dialog>
@@ -950,6 +1030,164 @@ const Cabinets: React.FC = () => {
             disabled={compartmentMaterialsLoading}
           >
             Drucken
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Alle Fach-Etiketten Druck Dialog */}
+      <Dialog 
+        open={allLabelsDialogOpen} 
+        onClose={() => setAllLabelsDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          Alle Fach-Etiketten drucken: {allLabelsCabinet?.name}
+        </DialogTitle>
+        <DialogContent>
+          {allLabelsLoading ? (
+            <Box display="flex" justifyContent="center" alignItems="center" py={4}>
+              <CircularProgress />
+              <Typography sx={{ ml: 2 }}>Etiketten werden vorbereitet...</Typography>
+            </Box>
+          ) : allLabels.length === 0 ? (
+            <Alert severity="info">Keine Fächer vorhanden.</Alert>
+          ) : (
+            <Box>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {allLabels.length} Etiketten werden gedruckt (4 pro A4-Seite)
+              </Typography>
+              
+              {/* Druckbarer Bereich - A4 mit 4 Etiketten pro Seite */}
+              <div 
+                ref={allLabelsPrintRef}
+                style={{ backgroundColor: 'white' }}
+              >
+                <style>
+                  {`
+                    @media print {
+                      .label-page {
+                        page-break-after: always;
+                      }
+                      .label-page:last-child {
+                        page-break-after: auto;
+                      }
+                    }
+                  `}
+                </style>
+                
+                {/* Gruppiere Etiketten in 4er-Gruppen (2x2 pro Seite) */}
+                {Array.from({ length: Math.ceil(allLabels.length / 4) }).map((_, pageIdx) => (
+                  <div 
+                    key={pageIdx} 
+                    className="label-page"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, 1fr)',
+                      gap: '10mm',
+                      padding: '10mm',
+                      minHeight: pageIdx < Math.ceil(allLabels.length / 4) - 1 ? '277mm' : 'auto',
+                    }}
+                  >
+                    {allLabels.slice(pageIdx * 4, pageIdx * 4 + 4).map((label, idx) => (
+                      <div
+                        key={idx}
+                        style={{ 
+                          backgroundColor: 'white',
+                          border: '2px solid #333',
+                          borderRadius: '4px',
+                          padding: '8px',
+                          width: '85mm',
+                          minHeight: '55mm',
+                          fontFamily: 'Arial, sans-serif',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        {/* Header mit Schrank/Fach-Info */}
+                        <div style={{ 
+                          borderBottom: '1px solid #ccc', 
+                          paddingBottom: '4px', 
+                          marginBottom: '4px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                        }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '2px' }}>
+                              {allLabelsCabinet?.name}
+                            </div>
+                            <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1976d2' }}>
+                              {label.compartment.name}
+                            </div>
+                            {allLabelsCabinet?.location && (
+                              <div style={{ fontSize: '9px', color: '#666' }}>
+                                {allLabelsCabinet.location}
+                              </div>
+                            )}
+                          </div>
+                          <img 
+                            src={label.qrCodeUrl} 
+                            alt="QR Code" 
+                            style={{ width: '20mm', height: '20mm' }} 
+                          />
+                        </div>
+                        
+                        {/* Materialien-Liste */}
+                        {label.materials.length === 0 ? (
+                          <div style={{ fontSize: '9px', color: '#666', textAlign: 'center', padding: '8px' }}>
+                            Keine Materialien
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '8px' }}>
+                            {groupMaterialsByName(label.materials).map((group, gIdx) => {
+                              const props: string[] = [];
+                              if (group.diameters.length > 0) {
+                                props.push(`Ø${formatNumberRanges(group.diameters)}`);
+                              }
+                              if (group.frenchSizes.length > 0) {
+                                props.push(`${formatNumberRanges(group.frenchSizes)}F`);
+                              }
+                              
+                              return (
+                                <div key={gIdx} style={{ padding: '1px 0', borderBottom: '1px dotted #eee' }}>
+                                  {group.name}
+                                  {props.length > 0 && (
+                                    <span style={{ color: '#666' }}> ({props.join(', ')})</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        
+                        {/* Footer */}
+                        <div style={{ 
+                          marginTop: '4px', 
+                          paddingTop: '2px', 
+                          borderTop: '1px solid #eee',
+                          fontSize: '7px', 
+                          color: '#999',
+                          textAlign: 'center',
+                        }}>
+                          ID: {allLabelsCabinet?.id}-{label.compartment.id}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAllLabelsDialogOpen(false)}>Schließen</Button>
+          <Button 
+            onClick={handlePrintAllLabelsAction} 
+            variant="contained" 
+            startIcon={<PrintIcon />}
+            disabled={allLabelsLoading || allLabels.length === 0}
+          >
+            Alle drucken
           </Button>
         </DialogActions>
       </Dialog>
