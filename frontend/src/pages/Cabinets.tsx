@@ -118,7 +118,9 @@ const groupMaterialsByName = (materials: CompartmentMaterial[]): GroupedMaterial
   const groups = new Map<string, GroupedMaterial>();
   
   for (const mat of materials) {
-    const existing = groups.get(mat.name);
+    // Normalisierter Key für Gruppierung (trim und lowercase)
+    const normalizedKey = mat.name.trim().toLowerCase();
+    const existing = groups.get(normalizedKey);
     if (existing) {
       existing.totalStock += mat.total_stock;
       if (mat.device_diameter) {
@@ -144,8 +146,8 @@ const groupMaterialsByName = (materials: CompartmentMaterial[]): GroupedMaterial
         const num = parseFloat(mat.french_size.replace(/[Ff]/g, ''));
         if (!isNaN(num)) frenchSizes.push(num);
       }
-      groups.set(mat.name, {
-        name: mat.name,
+      groups.set(normalizedKey, {
+        name: mat.name.trim(), // Original-Name (getrimmt) für Anzeige
         diameters,
         frenchSizes,
         totalStock: mat.total_stock,
@@ -898,40 +900,27 @@ const Cabinets: React.FC = () => {
                   Keine Materialien in diesem Fach
                 </div>
               ) : (
-                <table style={{ width: '100%', fontSize: '9px', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid #ddd' }}>
-                      <th style={{ textAlign: 'left', padding: '2px', fontWeight: 'bold' }}>Material</th>
-                      <th style={{ textAlign: 'right', padding: '2px', fontWeight: 'bold', width: '40px' }}>Bestand</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groupMaterialsByName(compartmentMaterials).map((group, idx) => {
-                      // Eigenschaften für Anzeige zusammenstellen
-                      const props: string[] = [];
-                      if (group.diameters.length > 0) {
-                        props.push(`Ø${formatNumberRanges(group.diameters)}`);
-                      }
-                      if (group.frenchSizes.length > 0) {
-                        props.push(`${formatNumberRanges(group.frenchSizes)}F`);
-                      }
-                      
-                      return (
-                        <tr key={idx} style={{ borderBottom: '1px dotted #eee' }}>
-                          <td style={{ padding: '2px' }}>
-                            {group.name}
-                            {props.length > 0 && (
-                              <span style={{ color: '#666' }}> ({props.join(', ')})</span>
-                            )}
-                          </td>
-                          <td style={{ textAlign: 'right', padding: '2px', fontWeight: 'bold' }}>
-                            {group.totalStock}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div style={{ fontSize: '9px' }}>
+                  {groupMaterialsByName(compartmentMaterials).map((group, idx) => {
+                    // Eigenschaften für Anzeige zusammenstellen
+                    const props: string[] = [];
+                    if (group.diameters.length > 0) {
+                      props.push(`Ø${formatNumberRanges(group.diameters)}`);
+                    }
+                    if (group.frenchSizes.length > 0) {
+                      props.push(`${formatNumberRanges(group.frenchSizes)}F`);
+                    }
+                    
+                    return (
+                      <div key={idx} style={{ padding: '2px 0', borderBottom: '1px dotted #eee' }}>
+                        {group.name}
+                        {props.length > 0 && (
+                          <span style={{ color: '#666' }}> ({props.join(', ')})</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
               
               {/* Footer mit IDs */}
