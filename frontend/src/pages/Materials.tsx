@@ -289,13 +289,13 @@ const Materials: React.FC = () => {
     const matchesCabinet = filters.cabinet_id === '' || String(material.cabinet_id) === filters.cabinet_id;
     const matchesShape = filters.shape_id === '' || String(material.shape_id) === filters.shape_id;
     const matchesFrenchSize = filters.french_size === '' || 
-      (material.french_size && material.french_size.toLowerCase().includes(filters.french_size.toLowerCase()));
+      (material.french_size && material.french_size.toLowerCase() === filters.french_size.toLowerCase());
     const matchesDeviceLength = filters.device_length === '' || 
-      (material.device_length && material.device_length.toLowerCase().includes(filters.device_length.toLowerCase()));
+      (material.device_length && material.device_length.toLowerCase() === filters.device_length.toLowerCase());
     const matchesShaftLength = filters.shaft_length === '' || 
-      (material.shaft_length && material.shaft_length.toLowerCase().includes(filters.shaft_length.toLowerCase()));
+      (material.shaft_length && material.shaft_length.toLowerCase() === filters.shaft_length.toLowerCase());
     const matchesDeviceDiameter = filters.device_diameter === '' || 
-      (material.device_diameter && material.device_diameter.toLowerCase().includes(filters.device_diameter.toLowerCase()));
+      (material.device_diameter && material.device_diameter.toLowerCase() === filters.device_diameter.toLowerCase());
     const matchesGuidewire = filters.guidewire_acceptance === '' || material.guidewire_acceptance === filters.guidewire_acceptance;
     const matchesConsignment = filters.is_consignment === '' || 
       (filters.is_consignment === 'true' ? material.is_consignment : !material.is_consignment);

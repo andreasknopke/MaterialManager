@@ -171,6 +171,78 @@ const MaterialDetail: React.FC = () => {
                 disabled
               />
             </Grid>
+            
+            {/* Device-Eigenschaften */}
+            {(material?.shape_name || material?.shaft_length || material?.device_length || 
+              material?.device_diameter || material?.french_size || material?.guidewire_acceptance) && (
+              <>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" sx={{ mt: 2, fontWeight: 'bold' }}>
+                    Device-Eigenschaften
+                  </Typography>
+                </Grid>
+                {material?.shape_name && (
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Shape / Form"
+                      value={material.shape_name}
+                      disabled
+                    />
+                  </Grid>
+                )}
+                {material?.shaft_length && (
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Schaftlänge"
+                      value={material.shaft_length}
+                      disabled
+                    />
+                  </Grid>
+                )}
+                {material?.device_length && (
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Device-Länge"
+                      value={material.device_length}
+                      disabled
+                    />
+                  </Grid>
+                )}
+                {material?.device_diameter && (
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Device-Durchmesser"
+                      value={material.device_diameter}
+                      disabled
+                    />
+                  </Grid>
+                )}
+                {material?.french_size && (
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="French-Size"
+                      value={material.french_size}
+                      disabled
+                    />
+                  </Grid>
+                )}
+                {material?.guidewire_acceptance && (
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Guidewire-Acceptance"
+                      value={material.guidewire_acceptance}
+                      disabled
+                    />
+                  </Grid>
+                )}
+              </>
+            )}
           </Grid>
         </TabPanel>
 
