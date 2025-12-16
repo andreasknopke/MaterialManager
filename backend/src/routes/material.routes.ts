@@ -62,6 +62,7 @@ router.get('/by-name/:name', async (req: Request, res: Response) => {
 });
 
 // GET Material-Template anhand GTIN (für Auto-Fill beim Scannen)
+// Nutzt jetzt die normalisierte products-Tabelle
 router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
   try {
     const { gtin } = req.params;
@@ -73,7 +74,71 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
     // Department-Filter
     const departmentFilter = getDepartmentFilter(req, '');
     
-    // Suche Material mit dieser GTIN (article_number)
+    // === Zuerst in products-Tabelle suchen (normalisierte Stammdaten) ===
+    const [products] = await pool.query<RowDataPacket[]>(
+      `SELECT p.id as product_id, p.gtin, p.name, p.description, p.size,
+              p.company_id, co.name as company_name,
+              p.shape_id, p.shaft_length, p.device_length, p.device_diameter, 
+              p.french_size, p.guidewire_acceptance, p.cost, p.notes
+       FROM products p
+       LEFT JOIN companies co ON p.company_id = co.id
+       WHERE p.gtin = ?
+       LIMIT 1`,
+      [gtin]
+    );
+    
+    if (products.length > 0) {
+      // Produkt gefunden - hole letzte Instanz-Daten für Kategorie/Schrank
+      let instanceQuery = `
+        SELECT m.category_id, c.name as category_name, m.cabinet_id, m.compartment_id,
+               m.unit_id, m.unit, m.location_in_cabinet, m.is_consignment
+        FROM materials m
+        LEFT JOIN categories c ON m.category_id = c.id
+        WHERE m.product_id = ? AND m.active = TRUE
+      `;
+      const instanceParams: any[] = [products[0].product_id];
+      
+      if (departmentFilter.whereClause) {
+        instanceQuery += ` AND ${departmentFilter.whereClause.replace('unit_id', 'm.unit_id')}`;
+        instanceParams.push(...departmentFilter.params);
+      }
+      instanceQuery += ' ORDER BY m.created_at DESC LIMIT 1';
+      
+      const [instances] = await pool.query<RowDataPacket[]>(instanceQuery, instanceParams);
+      const lastInstance = instances[0] || {};
+      
+      return res.json({
+        found: true,
+        fromProducts: true,
+        template: {
+          product_id: products[0].product_id,
+          name: products[0].name,
+          description: products[0].description,
+          size: products[0].size,
+          company_id: products[0].company_id,
+          company_name: products[0].company_name,
+          shape_id: products[0].shape_id,
+          shaft_length: products[0].shaft_length,
+          device_length: products[0].device_length,
+          device_diameter: products[0].device_diameter,
+          french_size: products[0].french_size,
+          guidewire_acceptance: products[0].guidewire_acceptance,
+          cost: products[0].cost,
+          article_number: products[0].gtin,
+          // Instanz-Daten vom letzten Material
+          category_id: lastInstance.category_id,
+          category_name: lastInstance.category_name,
+          cabinet_id: lastInstance.cabinet_id,
+          compartment_id: lastInstance.compartment_id,
+          unit_id: lastInstance.unit_id,
+          unit: lastInstance.unit,
+          location_in_cabinet: lastInstance.location_in_cabinet,
+          is_consignment: lastInstance.is_consignment || false
+        }
+      });
+    }
+    
+    // === Fallback: Suche in materials (für alte Daten ohne product_id) ===
     let query = `
       SELECT m.*, c.name as category_name, co.name as company_name
       FROM materials m
@@ -100,6 +165,7 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
     const material = rows[0];
     res.json({
       found: true,
+      fromProducts: false,
       template: {
         name: material.name,
         description: material.description,
@@ -360,18 +426,47 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     await connection.beginTransaction();
     
-    // Material einfügen (inkl. unit_id und Device-Eigenschaften!)
+    // === NORMALISIERUNG: Produkt-ID ermitteln oder neues Produkt erstellen ===
+    let productId: number | null = null;
+    
+    if (article_number) {
+      // Prüfen ob Produkt mit dieser GTIN bereits existiert
+      const [existingProducts] = await connection.query<RowDataPacket[]>(
+        'SELECT id FROM products WHERE gtin = ?',
+        [article_number]
+      );
+      
+      if (existingProducts.length > 0) {
+        // Produkt existiert - ID verwenden
+        productId = existingProducts[0].id;
+        console.log(`Bestehendes Produkt gefunden (ID: ${productId}) für GTIN: ${article_number}`);
+      } else {
+        // Neues Produkt erstellen
+        const [productResult] = await connection.query<ResultSetHeader>(
+          `INSERT INTO products 
+           (gtin, name, description, size, company_id, shape_id, 
+            shaft_length, device_length, device_diameter, french_size, guidewire_acceptance, cost, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [article_number, name, description, size, company_id, shape_id || null,
+           shaft_length || null, device_length || null, device_diameter || null, 
+           french_size || null, guidewire_acceptance || null, cost || null, notes]
+        );
+        productId = productResult.insertId;
+        console.log(`Neues Produkt erstellt (ID: ${productId}) für GTIN: ${article_number}`);
+      }
+    }
+    
+    // Material einfügen (inkl. product_id und unit_id!)
     // current_stock startet bei 1 (ein Material wird aufgenommen)
-    // min_stock ist nicht mehr relevant für einzelne Materialien (nur Kategorien)
     const [result] = await connection.query<ResultSetHeader>(
       `INSERT INTO materials 
-       (category_id, company_id, cabinet_id, compartment_id, unit_id, name, description, size, unit,
+       (product_id, category_id, company_id, cabinet_id, compartment_id, unit_id, name, description, size, unit,
         min_stock, current_stock, expiry_date, lot_number, article_number, cost,
         location_in_cabinet, shipping_container_code, notes, is_consignment,
         shape_id, shaft_length, device_length, device_diameter, french_size, guidewire_acceptance)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        category_id, company_id, cabinet_id, compartment_id || null, materialUnitId, name, description, size, unit,
+        productId, category_id, company_id, cabinet_id, compartment_id || null, materialUnitId, name, description, size, unit,
         0, current_stock || 1, expiry_date, lot_number,
         article_number, cost || null, location_in_cabinet, shipping_container_code, notes, is_consignment || false,
         shape_id || null, shaft_length || null, device_length || null, device_diameter || null, french_size || null, guidewire_acceptance || null
@@ -493,34 +588,46 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Material nicht gefunden' });
     }
     
-    // GTIN-Synchronisation: Wenn article_number (GTIN) vorhanden ist,
-    // aktualisiere alle anderen Materialien mit derselben GTIN
-    // (außer LOT, Verfallsdatum, Schrank/Fach, Bestand, Notizen, Aktiv-Status)
-    let updatedRelatedCount = 0;
+    // === NORMALISIERT: Stammdaten in products-Tabelle aktualisieren ===
+    // Statt alle Materialien mit gleicher GTIN zu aktualisieren,
+    // aktualisieren wir nur das verknüpfte Produkt (falls vorhanden)
+    let productUpdated = false;
     if (article_number && article_number.trim() !== '') {
-      const [relatedResult] = await pool.query<ResultSetHeader>(
-        `UPDATE materials 
-         SET category_id = ?, company_id = ?, unit_id = ?, name = ?,
-             description = ?, size = ?, unit = ?, min_stock = ?,
-             cost = ?, shipping_container_code = ?, is_consignment = ?,
-             shape_id = ?, shaft_length = ?, device_length = ?, device_diameter = ?, french_size = ?, guidewire_acceptance = ?
-         WHERE article_number = ? AND id != ? AND active = TRUE`,
-        [
-          category_id, company_id, materialUnitId, name, description, size, unit,
-          min_stock, cost || null, shipping_container_code, is_consignment || false,
-          shape_id || null, shaft_length || null, device_length || null, device_diameter || null, french_size || null, guidewire_acceptance || null,
-          article_number, req.params.id
-        ]
+      // Prüfen ob Produkt mit dieser GTIN existiert
+      const [existingProduct] = await pool.query<RowDataPacket[]>(
+        'SELECT id FROM products WHERE gtin = ?',
+        [article_number]
       );
-      updatedRelatedCount = relatedResult.affectedRows;
-      if (updatedRelatedCount > 0) {
-        console.log(`GTIN-Sync: ${updatedRelatedCount} weitere Materialien mit GTIN ${article_number} aktualisiert`);
+      
+      if (existingProduct.length > 0) {
+        // Produkt-Stammdaten aktualisieren
+        await pool.query(
+          `UPDATE products SET
+            name = ?, description = ?, size = ?, company_id = ?,
+            shape_id = ?, shaft_length = ?, device_length = ?, device_diameter = ?,
+            french_size = ?, guidewire_acceptance = ?, cost = ?
+           WHERE gtin = ?`,
+          [name, description, size, company_id,
+           shape_id || null, shaft_length || null, device_length || null, device_diameter || null,
+           french_size || null, guidewire_acceptance || null, cost || null,
+           article_number]
+        );
+        productUpdated = true;
+        console.log(`Produkt-Stammdaten für GTIN ${article_number} aktualisiert`);
+        
+        // Material mit Produkt verknüpfen falls noch nicht geschehen
+        await pool.query(
+          'UPDATE materials SET product_id = ? WHERE id = ? AND product_id IS NULL',
+          [existingProduct[0].id, req.params.id]
+        );
       }
     }
     
     res.json({ 
       message: 'Material erfolgreich aktualisiert',
-      relatedUpdated: updatedRelatedCount
+      productUpdated: productUpdated,
+      // relatedUpdated entfernt - nicht mehr nötig mit normalisierter DB
+      relatedUpdated: 0
     });
   } catch (error) {
     console.error('Fehler beim Aktualisieren des Materials:', error);

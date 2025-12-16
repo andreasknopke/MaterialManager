@@ -5,9 +5,70 @@ import { ResultSetHeader, RowDataPacket } from 'mysql2';
 const router = Router();
 
 // GET Stammdaten nach GTIN (Artikelnummer) suchen - für Vorbelegung bei bekannter GTIN
+// Nutzt jetzt die normalisierte products-Tabelle für GTIN-basierte Stammdaten
 router.get('/gtin/:gtin', async (req: Request, res: Response) => {
   try {
-    // Suche nach Material mit dieser GTIN (article_number)
+    // Zuerst in der products-Tabelle suchen (normalisierte Stammdaten)
+    const [products] = await pool.query<RowDataPacket[]>(
+      `SELECT p.id as product_id, p.gtin, p.name, p.description, p.size,
+              p.company_id, co.name as company_name,
+              p.shape_id, s.name as shape_name,
+              p.shaft_length, p.device_length, p.device_diameter, 
+              p.french_size, p.guidewire_acceptance, p.cost, p.notes
+       FROM products p
+       LEFT JOIN companies co ON p.company_id = co.id
+       LEFT JOIN shapes s ON p.shape_id = s.id
+       WHERE p.gtin = ?
+       LIMIT 1`,
+      [req.params.gtin]
+    );
+    
+    if (products.length > 0) {
+      // Produkt gefunden - hole zusätzlich letzte Instanz-Daten (Kategorie, Schrank, etc.)
+      const [lastMaterial] = await pool.query<RowDataPacket[]>(
+        `SELECT m.category_id, c.name as category_name, 
+                m.cabinet_id, cab.name as cabinet_name, m.unit, m.unit_id
+         FROM materials m
+         LEFT JOIN categories c ON m.category_id = c.id
+         LEFT JOIN cabinets cab ON m.cabinet_id = cab.id
+         WHERE m.product_id = ? AND m.active = TRUE
+         ORDER BY m.created_at DESC
+         LIMIT 1`,
+        [products[0].product_id]
+      );
+      
+      res.json({
+        found: true,
+        fromProducts: true,
+        masterData: {
+          product_id: products[0].product_id,
+          name: products[0].name,
+          description: products[0].description,
+          size: products[0].size,
+          company_id: products[0].company_id,
+          company_name: products[0].company_name,
+          shape_id: products[0].shape_id,
+          shape_name: products[0].shape_name,
+          shaft_length: products[0].shaft_length,
+          device_length: products[0].device_length,
+          device_diameter: products[0].device_diameter,
+          french_size: products[0].french_size,
+          guidewire_acceptance: products[0].guidewire_acceptance,
+          cost: products[0].cost,
+          notes: products[0].notes,
+          // Instanz-Daten vom letzten Material (als Vorschlag)
+          category_id: lastMaterial[0]?.category_id,
+          category_name: lastMaterial[0]?.category_name,
+          cabinet_id: lastMaterial[0]?.cabinet_id,
+          cabinet_name: lastMaterial[0]?.cabinet_name,
+          unit: lastMaterial[0]?.unit,
+          unit_id: lastMaterial[0]?.unit_id
+        }
+      });
+      return;
+    }
+    
+    // Fallback: Suche in alten materials (für noch nicht migrierte Daten)
     const [materials] = await pool.query<RowDataPacket[]>(
       `SELECT m.name, m.description, m.category_id, m.company_id, m.unit, m.size,
               m.cabinet_id, cab.name as cabinet_name,
@@ -26,9 +87,10 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
       return res.status(404).json({ found: false, message: 'GTIN nicht bekannt' });
     }
     
-    // Stammdaten gefunden
+    // Stammdaten aus materials gefunden (Fallback)
     res.json({
       found: true,
+      fromProducts: false,
       masterData: {
         name: materials[0].name,
         description: materials[0].description,

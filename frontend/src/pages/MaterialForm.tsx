@@ -864,9 +864,9 @@ const MaterialForm: React.FC = () => {
         setTimeout(() => navigate(`/materials/${response.data.id}`), 1500);
       } else {
         const response = await materialAPI.update(parseInt(id!), dataToSend);
-        const relatedUpdated = response.data?.relatedUpdated || 0;
-        if (relatedUpdated > 0) {
-          setSuccess(`Material erfolgreich aktualisiert! ${relatedUpdated} weitere Material${relatedUpdated === 1 ? '' : 'ien'} mit gleicher GTIN wurden ebenfalls angepasst.`);
+        const productUpdated = response.data?.productUpdated || false;
+        if (productUpdated) {
+          setSuccess('Material und Produkt-Stammdaten erfolgreich aktualisiert!');
         } else {
           setSuccess('Material erfolgreich aktualisiert!');
         }
