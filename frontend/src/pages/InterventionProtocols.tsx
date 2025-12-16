@@ -39,6 +39,7 @@ interface ProtocolItem {
   material_name: string;
   article_number: string;
   lot_number: string;
+  expiry_date: string | null;
   gtin: string;
   quantity: number;
   taken_at: string;
@@ -150,11 +151,19 @@ const InterventionProtocols: React.FC = () => {
   const handlePrint = () => {
     if (!selectedProtocol) return;
     
-    // Generiere UDI-Strings für QR-Codes (Format: (01)GTIN(21)LOT - ohne Verfallsdatum)
-    const generateUDI = (gtin: string, lot: string) => {
+    // Generiere UDI-Strings für QR-Codes (Format: (01)GTIN(17)EXPIRY(10)LOT)
+    const generateUDI = (gtin: string, lot: string, expiryDate: string | null) => {
       let udi = '';
       if (gtin) udi += `(01)${gtin}`;
-      if (lot) udi += `(21)${lot}`;
+      // Verfallsdatum im Format YYMMDD (AI 17)
+      if (expiryDate) {
+        const date = new Date(expiryDate);
+        const yy = String(date.getFullYear()).slice(-2);
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        udi += `(17)${yy}${mm}${dd}`;
+      }
+      if (lot) udi += `(10)${lot}`;
       return udi;
     };
     
@@ -200,7 +209,7 @@ const InterventionProtocols: React.FC = () => {
               </thead>
               <tbody>
                 ${protocolItems.map((item, idx) => {
-                  const udi = generateUDI(item.article_number || item.gtin || '', item.lot_number || '');
+                  const udi = generateUDI(item.article_number || item.gtin || '', item.lot_number || '', item.expiry_date);
                   return `
                   <tr>
                     <td>${new Date(item.taken_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</td>
@@ -222,7 +231,7 @@ const InterventionProtocols: React.FC = () => {
               // QR-Codes generieren nach dem Laden
               window.onload = function() {
                 ${protocolItems.map((item, idx) => {
-                  const udi = generateUDI(item.article_number || item.gtin || '', item.lot_number || '');
+                  const udi = generateUDI(item.article_number || item.gtin || '', item.lot_number || '', item.expiry_date);
                   if (!udi) return '';
                   return `
                     try {

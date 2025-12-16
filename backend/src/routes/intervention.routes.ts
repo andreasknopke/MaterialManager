@@ -16,6 +16,7 @@ interface ProtocolItem {
   materialName: string;
   articleNumber: string;
   lotNumber: string;
+  expiryDate?: string;
   gtin?: string;
   quantity: number;
   timestamp: string;
@@ -201,13 +202,14 @@ router.post('/', async (req: Request, res: Response) => {
     for (const item of items as ProtocolItem[]) {
       await connection.query(
         `INSERT INTO intervention_protocol_items 
-         (protocol_id, material_name, article_number, lot_number, gtin, quantity, is_consignment, taken_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (protocol_id, material_name, article_number, lot_number, expiry_date, gtin, quantity, is_consignment, taken_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           protocolId,
           item.materialName,
           item.articleNumber || null,
           item.lotNumber || null,
+          item.expiryDate || null,
           item.gtin || null,
           item.quantity || 1,
           item.isConsignment ? 1 : 0,

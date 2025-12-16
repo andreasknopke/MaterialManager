@@ -49,6 +49,7 @@ export interface InterventionItem {
   materialName: string;
   articleNumber: string;
   lotNumber: string;
+  expiryDate?: string;
   quantity: number;
   gtin?: string;
   isConsignment?: boolean;
@@ -267,6 +268,7 @@ const Dashboard: React.FC = () => {
           materialName: item.materialName,
           articleNumber: item.articleNumber,
           lotNumber: item.lotNumber,
+          expiryDate: item.expiryDate,
           gtin: item.gtin,
           quantity: item.quantity,
           timestamp: new Date(item.timestamp).toISOString(),
