@@ -3,7 +3,7 @@ import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, ToggleButton, ToggleButtonGroup, Chip,
   CircularProgress, IconButton, Collapse, Dialog, DialogContent,
-  Button, Divider, Alert
+  Button, Divider, Alert, Tooltip, Snackbar, Stack
 } from '@mui/material';
 import {
   Today as TodayIcon,
@@ -13,7 +13,8 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   QrCode as QrCodeIcon,
-  ShoppingCart as ShoppingCartIcon
+  ShoppingCart as ShoppingCartIcon,
+  ContentCopy as CopyIcon
 } from '@mui/icons-material';
 import { QRCodeSVG } from 'qrcode.react';
 import api from '../services/api';
@@ -29,6 +30,12 @@ interface StockOutItem {
   lot_numbers: string;
   earliest_expiry: string | null;
   last_transaction: string;
+  // Device-Eigenschaften
+  shaft_length: string | null;
+  device_length: string | null;
+  device_diameter: string | null;
+  french_size: string | null;
+  size: string | null;
 }
 
 interface Transaction {
@@ -90,6 +97,7 @@ const Reorder: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [enlargedQR, setEnlargedQR] = useState<{ gtin: string; lot: string; expiry: string | null } | null>(null);
+  const [copySnackbar, setCopySnackbar] = useState(false);
 
   useEffect(() => {
     fetchStockOuts();
@@ -127,6 +135,27 @@ const Reorder: React.FC = () => {
       setExpandedRow(productId);
       fetchTransactions(productId);
     }
+  };
+
+  const handleCopyGtin = async (gtin: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(gtin);
+      setCopySnackbar(true);
+    } catch (err) {
+      console.error('Kopieren fehlgeschlagen:', err);
+    }
+  };
+
+  // Device-Info Chips generieren
+  const getDeviceInfoChips = (item: StockOutItem) => {
+    const chips: { label: string; color: 'default' | 'primary' | 'secondary' | 'info' }[] = [];
+    if (item.size) chips.push({ label: item.size, color: 'default' });
+    if (item.french_size) chips.push({ label: `${item.french_size} Fr`, color: 'info' });
+    if (item.device_length) chips.push({ label: `L: ${item.device_length}`, color: 'primary' });
+    if (item.device_diameter) chips.push({ label: `Ø ${item.device_diameter}`, color: 'secondary' });
+    if (item.shaft_length) chips.push({ label: `Schaft: ${item.shaft_length}`, color: 'default' });
+    return chips;
   };
 
   const handlePrint = () => {
@@ -239,6 +268,7 @@ const Reorder: React.FC = () => {
                 <TableCell sx={{ color: 'white' }}>Produkt</TableCell>
                 <TableCell sx={{ color: 'white' }}>GTIN</TableCell>
                 <TableCell sx={{ color: 'white' }}>Hersteller</TableCell>
+                <TableCell sx={{ color: 'white' }}>Eigenschaften</TableCell>
                 <TableCell sx={{ color: 'white', textAlign: 'center' }}>Entnahmen</TableCell>
                 <TableCell sx={{ color: 'white', textAlign: 'center' }}>Bestand</TableCell>
                 <TableCell sx={{ color: 'white' }}>Chargen</TableCell>
@@ -266,14 +296,40 @@ const Reorder: React.FC = () => {
                       <Typography fontWeight="medium">{item.product_name}</Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" fontFamily="monospace">
-                        {item.gtin}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="body2" fontFamily="monospace">
+                          {item.gtin}
+                        </Typography>
+                        <Tooltip title="GTIN kopieren">
+                          <IconButton 
+                            size="small" 
+                            onClick={(e) => handleCopyGtin(item.gtin, e)}
+                            className="no-print"
+                          >
+                            <CopyIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </TableCell>
                     <TableCell>{item.company_name || '-'}</TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                        {getDeviceInfoChips(item).map((chip, idx) => (
+                          <Chip 
+                            key={idx}
+                            label={chip.label} 
+                            size="small" 
+                            color={chip.color}
+                            variant="outlined"
+                            sx={{ fontSize: '0.7rem', height: 20 }}
+                          />
+                        ))}
+                        {getDeviceInfoChips(item).length === 0 && '-'}
+                      </Stack>
+                    </TableCell>
                     <TableCell align="center">
                       <Chip 
-                        label={item.total_out} 
+                        label={Number(item.total_out)} 
                         color="error" 
                         size="small"
                         sx={{ fontWeight: 'bold' }}
@@ -281,7 +337,7 @@ const Reorder: React.FC = () => {
                     </TableCell>
                     <TableCell align="center">
                       <Chip 
-                        label={item.current_total_stock || 0} 
+                        label={Number(item.current_total_stock) || 0} 
                         color={item.current_total_stock <= 0 ? 'error' : 
                                item.current_total_stock <= 2 ? 'warning' : 'success'}
                         size="small"
@@ -436,6 +492,15 @@ const Reorder: React.FC = () => {
           }
         }
       `}</style>
+
+      {/* Copy Snackbar */}
+      <Snackbar
+        open={copySnackbar}
+        autoHideDuration={2000}
+        onClose={() => setCopySnackbar(false)}
+        message="GTIN in Zwischenablage kopiert"
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </Box>
   );
 };

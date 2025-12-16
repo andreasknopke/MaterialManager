@@ -43,14 +43,19 @@ router.get('/stock-outs', async (req: Request, res: Response) => {
         p.gtin,
         p.name as product_name,
         co.name as company_name,
-        SUM(ABS(mt.quantity)) as total_out,
+        CAST(SUM(ABS(mt.quantity)) AS SIGNED) as total_out,
         COUNT(DISTINCT mt.id) as transaction_count,
-        (SELECT SUM(m2.current_stock) 
+        CAST((SELECT COALESCE(SUM(m2.current_stock), 0) 
          FROM materials m2 
-         WHERE m2.product_id = p.id AND m2.active = TRUE) as current_total_stock,
+         WHERE m2.product_id = p.id AND m2.active = TRUE) AS SIGNED) as current_total_stock,
         GROUP_CONCAT(DISTINCT m.lot_number ORDER BY m.lot_number SEPARATOR ', ') as lot_numbers,
         MIN(m.expiry_date) as earliest_expiry,
-        MAX(mt.transaction_date) as last_transaction
+        MAX(mt.transaction_date) as last_transaction,
+        p.shaft_length,
+        p.device_length,
+        p.device_diameter,
+        p.french_size,
+        p.size
       FROM material_transactions mt
       JOIN materials m ON mt.material_id = m.id
       JOIN products p ON m.product_id = p.id
@@ -67,17 +72,20 @@ router.get('/stock-outs', async (req: Request, res: Response) => {
     }
     
     query += `
-      GROUP BY p.id, p.gtin, p.name, co.name
+      GROUP BY p.id, p.gtin, p.name, co.name, p.shaft_length, p.device_length, p.device_diameter, p.french_size, p.size
       ORDER BY total_out DESC, p.name
     `;
     
     const [rows] = await pool.query<RowDataPacket[]>(query, params);
     
+    // Sicherstellen dass total_out numerisch ist
+    const totalQuantity = rows.reduce((sum: number, r: any) => sum + (Number(r.total_out) || 0), 0);
+    
     res.json({
       period,
       stockOuts: rows,
       totalItems: rows.length,
-      totalQuantity: rows.reduce((sum: number, r: any) => sum + (r.total_out || 0), 0)
+      totalQuantity
     });
   } catch (error) {
     console.error('Fehler beim Abrufen der Materialausgänge:', error);
