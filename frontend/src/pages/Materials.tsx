@@ -35,9 +35,11 @@ interface FilterState {
   cabinet_id: string;
   shape_id: string;
   french_size: string;
+  device_length: string;
+  shaft_length: string;
+  device_diameter: string;
   guidewire_acceptance: string;
   is_consignment: string;
-  has_expiry: string;
 }
 
 const emptyFilters: FilterState = {
@@ -46,9 +48,11 @@ const emptyFilters: FilterState = {
   cabinet_id: '',
   shape_id: '',
   french_size: '',
+  device_length: '',
+  shaft_length: '',
+  device_diameter: '',
   guidewire_acceptance: '',
   is_consignment: '',
-  has_expiry: '',
 };
 
 const Materials: React.FC = () => {
@@ -286,14 +290,19 @@ const Materials: React.FC = () => {
     const matchesShape = filters.shape_id === '' || String(material.shape_id) === filters.shape_id;
     const matchesFrenchSize = filters.french_size === '' || 
       (material.french_size && material.french_size.toLowerCase().includes(filters.french_size.toLowerCase()));
+    const matchesDeviceLength = filters.device_length === '' || 
+      (material.device_length && material.device_length.toLowerCase().includes(filters.device_length.toLowerCase()));
+    const matchesShaftLength = filters.shaft_length === '' || 
+      (material.shaft_length && material.shaft_length.toLowerCase().includes(filters.shaft_length.toLowerCase()));
+    const matchesDeviceDiameter = filters.device_diameter === '' || 
+      (material.device_diameter && material.device_diameter.toLowerCase().includes(filters.device_diameter.toLowerCase()));
     const matchesGuidewire = filters.guidewire_acceptance === '' || material.guidewire_acceptance === filters.guidewire_acceptance;
     const matchesConsignment = filters.is_consignment === '' || 
       (filters.is_consignment === 'true' ? material.is_consignment : !material.is_consignment);
-    const matchesExpiry = filters.has_expiry === '' || 
-      (filters.has_expiry === 'true' ? material.expiry_date != null : material.expiry_date == null);
     
     return matchesSearch && hasStock && matchesCategory && matchesCompany && matchesCabinet && 
-           matchesShape && matchesFrenchSize && matchesGuidewire && matchesConsignment && matchesExpiry;
+           matchesShape && matchesFrenchSize && matchesDeviceLength && matchesShaftLength && 
+           matchesDeviceDiameter && matchesGuidewire && matchesConsignment;
   });
 
   // Gruppiere identische Materialien (gleiche GTIN oder gleicher Name)
@@ -526,17 +535,35 @@ const Materials: React.FC = () => {
               
               <Grid item xs={6} sm={4} md={2}>
                 <TextField
-                  select
                   fullWidth
                   size="small"
-                  label="Verfallsdatum"
-                  value={filters.has_expiry}
-                  onChange={handleFilterChange('has_expiry')}
-                >
-                  <MenuItem value="">Alle</MenuItem>
-                  <MenuItem value="true">Mit Verfallsdatum</MenuItem>
-                  <MenuItem value="false">Ohne Verfallsdatum</MenuItem>
-                </TextField>
+                  label="Device Length"
+                  value={filters.device_length}
+                  onChange={handleFilterChange('device_length')}
+                  placeholder="z.B. 100mm"
+                />
+              </Grid>
+              
+              <Grid item xs={6} sm={4} md={2}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Schaftlänge"
+                  value={filters.shaft_length}
+                  onChange={handleFilterChange('shaft_length')}
+                  placeholder="z.B. 80cm"
+                />
+              </Grid>
+              
+              <Grid item xs={6} sm={4} md={2}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Device-Ø"
+                  value={filters.device_diameter}
+                  onChange={handleFilterChange('device_diameter')}
+                  placeholder="z.B. 6mm"
+                />
               </Grid>
             </Grid>
           </Box>
