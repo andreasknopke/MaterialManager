@@ -29,6 +29,56 @@ import { materialAPI, categoryAPI, companyAPI, cabinetAPI, shapeAPI } from '../s
 // Guidewire-Acceptance Optionen
 const GUIDEWIRE_OPTIONS = ['0.014in', '0.018in', '0.032in', '0.035in', '0.038in'];
 
+// Hilfsfunktion: Numerischen Filter mit Operatoren parsen
+// Unterstützt: >, >=, <, <=, exakter Wert, und Bereiche (z.B. "8-10")
+const matchesNumericFilter = (value: string | null | undefined, filterExpr: string): boolean => {
+  if (!filterExpr || filterExpr.trim() === '') return true;
+  if (!value) return false;
+  
+  // Extrahiere Zahl aus dem Wert (z.B. "12mm" -> 12, "5.5" -> 5.5)
+  const numMatch = value.match(/[\d.]+/);
+  if (!numMatch) return false;
+  const numValue = parseFloat(numMatch[0]);
+  if (isNaN(numValue)) return false;
+  
+  const expr = filterExpr.trim();
+  
+  // Bereich: z.B. "8-10" oder "5.5-7.5"
+  const rangeMatch = expr.match(/^([\d.]+)\s*-\s*([\d.]+)$/);
+  if (rangeMatch) {
+    const min = parseFloat(rangeMatch[1]);
+    const max = parseFloat(rangeMatch[2]);
+    return numValue >= min && numValue <= max;
+  }
+  
+  // Operatoren: >=, <=, >, <
+  if (expr.startsWith('>=')) {
+    const threshold = parseFloat(expr.slice(2).trim());
+    return !isNaN(threshold) && numValue >= threshold;
+  }
+  if (expr.startsWith('<=')) {
+    const threshold = parseFloat(expr.slice(2).trim());
+    return !isNaN(threshold) && numValue <= threshold;
+  }
+  if (expr.startsWith('>')) {
+    const threshold = parseFloat(expr.slice(1).trim());
+    return !isNaN(threshold) && numValue > threshold;
+  }
+  if (expr.startsWith('<')) {
+    const threshold = parseFloat(expr.slice(1).trim());
+    return !isNaN(threshold) && numValue < threshold;
+  }
+  
+  // Exakte Übereinstimmung (numerisch)
+  const filterNum = parseFloat(expr);
+  if (!isNaN(filterNum)) {
+    return numValue === filterNum;
+  }
+  
+  // Fallback: String-Vergleich
+  return value.toLowerCase() === expr.toLowerCase();
+};
+
 interface FilterState {
   category_id: string;
   company_id: string;
@@ -290,12 +340,12 @@ const Materials: React.FC = () => {
     const matchesShape = filters.shape_id === '' || String(material.shape_id) === filters.shape_id;
     const matchesFrenchSize = filters.french_size === '' || 
       (material.french_size && material.french_size.toLowerCase() === filters.french_size.toLowerCase());
-    const matchesDeviceLength = filters.device_length === '' || 
-      (material.device_length && material.device_length.toLowerCase() === filters.device_length.toLowerCase());
-    const matchesShaftLength = filters.shaft_length === '' || 
-      (material.shaft_length && material.shaft_length.toLowerCase() === filters.shaft_length.toLowerCase());
-    const matchesDeviceDiameter = filters.device_diameter === '' || 
-      (material.device_diameter && material.device_diameter.toLowerCase() === filters.device_diameter.toLowerCase());
+    
+    // Numerische Filter mit Operator-Unterstützung (>, >=, <, <=, 8-10)
+    const matchesDeviceLength = matchesNumericFilter(material.device_length, filters.device_length);
+    const matchesShaftLength = matchesNumericFilter(material.shaft_length, filters.shaft_length);
+    const matchesDeviceDiameter = matchesNumericFilter(material.device_diameter, filters.device_diameter);
+    
     const matchesGuidewire = filters.guidewire_acceptance === '' || material.guidewire_acceptance === filters.guidewire_acceptance;
     const matchesConsignment = filters.is_consignment === '' || 
       (filters.is_consignment === 'true' ? material.is_consignment : !material.is_consignment);
@@ -540,7 +590,8 @@ const Materials: React.FC = () => {
                   label="Device Length"
                   value={filters.device_length}
                   onChange={handleFilterChange('device_length')}
-                  placeholder="z.B. 100mm"
+                  placeholder="z.B. >100, 80-120"
+                  helperText=">, >=, <, <=, oder 8-10"
                 />
               </Grid>
               
@@ -551,7 +602,8 @@ const Materials: React.FC = () => {
                   label="Schaftlänge"
                   value={filters.shaft_length}
                   onChange={handleFilterChange('shaft_length')}
-                  placeholder="z.B. 80cm"
+                  placeholder="z.B. >=80, 60-100"
+                  helperText=">, >=, <, <=, oder 8-10"
                 />
               </Grid>
               
@@ -562,7 +614,8 @@ const Materials: React.FC = () => {
                   label="Device-Ø"
                   value={filters.device_diameter}
                   onChange={handleFilterChange('device_diameter')}
-                  placeholder="z.B. 6mm"
+                  placeholder="z.B. <8, 5-7"
+                  helperText=">, >=, <, <=, oder 8-10"
                 />
               </Grid>
             </Grid>
