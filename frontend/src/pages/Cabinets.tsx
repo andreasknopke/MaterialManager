@@ -47,6 +47,8 @@ interface CompartmentMaterial {
   article_number: string | null;
   size: string | null;
   category_name: string | null;
+  device_diameter: string | null;
+  french_size: string | null;
   total_stock: number;
   item_count: number;
 }
@@ -818,17 +820,26 @@ const Cabinets: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {compartmentMaterials.map((mat, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px dotted #eee' }}>
-                        <td style={{ padding: '2px' }}>
-                          {mat.name}
-                          {mat.size && <span style={{ color: '#666' }}> ({mat.size})</span>}
-                        </td>
-                        <td style={{ textAlign: 'right', padding: '2px', fontWeight: 'bold' }}>
-                          {mat.total_stock}
-                        </td>
-                      </tr>
-                    ))}
+                    {compartmentMaterials.map((mat, idx) => {
+                      // Eigenschaften für Anzeige zusammenstellen
+                      const props: string[] = [];
+                      if (mat.device_diameter) props.push(`Ø${mat.device_diameter}`);
+                      if (mat.french_size) props.push(`${mat.french_size}${mat.french_size.toUpperCase().includes('F') ? '' : 'F'}`);
+                      
+                      return (
+                        <tr key={idx} style={{ borderBottom: '1px dotted #eee' }}>
+                          <td style={{ padding: '2px' }}>
+                            {mat.name}
+                            {props.length > 0 && (
+                              <span style={{ color: '#666' }}> ({props.join(', ')})</span>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '2px', fontWeight: 'bold' }}>
+                            {mat.total_stock}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}

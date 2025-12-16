@@ -511,13 +511,18 @@ router.get('/:cabinetId/compartments/:compartmentId/materials', async (req: Requ
          m.article_number,
          m.size,
          cat.name AS category_name,
+         m.device_diameter,
+         m.french_size,
          SUM(m.current_stock) AS total_stock,
          COUNT(*) AS item_count
        FROM materials m
        LEFT JOIN categories cat ON m.category_id = cat.id
        WHERE m.compartment_id = ? AND m.active = TRUE
-       GROUP BY m.name, m.article_number, m.size, cat.name
-       ORDER BY cat.name, m.name`,
+       GROUP BY m.name, m.article_number, m.size, cat.name, m.device_diameter, m.french_size
+       ORDER BY 
+         CAST(NULLIF(m.device_diameter, '') AS DECIMAL(10,2)) ASC,
+         CAST(NULLIF(REPLACE(m.french_size, 'F', ''), '') AS DECIMAL(10,2)) ASC,
+         m.name ASC`,
       [req.params.compartmentId]
     );
     

@@ -59,6 +59,7 @@ export const materialAPI = {
   getAll: (params?: any) => api.get('/materials', { params }),
   getById: (id: number) => api.get(`/materials/${id}`),
   getByGtin: (gtin: string) => api.get(`/materials/by-gtin/${encodeURIComponent(gtin)}`),
+  getByName: (name: string) => api.get(`/materials/by-name/${encodeURIComponent(name)}`),
   getTransactions: (id: number) => api.get(`/materials/${id}/transactions`),
   search: (params: { lot_number?: string; expiry_months?: number; query?: string; category_id?: number; is_consignment?: boolean }) => api.post('/materials/search', params),
   create: (data: any) => api.post('/materials', data),

@@ -34,6 +34,7 @@ import {
   Edit as EditIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
+  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import { materialAPI, cabinetAPI, categoryAPI, companyAPI, unitAPI, shapeAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
@@ -43,6 +44,7 @@ import { getScannerSettings } from './Admin';
 // Debounce Timer für GS1 Debug Logging und GTIN-Suche
 let gs1DebugTimer: ReturnType<typeof setTimeout> | null = null;
 let gtinSearchTimer: ReturnType<typeof setTimeout> | null = null;
+let nameSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Guidewire-Acceptance Optionen
 const GUIDEWIRE_OPTIONS = ['0.014in', '0.018in', '0.032in', '0.035in', '0.038in'];
@@ -131,6 +133,13 @@ const MaterialForm: React.FC = () => {
   // GS1-Parser Status
   const [gs1Data, setGs1Data] = useState<GS1Data | null>(null);
   const [gs1Warning, setGs1Warning] = useState<string | null>(null);
+  
+  // Tracking welche Felder aus GS1-Barcode geparst wurden
+  const [parsedFromGs1, setParsedFromGs1] = useState<{
+    gtin: boolean;
+    lot: boolean;
+    expiry: boolean;
+  }>({ gtin: false, lot: false, expiry: false });
 
   // Fach-QR-Code Status
   const [compartmentQrInput, setCompartmentQrInput] = useState<string>('');
@@ -440,6 +449,57 @@ const MaterialForm: React.FC = () => {
     if (field === 'cabinet_id') {
       const cabinetId = value ? Number(value) : '';
       setFormData(prev => ({ ...prev, cabinet_id: cabinetId, compartment_id: '' }));
+    } else if (field === 'name') {
+      // Name-Feld: Datenbank-Lookup wenn Kategorie und Firma leer sind
+      setFormData(prev => ({ ...prev, name: value }));
+      
+      // Debounced Name-Suche
+      if (nameSearchTimer) {
+        clearTimeout(nameSearchTimer);
+      }
+      
+      if (value.trim().length >= 3) {
+        nameSearchTimer = setTimeout(async () => {
+          // Prüfen ob Kategorie und Firma noch leer sind
+          setFormData(prev => {
+            // Nur suchen wenn beide Felder leer sind
+            if (!prev.category_id && !prev.company_id) {
+              (async () => {
+                try {
+                  console.log('Suche nach Materialname:', value);
+                  const response = await materialAPI.getByName(value.trim());
+                  if (response.data?.found && response.data?.template) {
+                    const template = response.data.template;
+                    console.log('Name Template gefunden:', template);
+                    
+                    setFormData(prevData => {
+                      const updates: Partial<MaterialFormData> = {};
+                      if (!prevData.category_id && template.category_id) {
+                        updates.category_id = template.category_id;
+                      }
+                      if (!prevData.company_id && template.company_id) {
+                        updates.company_id = template.company_id;
+                      }
+                      
+                      if (Object.keys(updates).length > 0) {
+                        console.log('Name-Lookup Updates:', updates);
+                        setSuccess(`Kategorie/Firma aus bestehendem Material "${template.name}" übernommen!`);
+                        setTimeout(() => setSuccess(null), 4000);
+                        return { ...prevData, ...updates };
+                      }
+                      return prevData;
+                    });
+                  }
+                } catch (err) {
+                  // 404 oder kein Match ist OK
+                  console.log('Kein exakter Name-Match gefunden');
+                }
+              })();
+            }
+            return prev;
+          });
+        }, 800); // Etwas länger warten für manuelle Eingabe
+      }
     } else {
       setFormData({ ...formData, [field]: value });
     }
@@ -500,25 +560,36 @@ const MaterialForm: React.FC = () => {
       // Auto-Fill Felder aus dem gescannten Barcode
       // Nur Felder aktualisieren die im aktuellen Scan vorhanden sind
       const updates: Partial<MaterialFormData> = {};
+      const gs1ParsedUpdates: { gtin: boolean; lot: boolean; expiry: boolean } = { gtin: false, lot: false, expiry: false };
 
       if (parsed.gtin) {
         updates.article_number = parsed.gtin;
+        gs1ParsedUpdates.gtin = true;
       }
 
       // LOT: batchNumber (AI 10) oder falls nicht vorhanden serialNumber (AI 21)
       if (parsed.batchNumber) {
         updates.lot_number = parsed.batchNumber;
+        gs1ParsedUpdates.lot = true;
       } else if (parsed.serialNumber) {
         updates.lot_number = parsed.serialNumber;
+        gs1ParsedUpdates.lot = true;
       }
 
       if (parsed.expiryDate) {
         updates.expiry_date = parsed.expiryDate;
+        gs1ParsedUpdates.expiry = true;
       }
 
       // Sofort die Barcode-Daten anwenden (nur die neuen Felder)
       if (Object.keys(updates).length > 0) {
         setFormData(prev => ({ ...prev, ...updates }));
+        // Aktualisiere welche Felder geparst wurden (merge mit vorherigen)
+        setParsedFromGs1(prev => ({
+          gtin: prev.gtin || gs1ParsedUpdates.gtin,
+          lot: prev.lot || gs1ParsedUpdates.lot,
+          expiry: prev.expiry || gs1ParsedUpdates.expiry,
+        }));
       }
 
       // GTIN-Suche debounced ausführen (wartet bis Scanner fertig ist)
@@ -582,9 +653,11 @@ const MaterialForm: React.FC = () => {
       gs1_barcode: '',
       expiry_date: '',
       lot_number: '',
+      article_number: '',
     }));
     setGs1Data(null);
     setGs1Warning(null);
+    setParsedFromGs1({ gtin: false, lot: false, expiry: false });
   };
 
   // Fach-QR-Code Handler
@@ -1016,11 +1089,19 @@ const MaterialForm: React.FC = () => {
 
             <Grid item xs={12} md={6}>
               <TextField
+                required
                 fullWidth
                 label="Artikelnummer (GTIN)"
                 value={formData.article_number}
                 onChange={handleChange('article_number')}
                 helperText={gs1Data?.gtin ? `GTIN aus GS1-Barcode: ${gs1Data.gtin}` : 'Global Trade Item Number (GTIN)'}
+                InputProps={{
+                  endAdornment: parsedFromGs1.gtin ? (
+                    <InputAdornment position="end">
+                      <CheckCircleIcon color="success" />
+                    </InputAdornment>
+                  ) : undefined,
+                }}
               />
             </Grid>
 
@@ -1218,6 +1299,13 @@ const MaterialForm: React.FC = () => {
                 value={formData.lot_number}
                 onChange={handleChange('lot_number')}
                 helperText={gs1Data?.batchNumber ? `LOT-Nummer aus GS1-Barcode: ${gs1Data.batchNumber}` : (gs1Data?.serialNumber ? `Seriennummer als LOT: ${gs1Data.serialNumber}` : 'Batch/Lot Number aus GS1 AI 10 oder Seriennummer AI 21')}
+                InputProps={{
+                  endAdornment: parsedFromGs1.lot ? (
+                    <InputAdornment position="end">
+                      <CheckCircleIcon color="success" />
+                    </InputAdornment>
+                  ) : undefined,
+                }}
               />
             </Grid>
 
@@ -1231,6 +1319,13 @@ const MaterialForm: React.FC = () => {
                 onChange={handleChange('expiry_date')}
                 InputLabelProps={{ shrink: true }}
                 helperText={gs1Data?.expiryDate ? 'Aus GS1-Barcode übernommen' : ''}
+                InputProps={{
+                  endAdornment: parsedFromGs1.expiry ? (
+                    <InputAdornment position="end">
+                      <CheckCircleIcon color="success" />
+                    </InputAdornment>
+                  ) : undefined,
+                }}
               />
             </Grid>
 
@@ -1404,14 +1499,24 @@ const MaterialForm: React.FC = () => {
                 >
                   Abbrechen
                 </Button>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />}
-                  disabled={saving}
+                <Tooltip 
+                  title={
+                    !formData.name.trim() || !formData.article_number.trim() || !formData.lot_number.trim() || !formData.expiry_date
+                      ? 'Bitte füllen Sie alle Pflichtfelder aus: Bezeichnung, GTIN, LOT und Verfallsdatum'
+                      : ''
+                  }
                 >
-                  {saving ? 'Speichern...' : 'Speichern'}
-                </Button>
+                  <span>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />}
+                      disabled={saving || !formData.name.trim() || !formData.article_number.trim() || !formData.lot_number.trim() || !formData.expiry_date}
+                    >
+                      {saving ? 'Speichern...' : 'Speichern'}
+                    </Button>
+                  </span>
+                </Tooltip>
               </Box>
             </Grid>
           </Grid>

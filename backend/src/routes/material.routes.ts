@@ -9,6 +9,58 @@ const router = Router();
 // Alle Routes benötigen Authentifizierung
 router.use(authenticate);
 
+// GET Material-Template anhand Name (für Auto-Fill bei Namenseingabe)
+router.get('/by-name/:name', async (req: Request, res: Response) => {
+  try {
+    const { name } = req.params;
+    
+    if (!name || name.length < 3) {
+      return res.status(400).json({ error: 'Name zu kurz (min. 3 Zeichen)' });
+    }
+    
+    // Department-Filter
+    const departmentFilter = getDepartmentFilter(req, '');
+    
+    // Suche Material mit exakt diesem Namen (case-insensitive)
+    let query = `
+      SELECT m.*, c.name as category_name, co.name as company_name
+      FROM materials m
+      LEFT JOIN categories c ON m.category_id = c.id
+      LEFT JOIN companies co ON m.company_id = co.id
+      WHERE LOWER(TRIM(m.name)) = LOWER(TRIM(?))
+    `;
+    const params: any[] = [name];
+    
+    if (departmentFilter.whereClause) {
+      query += ` AND ${departmentFilter.whereClause.replace('unit_id', 'm.unit_id')}`;
+      params.push(...departmentFilter.params);
+    }
+    
+    query += ' ORDER BY m.created_at DESC LIMIT 1';
+    
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Kein Material mit diesem Namen gefunden' });
+    }
+    
+    // Gib Template-Daten zurück (Kategorie und Firma)
+    const material = rows[0];
+    res.json({
+      found: true,
+      template: {
+        category_id: material.category_id,
+        category_name: material.category_name,
+        company_id: material.company_id,
+        company_name: material.company_name,
+      }
+    });
+  } catch (error) {
+    console.error('Fehler beim Suchen nach Name:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 // GET Material-Template anhand GTIN (für Auto-Fill beim Scannen)
 router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
   try {
