@@ -22,6 +22,7 @@ import Admin from './pages/Admin';
 import Units from './pages/Units';
 import Users from './pages/Users';
 import InterventionProtocols from './pages/InterventionProtocols';
+import Reorder from './pages/Reorder';
 
 function App() {
   return (
@@ -201,6 +202,16 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <InterventionProtocols />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reorder"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <Reorder />
                 </Layout>
               </ProtectedRoute>
             }
