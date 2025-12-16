@@ -78,6 +78,92 @@ interface InfosheetCompartment extends Compartment {
   materials: InfosheetMaterial[];
 }
 
+// Hilfsfunktion: Zahlen zu Bereichen zusammenfassen (z.B. [6,7,8,10] → "6-8, 10")
+const formatNumberRanges = (values: number[]): string => {
+  if (values.length === 0) return '';
+  const sorted = [...values].sort((a, b) => a - b);
+  const ranges: string[] = [];
+  let start = sorted[0];
+  let end = sorted[0];
+  
+  for (let i = 1; i <= sorted.length; i++) {
+    if (i < sorted.length && sorted[i] === end + 1) {
+      end = sorted[i];
+    } else {
+      if (start === end) {
+        ranges.push(String(start));
+      } else if (end === start + 1) {
+        ranges.push(`${start}, ${end}`);
+      } else {
+        ranges.push(`${start}-${end}`);
+      }
+      if (i < sorted.length) {
+        start = sorted[i];
+        end = sorted[i];
+      }
+    }
+  }
+  return ranges.join(', ');
+};
+
+// Hilfsfunktion: Materialien nach Namen gruppieren und Eigenschaften zusammenfassen
+interface GroupedMaterial {
+  name: string;
+  diameters: number[];
+  frenchSizes: number[];
+  totalStock: number;
+}
+
+const groupMaterialsByName = (materials: CompartmentMaterial[]): GroupedMaterial[] => {
+  const groups = new Map<string, GroupedMaterial>();
+  
+  for (const mat of materials) {
+    const existing = groups.get(mat.name);
+    if (existing) {
+      existing.totalStock += mat.total_stock;
+      if (mat.device_diameter) {
+        const num = parseFloat(mat.device_diameter);
+        if (!isNaN(num) && !existing.diameters.includes(num)) {
+          existing.diameters.push(num);
+        }
+      }
+      if (mat.french_size) {
+        const num = parseFloat(mat.french_size.replace(/[Ff]/g, ''));
+        if (!isNaN(num) && !existing.frenchSizes.includes(num)) {
+          existing.frenchSizes.push(num);
+        }
+      }
+    } else {
+      const diameters: number[] = [];
+      const frenchSizes: number[] = [];
+      if (mat.device_diameter) {
+        const num = parseFloat(mat.device_diameter);
+        if (!isNaN(num)) diameters.push(num);
+      }
+      if (mat.french_size) {
+        const num = parseFloat(mat.french_size.replace(/[Ff]/g, ''));
+        if (!isNaN(num)) frenchSizes.push(num);
+      }
+      groups.set(mat.name, {
+        name: mat.name,
+        diameters,
+        frenchSizes,
+        totalStock: mat.total_stock,
+      });
+    }
+  }
+  
+  // Sortieren nach kleinstem Durchmesser, dann French Size
+  return Array.from(groups.values()).sort((a, b) => {
+    const minDiaA = a.diameters.length > 0 ? Math.min(...a.diameters) : Infinity;
+    const minDiaB = b.diameters.length > 0 ? Math.min(...b.diameters) : Infinity;
+    if (minDiaA !== minDiaB) return minDiaA - minDiaB;
+    const minFrA = a.frenchSizes.length > 0 ? Math.min(...a.frenchSizes) : Infinity;
+    const minFrB = b.frenchSizes.length > 0 ? Math.min(...b.frenchSizes) : Infinity;
+    return minFrA - minFrB;
+  });
+};
+
 const Cabinets: React.FC = () => {
   const [cabinets, setCabinets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -820,22 +906,26 @@ const Cabinets: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {compartmentMaterials.map((mat, idx) => {
+                    {groupMaterialsByName(compartmentMaterials).map((group, idx) => {
                       // Eigenschaften für Anzeige zusammenstellen
                       const props: string[] = [];
-                      if (mat.device_diameter) props.push(`Ø${mat.device_diameter}`);
-                      if (mat.french_size) props.push(`${mat.french_size}${mat.french_size.toUpperCase().includes('F') ? '' : 'F'}`);
+                      if (group.diameters.length > 0) {
+                        props.push(`Ø${formatNumberRanges(group.diameters)}`);
+                      }
+                      if (group.frenchSizes.length > 0) {
+                        props.push(`${formatNumberRanges(group.frenchSizes)}F`);
+                      }
                       
                       return (
                         <tr key={idx} style={{ borderBottom: '1px dotted #eee' }}>
                           <td style={{ padding: '2px' }}>
-                            {mat.name}
+                            {group.name}
                             {props.length > 0 && (
                               <span style={{ color: '#666' }}> ({props.join(', ')})</span>
                             )}
                           </td>
                           <td style={{ textAlign: 'right', padding: '2px', fontWeight: 'bold' }}>
-                            {mat.total_stock}
+                            {group.totalStock}
                           </td>
                         </tr>
                       );
