@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
@@ -23,8 +23,14 @@ import Units from './pages/Units';
 import Users from './pages/Users';
 import InterventionProtocols from './pages/InterventionProtocols';
 import Reorder from './pages/Reorder';
+import { extractAndSaveDbTokenFromUrl } from './utils/dbToken';
 
 function App() {
+  // Bei App-Start: DB-Token aus URL extrahieren falls vorhanden
+  useEffect(() => {
+    extractAndSaveDbTokenFromUrl();
+  }, []);
+
   return (
     <AuthProvider>
       <Box>

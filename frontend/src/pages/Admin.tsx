@@ -18,6 +18,12 @@ import {
   TextField,
   Switch,
   FormControlLabel,
+  Checkbox,
+  IconButton,
+  Tooltip,
+  Snackbar,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Warning as WarningIcon,
@@ -25,9 +31,21 @@ import {
   Settings as SettingsIcon,
   CameraAlt as CameraIcon,
   BluetoothConnected as BluetoothIcon,
+  Storage as DatabaseIcon,
+  ContentCopy as CopyIcon,
+  Refresh as RefreshIcon,
+  Key as KeyIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+import { 
+  encodeDbToken, 
+  getDbToken, 
+  saveDbToken, 
+  clearDbToken, 
+  getCurrentDbCredentials,
+  DbCredentials 
+} from '../utils/dbToken';
 
 // Scanner-Einstellungen aus localStorage laden/speichern
 export const getScannerSettings = () => {
@@ -51,12 +69,109 @@ const Admin: React.FC = () => {
   // Scanner-Einstellungen
   const [scannerSettings, setScannerSettings] = useState(getScannerSettings());
   
+  // DB Token Generator
+  const [dbTokenTab, setDbTokenTab] = useState(0);
+  const [generatedToken, setGeneratedToken] = useState('');
+  const [copySnackbar, setCopySnackbar] = useState(false);
+  const [currentDbInfo, setCurrentDbInfo] = useState<DbCredentials | null>(null);
+  
+  // Manuelle DB-Credentials
+  const [manualCredentials, setManualCredentials] = useState<DbCredentials>({
+    host: '',
+    user: '',
+    password: '',
+    database: '',
+    port: 3306,
+    ssl: false  // Standard: kein SSL erzwingen
+  });
+
+  useEffect(() => {
+    // Aktuelle DB-Credentials laden
+    const creds = getCurrentDbCredentials();
+    setCurrentDbInfo(creds);
+  }, []);
+
   const handleScannerSettingChange = (setting: 'cameraEnabled' | 'bluetoothEnabled') => {
     const newSettings = { ...scannerSettings, [setting]: !scannerSettings[setting] };
     setScannerSettings(newSettings);
     saveScannerSettings(newSettings);
     setSuccess(`Scanner-Einstellung wurde gespeichert`);
     setTimeout(() => setSuccess(null), 2000);
+  };
+
+  // Token aus Server-Secrets generieren
+  const generateTokenFromSecrets = async () => {
+    try {
+      const response = await axios.get('/api/admin/db-credentials');
+      const creds = response.data;
+      const token = encodeDbToken({
+        host: creds.host,
+        user: creds.user,
+        password: creds.password,
+        database: creds.database,
+        port: creds.port || 3306,
+        ssl: creds.ssl !== false
+      });
+      setGeneratedToken(token);
+      setSuccess('Token aus Server-Secrets generiert');
+    } catch (err: any) {
+      setError('Fehler beim Laden der Server-Credentials: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  // Token aus manuellen Eingaben generieren
+  const generateTokenFromManual = () => {
+    if (!manualCredentials.host || !manualCredentials.user || !manualCredentials.password || !manualCredentials.database) {
+      setError('Bitte alle Pflichtfelder ausfüllen');
+      return;
+    }
+    const token = encodeDbToken(manualCredentials);
+    setGeneratedToken(token);
+    setSuccess('Token manuell generiert');
+  };
+
+  // Token in Zwischenablage kopieren
+  const copyTokenToClipboard = async () => {
+    if (!generatedToken) return;
+    try {
+      await navigator.clipboard.writeText(generatedToken);
+      setCopySnackbar(true);
+    } catch (err) {
+      // Fallback für ältere Browser
+      const textArea = document.createElement('textarea');
+      textArea.value = generatedToken;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopySnackbar(true);
+    }
+  };
+
+  // URL mit Token generieren
+  const generateUrlWithToken = () => {
+    if (!generatedToken) return '';
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/?db_token=${encodeURIComponent(generatedToken)}`;
+  };
+
+  // Aktuellen Token aktivieren
+  const activateGeneratedToken = () => {
+    if (!generatedToken) return;
+    const success = saveDbToken(generatedToken);
+    if (success) {
+      setCurrentDbInfo(getCurrentDbCredentials());
+      setSuccess('Token aktiviert - wird ab jetzt für DB-Verbindungen verwendet');
+    } else {
+      setError('Ungültiger Token');
+    }
+  };
+
+  // Token deaktivieren
+  const deactivateToken = () => {
+    clearDbToken();
+    setCurrentDbInfo(null);
+    setSuccess('DB-Token deaktiviert - Server verwendet Standard-Credentials');
   };
 
   const handleResetDatabase = async () => {
@@ -337,7 +452,213 @@ const Admin: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* DB Token Generator - Für Root */}
+        {isRoot && (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                  <DatabaseIcon color="primary" />
+                  <Typography variant="h6">
+                    Datenbank Token-Generator
+                  </Typography>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                
+                {/* Aktuelle Verbindung anzeigen */}
+                {currentDbInfo && (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <strong>Aktiver DB-Token:</strong> {currentDbInfo.host}:{currentDbInfo.port} / {currentDbInfo.database}
+                    <Button size="small" color="inherit" onClick={deactivateToken} sx={{ ml: 2 }}>
+                      Deaktivieren
+                    </Button>
+                  </Alert>
+                )}
+
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Generieren Sie einen DB-Token für die dynamische Datenbankverbindung.
+                  Der Token kann über den URL-Parameter <code>db_token</code> übergeben werden.
+                </Typography>
+
+                <Tabs value={dbTokenTab} onChange={(_, v) => setDbTokenTab(v)} sx={{ mb: 2 }}>
+                  <Tab label="Aus Server-Secrets" />
+                  <Tab label="Manuell eingeben" />
+                </Tabs>
+
+                {/* Tab 0: Aus Server-Secrets */}
+                {dbTokenTab === 0 && (
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" paragraph>
+                      Lädt die Datenbank-Credentials aus den Server-Umgebungsvariablen und generiert daraus einen Token.
+                    </Typography>
+                    <Button 
+                      variant="contained" 
+                      startIcon={<KeyIcon />}
+                      onClick={generateTokenFromSecrets}
+                    >
+                      Token aus Secrets generieren
+                    </Button>
+                  </Box>
+                )}
+
+                {/* Tab 1: Manuelle Eingabe */}
+                {dbTokenTab === 1 && (
+                  <Box>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          label="Host"
+                          value={manualCredentials.host}
+                          onChange={(e) => setManualCredentials({ ...manualCredentials, host: e.target.value })}
+                          placeholder="z.B. db.example.com"
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={3}>
+                        <TextField
+                          fullWidth
+                          label="Port"
+                          type="number"
+                          value={manualCredentials.port}
+                          onChange={(e) => setManualCredentials({ ...manualCredentials, port: parseInt(e.target.value) || 3306 })}
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={3}>
+                        <TextField
+                          fullWidth
+                          label="Datenbank"
+                          value={manualCredentials.database}
+                          onChange={(e) => setManualCredentials({ ...manualCredentials, database: e.target.value })}
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          label="Benutzer"
+                          value={manualCredentials.user}
+                          onChange={(e) => setManualCredentials({ ...manualCredentials, user: e.target.value })}
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          label="Passwort"
+                          type="password"
+                          value={manualCredentials.password}
+                          onChange={(e) => setManualCredentials({ ...manualCredentials, password: e.target.value })}
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={manualCredentials.ssl || false}
+                              onChange={(e) => setManualCredentials({ ...manualCredentials, ssl: e.target.checked })}
+                            />
+                          }
+                          label="SSL-Verbindung erzwingen"
+                        />
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 4 }}>
+                          Aktivieren Sie dies nur, wenn der Datenbankserver SSL erfordert
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Button 
+                          variant="contained" 
+                          startIcon={<KeyIcon />}
+                          onClick={generateTokenFromManual}
+                        >
+                          Token generieren
+                        </Button>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                )}
+
+                {/* Generierter Token */}
+                {generatedToken && (
+                  <Box sx={{ mt: 3 }}>
+                    <Divider sx={{ mb: 2 }} />
+                    <Typography variant="subtitle2" gutterBottom>
+                      Generierter Token:
+                    </Typography>
+                    <Paper sx={{ p: 2, bgcolor: 'grey.100', display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <TextField
+                        fullWidth
+                        value={generatedToken}
+                        size="small"
+                        InputProps={{
+                          readOnly: true,
+                          sx: { fontFamily: 'monospace', fontSize: '0.8rem' }
+                        }}
+                      />
+                      <Tooltip title="Token kopieren">
+                        <IconButton onClick={copyTokenToClipboard}>
+                          <CopyIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </Paper>
+
+                    <Typography variant="subtitle2" sx={{ mt: 2 }} gutterBottom>
+                      URL mit Token:
+                    </Typography>
+                    <Paper sx={{ p: 2, bgcolor: 'grey.100', display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <TextField
+                        fullWidth
+                        value={generateUrlWithToken()}
+                        size="small"
+                        InputProps={{
+                          readOnly: true,
+                          sx: { fontFamily: 'monospace', fontSize: '0.75rem' }
+                        }}
+                      />
+                      <Tooltip title="URL kopieren">
+                        <IconButton onClick={async () => {
+                          await navigator.clipboard.writeText(generateUrlWithToken());
+                          setCopySnackbar(true);
+                        }}>
+                          <CopyIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </Paper>
+
+                    <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+                      <Button 
+                        variant="outlined" 
+                        color="primary"
+                        onClick={activateGeneratedToken}
+                      >
+                        Token aktivieren
+                      </Button>
+                      <Button 
+                        variant="text" 
+                        onClick={() => setGeneratedToken('')}
+                      >
+                        Token löschen
+                      </Button>
+                    </Box>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
       </Grid>
+
+      {/* Copy Snackbar */}
+      <Snackbar
+        open={copySnackbar}
+        autoHideDuration={2000}
+        onClose={() => setCopySnackbar(false)}
+        message="In Zwischenablage kopiert"
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
 
       {/* Bestätigungs-Dialog */}
       <Dialog

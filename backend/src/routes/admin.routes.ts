@@ -699,4 +699,25 @@ router.get('/debug-cabinets', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/admin/db-credentials - Gibt die Server-DB-Credentials für Token-Generierung zurück
+// ACHTUNG: Nur für authentifizierte Root-User!
+router.get('/db-credentials', async (req: Request, res: Response) => {
+  try {
+    // Credentials aus Umgebungsvariablen
+    const credentials = {
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME || 'material_manager',
+      port: parseInt(process.env.DB_PORT || '3306'),
+      ssl: process.env.DB_SSL === 'true'
+    };
+    
+    res.json(credentials);
+  } catch (error) {
+    console.error('Fehler beim Laden der DB-Credentials:', error);
+    res.status(500).json({ error: 'Fehler beim Laden der Credentials' });
+  }
+});
+
 export default router;

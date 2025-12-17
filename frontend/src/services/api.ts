@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getDbToken } from '../utils/dbToken';
 
 // Use relative URL for API calls - nginx will proxy to backend
 const API_BASE_URL = '/api';
@@ -13,10 +14,18 @@ const api = axios.create({
 // Request Interceptor - Token automatisch hinzufügen
 api.interceptors.request.use(
   (config) => {
+    // Auth Token
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // DB Token (für dynamische Datenbank-Verbindung)
+    const dbToken = getDbToken();
+    if (dbToken) {
+      config.headers['X-DB-Token'] = dbToken;
+    }
+    
     return config;
   },
   (error) => {
