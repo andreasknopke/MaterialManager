@@ -263,11 +263,14 @@ router.get('/', async (req: Request, res: Response) => {
     
     const { category, cabinet, company, search, lowStock, expiring } = req.query;
     
-    let query = 'SELECT * FROM v_materials_overview WHERE active = TRUE';
+    // Basis-Query mit offenen Bestellungen als Subquery
+    let query = `SELECT v.*, 
+      (SELECT COUNT(*) FROM reorder_history rh WHERE rh.product_id = v.product_id AND rh.status = 'ordered') as pending_orders
+      FROM v_materials_overview v WHERE v.active = TRUE`;
     const params: any[] = [];
     
     // Department-Filter hinzufügen (View braucht keinen Prefix)
-    const departmentFilter = getDepartmentFilter(req, '');
+    const departmentFilter = getDepartmentFilter(req, 'v');
     console.log('Department filter:', departmentFilter);
     
     if (departmentFilter.whereClause) {
@@ -276,35 +279,35 @@ router.get('/', async (req: Request, res: Response) => {
     }
     
     if (category) {
-      query += ' AND category_name = ?';
+      query += ' AND v.category_name = ?';
       params.push(category);
     }
     
     if (cabinet) {
-      query += ' AND cabinet_name = ?';
+      query += ' AND v.cabinet_name = ?';
       params.push(cabinet);
     }
     
     if (company) {
-      query += ' AND company_name = ?';
+      query += ' AND v.company_name = ?';
       params.push(company);
     }
     
     if (search) {
-      query += ' AND (name LIKE ? OR description LIKE ? OR article_number LIKE ? OR lot_number LIKE ?)';
+      query += ' AND (v.name LIKE ? OR v.description LIKE ? OR v.article_number LIKE ? OR v.lot_number LIKE ?)';
       const searchParam = `%${search}%`;
       params.push(searchParam, searchParam, searchParam, searchParam);
     }
     
     if (lowStock === 'true') {
-      query += ' AND stock_status = "LOW"';
+      query += ' AND v.stock_status = "LOW"';
     }
     
     if (expiring === 'true') {
-      query += ' AND stock_status = "EXPIRING"';
+      query += ' AND v.stock_status = "EXPIRING"';
     }
     
-    query += ' ORDER BY name';
+    query += ' ORDER BY v.name';
     
     const [rows] = await pool.query<RowDataPacket[]>(query, params);
     res.json(rows);

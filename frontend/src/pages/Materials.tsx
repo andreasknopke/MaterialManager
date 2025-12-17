@@ -22,6 +22,7 @@ import {
   Delete as DeleteIcon,
   FilterList as FilterListIcon,
   Clear as ClearIcon,
+  ShoppingCart as ShoppingCartIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { materialAPI, categoryAPI, companyAPI, cabinetAPI, shapeAPI } from '../services/api';
@@ -270,6 +271,27 @@ const Materials: React.FC = () => {
       ),
     },
     { field: 'min_stock', headerName: 'Min.', width: 70, type: 'number' },
+    {
+      field: 'pending_orders',
+      headerName: 'Bestellt',
+      width: 80,
+      type: 'number',
+      renderCell: (params) => {
+        const count = Number(params.value) || 0;
+        if (count > 0) {
+          return (
+            <Chip
+              icon={<ShoppingCartIcon sx={{ fontSize: 14 }} />}
+              label={count}
+              size="small"
+              color="success"
+              sx={{ height: 22 }}
+            />
+          );
+        }
+        return <Typography variant="body2" color="text.secondary">-</Typography>;
+      },
+    },
     {
       field: 'expiry_date',
       headerName: 'Verfallsdatum',
