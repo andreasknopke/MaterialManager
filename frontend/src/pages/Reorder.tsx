@@ -3,7 +3,8 @@ import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, ToggleButton, ToggleButtonGroup, Chip,
   CircularProgress, IconButton, Collapse, Dialog, DialogContent,
-  Button, Divider, Alert, Tooltip, Snackbar, Stack
+  Button, Divider, Alert, Tooltip, Snackbar, Stack, Checkbox,
+  Tab, Tabs, TextField, InputAdornment, DialogTitle, DialogActions
 } from '@mui/material';
 import {
   Today as TodayIcon,
@@ -14,7 +15,12 @@ import {
   ExpandLess as ExpandLessIcon,
   QrCode as QrCodeIcon,
   ShoppingCart as ShoppingCartIcon,
-  ContentCopy as CopyIcon
+  ContentCopy as CopyIcon,
+  History as HistoryIcon,
+  Search as SearchIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import { QRCodeSVG } from 'qrcode.react';
 import api from '../services/api';
@@ -49,6 +55,25 @@ interface Transaction {
   gtin: string;
   product_name: string;
   cabinet_name: string | null;
+}
+
+interface ReorderHistoryItem {
+  id: number;
+  product_id: number;
+  gtin: string | null;
+  product_name: string;
+  quantity_ordered: number;
+  ordered_at: string;
+  ordered_by: number | null;
+  ordered_by_name: string | null;
+  notes: string | null;
+  status: 'ordered' | 'received' | 'cancelled';
+  received_at: string | null;
+  company_name: string | null;
+  shaft_length: string | null;
+  device_length: string | null;
+  device_diameter: string | null;
+  french_size: string | null;
 }
 
 // GS1 UDI QR-Code generieren (AI 01 = GTIN, 10 = LOT, 17 = Expiry)
@@ -98,10 +123,34 @@ const Reorder: React.FC = () => {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [enlargedQR, setEnlargedQR] = useState<{ gtin: string; lot: string; expiry: string | null } | null>(null);
   const [copySnackbar, setCopySnackbar] = useState(false);
+  
+  // Tab-State
+  const [activeTab, setActiveTab] = useState(0);
+  
+  // Bestellhistorie State
+  const [history, setHistory] = useState<ReorderHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyPeriod, setHistoryPeriod] = useState<string>('all');
+  const [historyStatus, setHistoryStatus] = useState<string>('all');
+  
+  // Nachbestellungs-State
+  const [orderedProducts, setOrderedProducts] = useState<Set<number>>(new Set());
+  const [orderSnackbar, setOrderSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+  
+  // Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; item: ReorderHistoryItem | null; action: 'receive' | 'cancel' | 'delete' }>({ open: false, item: null, action: 'receive' });
 
   useEffect(() => {
     fetchStockOuts();
+    fetchOrderedProducts();
   }, [period]);
+
+  useEffect(() => {
+    if (activeTab === 1) {
+      fetchHistory();
+    }
+  }, [activeTab, historySearch, historyPeriod, historyStatus]);
 
   const fetchStockOuts = async () => {
     setLoading(true);
@@ -114,6 +163,76 @@ const Reorder: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchOrderedProducts = async () => {
+    try {
+      const response = await api.get('/reorder/history?status=ordered');
+      const orderedIds = new Set<number>(response.data.map((item: ReorderHistoryItem) => item.product_id));
+      setOrderedProducts(orderedIds);
+    } catch (error) {
+      console.error('Fehler beim Laden der bestellten Produkte:', error);
+    }
+  };
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (historyStatus !== 'all') params.append('status', historyStatus);
+      if (historyPeriod !== 'all') params.append('period', historyPeriod);
+      if (historySearch) params.append('search', historySearch);
+      
+      const response = await api.get(`/reorder/history?${params.toString()}`);
+      setHistory(response.data);
+    } catch (error) {
+      console.error('Fehler beim Laden der Historie:', error);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleMarkOrdered = async (item: StockOutItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await api.post('/reorder/mark-ordered', {
+        product_id: item.product_id,
+        gtin: item.gtin,
+        product_name: item.product_name,
+        quantity_ordered: item.total_out
+      });
+      setOrderedProducts(prev => new Set(prev).add(item.product_id));
+      setOrderSnackbar({ open: true, message: `"${item.product_name}" als nachbestellt markiert`, severity: 'success' });
+    } catch (error) {
+      console.error('Fehler:', error);
+      setOrderSnackbar({ open: true, message: 'Fehler beim Markieren', severity: 'error' });
+    }
+  };
+
+  const handleUpdateStatus = async (id: number, status: 'received' | 'cancelled') => {
+    try {
+      await api.put(`/reorder/history/${id}`, { status });
+      fetchHistory();
+      fetchOrderedProducts();
+      setOrderSnackbar({ open: true, message: status === 'received' ? 'Als empfangen markiert' : 'Storniert', severity: 'success' });
+    } catch (error) {
+      console.error('Fehler:', error);
+      setOrderSnackbar({ open: true, message: 'Fehler beim Aktualisieren', severity: 'error' });
+    }
+    setConfirmDialog({ open: false, item: null, action: 'receive' });
+  };
+
+  const handleDeleteOrder = async (id: number) => {
+    try {
+      await api.delete(`/reorder/history/${id}`);
+      fetchHistory();
+      fetchOrderedProducts();
+      setOrderSnackbar({ open: true, message: 'Eintrag gelöscht', severity: 'success' });
+    } catch (error) {
+      console.error('Fehler:', error);
+      setOrderSnackbar({ open: true, message: 'Fehler beim Löschen', severity: 'error' });
+    }
+    setConfirmDialog({ open: false, item: null, action: 'delete' });
   };
 
   const fetchTransactions = async (productId: number) => {
@@ -200,15 +319,26 @@ const Reorder: React.FC = () => {
         </Button>
       </Box>
 
-      {/* Zeitraum-Auswahl */}
-      <Paper sx={{ p: 2, mb: 3 }} className="no-print">
-        <Typography variant="subtitle2" gutterBottom>
-          Zeitraum wählen:
-        </Typography>
-        <ToggleButtonGroup
-          value={period}
-          exclusive
-          onChange={(_, value) => value && setPeriod(value)}
+      {/* Tabs */}
+      <Paper sx={{ mb: 3 }} className="no-print">
+        <Tabs value={activeTab} onChange={(_, val) => setActiveTab(val)}>
+          <Tab icon={<ShoppingCartIcon />} label="Materialausgänge" iconPosition="start" />
+          <Tab icon={<HistoryIcon />} label="Bestellhistorie" iconPosition="start" />
+        </Tabs>
+      </Paper>
+
+      {/* TAB 0: Materialausgänge */}
+      {activeTab === 0 && (
+        <>
+          {/* Zeitraum-Auswahl */}
+          <Paper sx={{ p: 2, mb: 3 }} className="no-print">
+            <Typography variant="subtitle2" gutterBottom>
+              Zeitraum wählen:
+            </Typography>
+            <ToggleButtonGroup
+              value={period}
+              exclusive
+              onChange={(_, value) => value && setPeriod(value)}
           sx={{ flexWrap: 'wrap' }}
         >
           <ToggleButton value="today">
@@ -265,6 +395,7 @@ const Reorder: React.FC = () => {
             <TableHead>
               <TableRow sx={{ backgroundColor: 'primary.main' }}>
                 <TableCell sx={{ color: 'white', width: 40 }}></TableCell>
+                <TableCell sx={{ color: 'white', width: 60, textAlign: 'center' }} className="no-print">Bestellt</TableCell>
                 <TableCell sx={{ color: 'white' }}>Produkt</TableCell>
                 <TableCell sx={{ color: 'white' }}>GTIN</TableCell>
                 <TableCell sx={{ color: 'white' }}>Hersteller</TableCell>
@@ -283,7 +414,8 @@ const Reorder: React.FC = () => {
                     onClick={() => handleRowClick(item.product_id)}
                     sx={{ 
                       cursor: 'pointer',
-                      backgroundColor: item.current_total_stock <= 0 ? 'error.light' : 
+                      backgroundColor: orderedProducts.has(item.product_id) ? 'success.light' :
+                                       item.current_total_stock <= 0 ? 'error.light' : 
                                        item.current_total_stock <= 2 ? 'warning.light' : 'inherit'
                     }}
                   >
@@ -291,6 +423,17 @@ const Reorder: React.FC = () => {
                       <IconButton size="small">
                         {expandedRow === item.product_id ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                       </IconButton>
+                    </TableCell>
+                    <TableCell align="center" className="no-print">
+                      <Tooltip title={orderedProducts.has(item.product_id) ? 'Bereits als nachbestellt markiert' : 'Als nachbestellt markieren'}>
+                        <Checkbox
+                          checked={orderedProducts.has(item.product_id)}
+                          onChange={(e) => !orderedProducts.has(item.product_id) && handleMarkOrdered(item, e as any)}
+                          onClick={(e) => e.stopPropagation()}
+                          color="success"
+                          disabled={orderedProducts.has(item.product_id)}
+                        />
+                      </Tooltip>
                     </TableCell>
                     <TableCell>
                       <Typography fontWeight="medium">{item.product_name}</Typography>
@@ -369,7 +512,7 @@ const Reorder: React.FC = () => {
 
                   {/* Expandierte Details */}
                   <TableRow>
-                    <TableCell colSpan={8} sx={{ py: 0 }}>
+                    <TableCell colSpan={10} sx={{ py: 0 }}>
                       <Collapse in={expandedRow === item.product_id} timeout="auto" unmountOnExit>
                         <Box sx={{ py: 2, px: 3, backgroundColor: 'grey.50' }}>
                           <Typography variant="subtitle2" gutterBottom>
@@ -439,6 +582,158 @@ const Reorder: React.FC = () => {
           </Table>
         </TableContainer>
       )}
+        </>
+      )}
+
+      {/* TAB 1: Bestellhistorie */}
+      {activeTab === 1 && (
+        <>
+          {/* Filter */}
+          <Paper sx={{ p: 2, mb: 3 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+              <TextField
+                size="small"
+                placeholder="Suche nach Produkt, GTIN, Hersteller..."
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                sx={{ minWidth: 300 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  )
+                }}
+              />
+              <ToggleButtonGroup
+                value={historyStatus}
+                exclusive
+                onChange={(_, val) => val && setHistoryStatus(val)}
+                size="small"
+              >
+                <ToggleButton value="all">Alle</ToggleButton>
+                <ToggleButton value="ordered">Offen</ToggleButton>
+                <ToggleButton value="received">Empfangen</ToggleButton>
+                <ToggleButton value="cancelled">Storniert</ToggleButton>
+              </ToggleButtonGroup>
+              <ToggleButtonGroup
+                value={historyPeriod}
+                exclusive
+                onChange={(_, val) => val && setHistoryPeriod(val)}
+                size="small"
+              >
+                <ToggleButton value="all">Gesamt</ToggleButton>
+                <ToggleButton value="today">Heute</ToggleButton>
+                <ToggleButton value="week">Woche</ToggleButton>
+                <ToggleButton value="month">Monat</ToggleButton>
+              </ToggleButtonGroup>
+            </Stack>
+          </Paper>
+
+          {/* Historie-Tabelle */}
+          {historyLoading ? (
+            <Box display="flex" justifyContent="center" py={4}>
+              <CircularProgress />
+            </Box>
+          ) : history.length === 0 ? (
+            <Paper sx={{ p: 4, textAlign: 'center' }}>
+              <Typography color="text.secondary">
+                Keine Bestellungen gefunden
+              </Typography>
+            </Paper>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: 'primary.main' }}>
+                    <TableCell sx={{ color: 'white' }}>Datum</TableCell>
+                    <TableCell sx={{ color: 'white' }}>Produkt</TableCell>
+                    <TableCell sx={{ color: 'white' }}>GTIN</TableCell>
+                    <TableCell sx={{ color: 'white' }}>Hersteller</TableCell>
+                    <TableCell sx={{ color: 'white', textAlign: 'center' }}>Menge</TableCell>
+                    <TableCell sx={{ color: 'white' }}>Bestellt von</TableCell>
+                    <TableCell sx={{ color: 'white', textAlign: 'center' }}>Status</TableCell>
+                    <TableCell sx={{ color: 'white', textAlign: 'center' }}>Aktionen</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {history.map((item) => (
+                    <TableRow 
+                      key={item.id}
+                      sx={{ 
+                        backgroundColor: item.status === 'received' ? 'success.light' : 
+                                        item.status === 'cancelled' ? 'grey.200' : 'inherit'
+                      }}
+                    >
+                      <TableCell>
+                        <Typography variant="body2">
+                          {new Date(item.ordered_at).toLocaleDateString('de-DE')}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {new Date(item.ordered_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography fontWeight="medium">{item.product_name}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontFamily="monospace">{item.gtin || '-'}</Typography>
+                      </TableCell>
+                      <TableCell>{item.company_name || '-'}</TableCell>
+                      <TableCell align="center">
+                        <Chip label={item.quantity_ordered} size="small" color="primary" />
+                      </TableCell>
+                      <TableCell>{item.ordered_by_name || '-'}</TableCell>
+                      <TableCell align="center">
+                        <Chip 
+                          label={item.status === 'ordered' ? 'Bestellt' : item.status === 'received' ? 'Empfangen' : 'Storniert'}
+                          size="small"
+                          color={item.status === 'ordered' ? 'warning' : item.status === 'received' ? 'success' : 'default'}
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        {item.status === 'ordered' && (
+                          <Stack direction="row" spacing={0.5} justifyContent="center">
+                            <Tooltip title="Als empfangen markieren">
+                              <IconButton 
+                                size="small" 
+                                color="success"
+                                onClick={() => setConfirmDialog({ open: true, item, action: 'receive' })}
+                              >
+                                <CheckCircleIcon />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Stornieren">
+                              <IconButton 
+                                size="small" 
+                                color="warning"
+                                onClick={() => setConfirmDialog({ open: true, item, action: 'cancel' })}
+                              >
+                                <CancelIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        )}
+                        {item.status !== 'ordered' && (
+                          <Tooltip title="Löschen">
+                            <IconButton 
+                              size="small" 
+                              color="error"
+                              onClick={() => setConfirmDialog({ open: true, item, action: 'delete' })}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </>
+      )}
 
       {/* QR-Code Dialog (vergrößert) */}
       <Dialog 
@@ -501,6 +796,64 @@ const Reorder: React.FC = () => {
         message="GTIN in Zwischenablage kopiert"
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       />
+
+      {/* Order Snackbar */}
+      <Snackbar
+        open={orderSnackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setOrderSnackbar({ ...orderSnackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={orderSnackbar.severity} onClose={() => setOrderSnackbar({ ...orderSnackbar, open: false })}>
+          {orderSnackbar.message}
+        </Alert>
+      </Snackbar>
+
+      {/* Bestätigungs-Dialog */}
+      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog({ open: false, item: null, action: 'receive' })}>
+        <DialogTitle>
+          {confirmDialog.action === 'receive' && 'Als empfangen markieren?'}
+          {confirmDialog.action === 'cancel' && 'Bestellung stornieren?'}
+          {confirmDialog.action === 'delete' && 'Eintrag löschen?'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            {confirmDialog.item?.product_name}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDialog({ open: false, item: null, action: 'receive' })}>
+            Abbrechen
+          </Button>
+          {confirmDialog.action === 'receive' && (
+            <Button 
+              variant="contained" 
+              color="success"
+              onClick={() => confirmDialog.item && handleUpdateStatus(confirmDialog.item.id, 'received')}
+            >
+              Empfangen
+            </Button>
+          )}
+          {confirmDialog.action === 'cancel' && (
+            <Button 
+              variant="contained" 
+              color="warning"
+              onClick={() => confirmDialog.item && handleUpdateStatus(confirmDialog.item.id, 'cancelled')}
+            >
+              Stornieren
+            </Button>
+          )}
+          {confirmDialog.action === 'delete' && (
+            <Button 
+              variant="contained" 
+              color="error"
+              onClick={() => confirmDialog.item && handleDeleteOrder(confirmDialog.item.id)}
+            >
+              Löschen
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
