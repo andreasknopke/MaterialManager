@@ -158,7 +158,7 @@ router.post('/mark-ordered', async (req: Request, res: Response) => {
     }
     
     const userId = req.user?.id || null;
-    const userName = req.user?.displayName || req.user?.username || 'Unbekannt';
+    const userName = req.user?.fullName || req.user?.username || 'Unbekannt';
     
     const [result] = await pool.query<ResultSetHeader>(
       `INSERT INTO reorder_history (product_id, gtin, product_name, quantity_ordered, ordered_by, ordered_by_name, notes)
