@@ -153,15 +153,6 @@ const Login: React.FC = () => {
             </Link>
           </Box>
         </form>
-
-        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-          <Typography variant="caption" color="text.secondary" display="block" textAlign="center">
-            Standard-Login: root / root
-          </Typography>
-          <Typography variant="caption" color="error" display="block" textAlign="center">
-            (Passwort nach erstem Login ändern!)
-          </Typography>
-        </Box>
       </Paper>
     </Box>
   );
