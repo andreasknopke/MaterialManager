@@ -940,4 +940,59 @@ router.get('/reports/low-stock', async (req: Request, res: Response) => {
   }
 });
 
+// GET Inaktive Bestände - Materialien, die lange nicht bewegt wurden
+router.get('/reports/inactive', async (req: Request, res: Response) => {
+  try {
+    const months = parseInt(req.query.months as string) || 6;
+    const cutoffDate = new Date();
+    cutoffDate.setMonth(cutoffDate.getMonth() - months);
+    
+    // Suche Materialien, deren letztes Update (oder Erstellung) vor dem Cutoff-Datum liegt
+    // und die noch Bestand haben
+    let query = `
+      SELECT 
+        m.id,
+        m.name,
+        m.article_number,
+        m.lot_number,
+        m.current_stock,
+        m.min_stock,
+        m.expiry_date,
+        m.unit_id,
+        m.updated_at,
+        m.created_at,
+        c.name AS category_name,
+        co.name AS company_name,
+        cab.name AS cabinet_name,
+        cab.location AS cabinet_location,
+        DATEDIFF(CURDATE(), COALESCE(m.updated_at, m.created_at)) AS days_inactive,
+        ROUND(DATEDIFF(CURDATE(), COALESCE(m.updated_at, m.created_at)) / 30, 1) AS months_inactive
+      FROM materials m
+      LEFT JOIN categories c ON m.category_id = c.id
+      LEFT JOIN companies co ON m.company_id = co.id
+      LEFT JOIN cabinets cab ON m.cabinet_id = cab.id
+      WHERE m.active = TRUE
+        AND m.current_stock > 0
+        AND COALESCE(m.updated_at, m.created_at) < ?
+    `;
+    const params: any[] = [cutoffDate.toISOString().slice(0, 19).replace('T', ' ')];
+    
+    // Department-Filter für Non-Root
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      query += ' AND m.unit_id = ?';
+      params.push(req.user.departmentId);
+    }
+    
+    query += ' ORDER BY days_inactive DESC';
+    
+    console.log('[REPORTS] Inactive materials query, months:', months, 'cutoff:', cutoffDate);
+    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    console.log('[REPORTS] Inactive materials found:', rows.length);
+    res.json(rows);
+  } catch (error) {
+    console.error('Fehler beim Abrufen inaktiver Materialien:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 export default router;

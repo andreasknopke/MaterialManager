@@ -148,6 +148,7 @@ export const materialAPI = {
   stockOut: (id: number, data: any) => api.post(`/materials/${id}/stock-out`, data),
   getExpiring: () => api.get('/materials/reports/expiring'),
   getLowStock: () => api.get('/materials/reports/low-stock'),
+  getInactive: (months: number = 6) => api.get(`/materials/reports/inactive?months=${months}`),
 };
 
 // Categories
