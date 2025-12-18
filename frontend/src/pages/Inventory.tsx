@@ -477,7 +477,7 @@ const Inventory: React.FC = () => {
       {/* Inventur Dialog */}
       <Dialog 
         open={dialogOpen} 
-        onClose={() => { setDialogOpen(false); setInventoryMode(false); stopScanner(); }}
+        onClose={() => { setDialogOpen(false); setInventoryMode(false); }}
         maxWidth="md"
         fullWidth
       >
