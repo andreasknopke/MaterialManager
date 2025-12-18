@@ -16,11 +16,127 @@ import {
   Select,
   MenuItem,
   Chip,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemButton,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Business as BusinessIcon } from '@mui/icons-material';
 import { companyAPI, unitAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+
+// EU-registrierte Medizintechnik-Firmen
+const EU_REGISTERED_COMPANIES = [
+  "Aachen Resonance GmbH",
+  "Abbott",
+  "Acandis GmbH & Co. KG",
+  "Advanced Vascular Dynamics",
+  "ALN",
+  "Alvimedica",
+  "amg International GmbH",
+  "Andramed GmbH",
+  "AndraTec GmbH Germany",
+  "AngioDynamics",
+  "Argon Medical Devices, Inc.",
+  "Arthesys",
+  "Artivion, Inc.",
+  "ArtVentive Medical Group, Inc.",
+  "Asahi Intecc Co Ltd.",
+  "Avinger, Inc.",
+  "B. Braun Melsungen AG",
+  "Balt",
+  "Balton",
+  "Bard Access Systems, Inc",
+  "BD Interventional",
+  "Bentley InnoMed GmbH",
+  "BioCardia, Inc.",
+  "Biolas",
+  "Biosensors International",
+  "Blockade Medical",
+  "Boston Scientific Corporation",
+  "BrosMed Medical",
+  "Cagent Vascular",
+  "Cardionovum GmbH",
+  "Cerenovus",
+  "Concept Medical",
+  "Contego Medical LLC",
+  "Control Medical Technology",
+  "Cook Medical",
+  "Cordis",
+  "Dornier MedTech GmbH",
+  "Edwards Lifesciences",
+  "EndoCross",
+  "Endologix",
+  "eucatech AG",
+  "Eurocor GmbH",
+  "F Care Systems",
+  "Forge Medical, Inc.",
+  "Front Line Medical Technologies Inc.",
+  "Galt",
+  "Getinge",
+  "Gore & Associates",
+  "Haemonetics",
+  "iMS GmbH",
+  "Inari Medical",
+  "Infraredx",
+  "InspireMD",
+  "Invamed",
+  "iVascular",
+  "Joline GmbH & Co. KG",
+  "Kawasumi Laboratories, Inc",
+  "LeMaitre Vascular, Inc.",
+  "Lombard Medical Limited",
+  "MedAlliance",
+  "Medcomp",
+  "Medtronic",
+  "Meril Life Sciences Pvt. Ltd.",
+  "Merit Medical Systems, Inc.",
+  "Mermaid Medical",
+  "Micro Medical Solutions",
+  "Natec Medical Ltd",
+  "Opsens Medical",
+  "optimed Medizinische Instrumente GmbH",
+  "Oscor Inc.",
+  "Pediavascular",
+  "Penumbra, Inc.",
+  "Perflow Medical",
+  "phenox GmbH",
+  "Philips",
+  "Prytime Medical Devices, Inc.",
+  "Q3 Medical Group",
+  "Ra Medical Systems, Inc.",
+  "Rapid Medical",
+  "Recor Medical",
+  "Reflow Medical, Inc",
+  "RenalGuard Solutions, Inc.",
+  "Rontis AG",
+  "Scitech Medical",
+  "Shape Memory Medical Inc.",
+  "Shockwave Medical, Inc.",
+  "Simeks Medical",
+  "STARmed Co., Ltd.",
+  "Stryker",
+  "Teleflex",
+  "Terumo Aortic",
+  "Terumo Europe",
+  "Terumo Neuro",
+  "ThermopeutiX, Inc.",
+  "Tokai Medical Products, Inc",
+  "Total Vein Systems",
+  "Translational Research Institute",
+  "Tricol Biomedical Inc.",
+  "TriReme Medical LLC",
+  "TriSalus Life Sciences",
+  "Varian Medical Systems",
+  "VentureMed Group, Inc.",
+  "Veryan Medical",
+  "Vesalio Inc.",
+  "Wallaby Medical, Inc.",
+  "Z-Medica, LLC"
+].sort();
 
 const Companies: React.FC = () => {
   const { user } = useAuth();
@@ -28,6 +144,8 @@ const Companies: React.FC = () => {
   const [departments, setDepartments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [euCompaniesDialogOpen, setEuCompaniesDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [editingCompany, setEditingCompany] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -123,6 +241,33 @@ const Companies: React.FC = () => {
     }
   };
 
+  const handleAddEuCompany = async (companyName: string) => {
+    try {
+      await companyAPI.create({
+        name: companyName,
+        contact_person: '',
+        email: '',
+        phone: '',
+        address: '',
+        department_id: user?.departmentId || null
+      });
+      fetchCompanies();
+      setEuCompaniesDialogOpen(false);
+    } catch (error) {
+      console.error('Fehler beim Hinzufügen der Firma:', error);
+    }
+  };
+
+  const filteredEuCompanies = EU_REGISTERED_COMPANIES.filter(company =>
+    company.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Prüfe welche EU-Firmen bereits in der Datenbank existieren
+  const existingCompanyNames = new Set(companies.map(c => c.name.toLowerCase()));
+  const availableEuCompanies = filteredEuCompanies.filter(
+    company => !existingCompanyNames.has(company.toLowerCase())
+  );
+
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
     { field: 'name', headerName: 'Name', width: 180 },
@@ -157,9 +302,18 @@ const Companies: React.FC = () => {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Firmen</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()}>
-          Neue Firma
-        </Button>
+        <Box display="flex" gap={2}>
+          <Button 
+            variant="outlined" 
+            startIcon={<BusinessIcon />} 
+            onClick={() => setEuCompaniesDialogOpen(true)}
+          >
+            EU-Firmen hinzufügen
+          </Button>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()}>
+            Neue Firma
+          </Button>
+        </Box>
       </Box>
 
       <Paper sx={{ height: 600, width: '100%' }}>
@@ -250,6 +404,66 @@ const Companies: React.FC = () => {
           <Button onClick={handleClose}>Abbrechen</Button>
           <Button onClick={handleSave} variant="contained">
             Speichern
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* EU-Firmen Dialog */}
+      <Dialog 
+        open={euCompaniesDialogOpen} 
+        onClose={() => setEuCompaniesDialogOpen(false)} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle>
+          EU-registrierte Medizintechnik-Firmen
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Wählen Sie Firmen aus, um sie zur lokalen Liste hinzuzufügen
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Suche"
+            variant="outlined"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            sx={{ mb: 2, mt: 1 }}
+            placeholder="Firmenname suchen..."
+          />
+          <Paper variant="outlined" sx={{ maxHeight: 400, overflow: 'auto' }}>
+            <List>
+              {availableEuCompanies.length > 0 ? (
+                availableEuCompanies.map((company, index) => (
+                  <ListItem key={index} disablePadding>
+                    <ListItemButton onClick={() => handleAddEuCompany(company)}>
+                      <ListItemText 
+                        primary={company}
+                        secondary="Klicken zum Hinzufügen"
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                ))
+              ) : (
+                <ListItem>
+                  <ListItemText 
+                    primary={searchTerm ? "Keine Firmen gefunden" : "Alle EU-Firmen bereits hinzugefügt"}
+                    sx={{ textAlign: 'center', color: 'text.secondary' }}
+                  />
+                </ListItem>
+              )}
+            </List>
+          </Paper>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+            {availableEuCompanies.length} von {EU_REGISTERED_COMPANIES.length} Firmen verfügbar
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setEuCompaniesDialogOpen(false);
+            setSearchTerm('');
+          }}>
+            Schließen
           </Button>
         </DialogActions>
       </Dialog>
