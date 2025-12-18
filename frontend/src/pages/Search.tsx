@@ -26,6 +26,10 @@ import {
   Tooltip,
   Card,
   CardContent,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Divider,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -34,8 +38,11 @@ import {
   CheckCircle as CheckCircleIcon,
   Clear as ClearIcon,
   Visibility as ViewIcon,
+  ExpandMore as ExpandMoreIcon,
+  Person as PersonIcon,
+  LocalHospital as HospitalIcon,
 } from '@mui/icons-material';
-import { materialAPI, categoryAPI } from '../services/api';
+import { materialAPI, categoryAPI, interventionAPI } from '../services/api';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -66,11 +73,29 @@ interface SearchResult {
   is_consignment: boolean;
 }
 
+interface InterventionResult {
+  id: number;
+  patient_id: string;
+  patient_name: string | null;
+  started_at: string;
+  finished_at: string | null;
+  notes: string | null;
+  created_by_name: string | null;
+  item_count: number;
+  matching_items?: Array<{
+    material_name: string;
+    lot_number: string;
+    article_number: string;
+    quantity: number;
+  }>;
+}
+
 const Search: React.FC = () => {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [interventionResults, setInterventionResults] = useState<InterventionResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<any[]>([]);
 
@@ -96,10 +121,11 @@ const Search: React.FC = () => {
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
     setResults([]);
+    setInterventionResults([]);
     setError(null);
   };
 
-  // Chargen-Suche (LOT)
+  // Chargen-Suche (LOT) - sucht in Materialien UND Interventionsprotokollen
   const handleLotSearch = async () => {
     if (!lotSearch.trim()) {
       setError('Bitte geben Sie eine Chargennummer ein');
@@ -107,11 +133,23 @@ const Search: React.FC = () => {
     }
     setLoading(true);
     setError(null);
+    setInterventionResults([]);
+    
     try {
-      const response = await materialAPI.search({ lot_number: lotSearch.trim() });
-      setResults(response.data || []);
-      if ((response.data || []).length === 0) {
-        setError('Keine Materialien mit dieser Chargennummer gefunden');
+      // Parallel: Materialien und Interventionsprotokolle durchsuchen
+      const [materialResponse, interventionResponse] = await Promise.all([
+        materialAPI.search({ lot_number: lotSearch.trim() }),
+        interventionAPI.getAll({ lot_number: lotSearch.trim(), limit: 100 })
+      ]);
+      
+      const materials = materialResponse.data || [];
+      const interventions = interventionResponse.data?.protocols || [];
+      
+      setResults(materials);
+      setInterventionResults(interventions);
+      
+      if (materials.length === 0 && interventions.length === 0) {
+        setError('Keine Materialien oder Patientenprotokolle mit dieser Chargennummer gefunden');
       }
     } catch (err) {
       console.error('Suchfehler:', err);
@@ -309,8 +347,8 @@ const Search: React.FC = () => {
               Chargen-Suche (LOT) für Rückrufe
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Geben Sie die Chargennummer (LOT) ein, um alle betroffenen Materialien zu finden.
-              Ideal für Produktrückrufe.
+              Geben Sie die Chargennummer (LOT) ein, um alle betroffenen Materialien <strong>und Patienten</strong> zu finden.
+              Die Suche durchsucht automatisch auch alle Interventionsprotokolle nach verwendeten Chargen.
             </Typography>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} sm={8}>
@@ -352,6 +390,87 @@ const Search: React.FC = () => {
             </Grid>
           </CardContent>
         </Card>
+
+        {/* Interventionsprotokolle Ergebnisse (Patienten) */}
+        {interventionResults.length > 0 && (
+          <Card sx={{ mt: 3, border: '2px solid', borderColor: 'error.main' }}>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <PersonIcon color="error" />
+                <Typography variant="h6" color="error">
+                  ⚠️ Betroffene Patienten ({interventionResults.length})
+                </Typography>
+              </Box>
+              <Alert severity="error" sx={{ mb: 2 }}>
+                <strong>Achtung:</strong> Diese Patienten haben Material mit der Chargennummer "{lotSearch}" erhalten!
+              </Alert>
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'error.light' }}>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Patienten-ID</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Patient</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Datum</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Durchgeführt von</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Material</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Aktionen</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {interventionResults.map((intervention) => (
+                      <TableRow 
+                        key={intervention.id}
+                        sx={{ '&:hover': { bgcolor: 'error.50' } }}
+                      >
+                        <TableCell>
+                          <Chip 
+                            label={intervention.patient_id} 
+                            size="small" 
+                            color="error"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {intervention.patient_name || '-'}
+                        </TableCell>
+                        <TableCell>
+                          {new Date(intervention.started_at).toLocaleDateString('de-DE', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          {intervention.created_by_name || '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={`${intervention.item_count} Material(ien)`}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Tooltip title="Details anzeigen">
+                            <IconButton 
+                              size="small"
+                              onClick={() => navigate(`/protocols/${intervention.id}`)}
+                              color="primary"
+                            >
+                              <ViewIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
+        )}
       </TabPanel>
 
       {/* Verfallsdatum-Suche */}
