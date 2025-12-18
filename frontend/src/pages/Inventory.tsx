@@ -218,7 +218,7 @@ const Inventory: React.FC = () => {
     if (isValidGS1Barcode(barcode)) {
       const gs1Data = parseGS1Barcode(barcode);
       if (gs1Data.gtin) gtin = gs1Data.gtin;
-      if (gs1Data.lot) lotNumber = gs1Data.lot;
+      if (gs1Data.batchNumber) lotNumber = gs1Data.batchNumber;
     }
     
     // Suche Material in der aktuellen Liste
