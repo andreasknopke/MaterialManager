@@ -40,6 +40,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import ChangePasswordDialog from './ChangePasswordDialog';
+import OfflineIndicator from './OfflineIndicator';
 
 const drawerWidth = 240;
 
@@ -184,6 +185,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 icon={<LockIcon />}
               />
             )}
+            
+            {/* Offline-Indikator */}
+            <OfflineIndicator />
+            
             <Typography variant="body2" sx={{ mr: 1, display: { xs: 'none', md: 'block' } }}>
               {user?.username}
             </Typography>

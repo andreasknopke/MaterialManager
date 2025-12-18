@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getDbToken } from '../utils/dbToken';
+import offlineStorage from './offlineStorage';
 
 // Use relative URL for API calls - nginx will proxy to backend
 const API_BASE_URL = '/api';
@@ -33,14 +34,82 @@ api.interceptors.request.use(
   }
 );
 
-// Response Interceptor
+// Response Interceptor mit Offline-Unterstützung
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response) => {
+    // Erfolgreiche GET-Requests cachen
+    if (response.config.method === 'get' && response.status === 200) {
+      const cacheKey = response.config.url || '';
+      if (cacheKey && shouldCache(cacheKey)) {
+        offlineStorage.cacheData(cacheKey, response.data);
+      }
+    }
+    return response;
+  },
+  async (error) => {
+    // Bei Netzwerk-Fehler: Versuche aus Cache zu laden (GET) oder Queue (POST/PUT/DELETE)
+    if (!error.response && !navigator.onLine) {
+      const config = error.config;
+      
+      if (config.method === 'get') {
+        // Versuche gecachte Daten zurückzugeben
+        const cacheKey = config.url;
+        const cachedData = await offlineStorage.getCachedData(cacheKey);
+        
+        if (cachedData) {
+          console.log('[API] Returning cached data for:', cacheKey);
+          return {
+            data: cachedData,
+            status: 200,
+            statusText: 'OK (cached)',
+            headers: { 'x-from-cache': 'true', 'x-offline-mode': 'true' },
+            config
+          };
+        }
+      } else if (['post', 'put', 'delete'].includes(config.method || '')) {
+        // Änderungen in Queue speichern
+        await offlineStorage.addPendingChange({
+          url: `${API_BASE_URL}${config.url}`,
+          method: config.method?.toUpperCase() || 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': config.headers.Authorization || '',
+            'X-DB-Token': config.headers['X-DB-Token'] || ''
+          },
+          body: config.data || ''
+        });
+        
+        // Erfolg simulieren für Offline-Betrieb
+        return {
+          data: { 
+            message: 'Änderung wird bei Verbindung synchronisiert',
+            offline: true,
+            queued: true 
+          },
+          status: 202,
+          statusText: 'Accepted (offline)',
+          headers: { 'x-offline-mode': 'true' },
+          config
+        };
+      }
+    }
+    
     console.error('API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   }
 );
+
+// Bestimme, welche Routen gecacht werden sollen
+function shouldCache(url: string): boolean {
+  const cacheableRoutes = [
+    '/cabinets',
+    '/materials',
+    '/categories',
+    '/companies',
+    '/units'
+  ];
+  return cacheableRoutes.some(route => url.includes(route));
+}
 
 export default api;
 

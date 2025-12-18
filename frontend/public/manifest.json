@@ -1,0 +1,21 @@
+{
+  "name": "Material Manager - Angiographie",
+  "short_name": "MatManager",
+  "description": "Materialmanagementsystem für medizinische Einrichtungen mit Offline-Unterstützung",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1976d2",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["medical", "productivity", "utilities"],
+  "lang": "de-DE",
+  "prefer_related_applications": false
+}

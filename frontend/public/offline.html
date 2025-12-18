@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1976d2">
+  <title>Material Manager - Offline</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      padding: 20px;
+    }
+    .offline-container {
+      text-align: center;
+      max-width: 500px;
+    }
+    .offline-icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(0.95); }
+    }
+    h1 {
+      font-size: 28px;
+      margin-bottom: 16px;
+      font-weight: 500;
+    }
+    p {
+      font-size: 16px;
+      opacity: 0.9;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .status-box {
+      background: rgba(255,255,255,0.15);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .status-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+    .status-item:last-child {
+      border-bottom: none;
+    }
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ff9800;
+    }
+    .status-dot.synced {
+      background: #4caf50;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 32px;
+      background: white;
+      color: #1976d2;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    .pending-count {
+      font-size: 32px;
+      font-weight: bold;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .pending-label {
+      font-size: 14px;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="offline-container">
+    <div class="offline-icon">📶</div>
+    <h1>Keine Internetverbindung</h1>
+    <p>
+      Sie befinden sich im Offline-Modus. Ihre Änderungen werden lokal gespeichert 
+      und automatisch synchronisiert, sobald die Verbindung wiederhergestellt ist.
+    </p>
+    
+    <div class="status-box">
+      <div class="status-item">
+        <span>Ausstehende Änderungen</span>
+        <span id="pending-count">
+          <span class="pending-count">0</span>
+          <span class="pending-label">Einträge</span>
+        </span>
+      </div>
+      <div class="status-item">
+        <span>Sync-Status</span>
+        <div class="status-dot" id="sync-status"></div>
+      </div>
+      <div class="status-item">
+        <span>Letzter Sync</span>
+        <span id="last-sync">Nie</span>
+      </div>
+    </div>
+    
+    <button class="btn" onclick="tryReconnect()">
+      🔄 Verbindung erneut versuchen
+    </button>
+  </div>
+
+  <script>
+    function tryReconnect() {
+      window.location.reload();
+    }
+
+    // Check für Online-Status
+    window.addEventListener('online', () => {
+      window.location.reload();
+    });
+
+    // Lade Pending-Count aus localStorage
+    try {
+      const pendingChanges = JSON.parse(localStorage.getItem('pendingChanges') || '[]');
+      document.getElementById('pending-count').innerHTML = `
+        <span class="pending-count">${pendingChanges.length}</span>
+        <span class="pending-label">Einträge</span>
+      `;
+      
+      if (pendingChanges.length === 0) {
+        document.getElementById('sync-status').classList.add('synced');
+      }
+      
+      const lastSync = localStorage.getItem('lastSyncTime');
+      if (lastSync) {
+        const date = new Date(parseInt(lastSync));
+        document.getElementById('last-sync').textContent = date.toLocaleString('de-DE');
+      }
+    } catch (e) {
+      console.log('Error loading pending changes:', e);
+    }
+  </script>
+</body>
+</html>
