@@ -506,7 +506,7 @@ const Inventory: React.FC = () => {
             <Button
               variant="outlined"
               color="secondary"
-              onClick={() => { setInventoryMode(false); setConfirmedMaterials(new Map()); stopScanner(); }}
+              onClick={() => { setInventoryMode(false); setConfirmedMaterials(new Map()); }}
             >
               Inventur beenden
             </Button>
@@ -736,7 +736,7 @@ const Inventory: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button onClick={() => { setDialogOpen(false); setInventoryMode(false); stopScanner(); }}>
+          <Button onClick={() => { setDialogOpen(false); setInventoryMode(false); }}>
             Schließen
           </Button>
           <Button 
