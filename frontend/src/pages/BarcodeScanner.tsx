@@ -214,10 +214,13 @@ const BarcodeScanner: React.FC = () => {
       scanMode?: 'gs1' | 'qr';
       scanPatientBarcode?: boolean;
       assumeGS1?: boolean;
+      inventoryCheck?: boolean;
+      cabinetId?: number;
+      cabinetName?: string;
     } | null;
     
     // Auto-Open für verschiedene Szenarien
-    if ((state?.autoOpenCamera || state?.scanCabinet || state?.returnToMaterialForm || state?.scanPatientBarcode) && scannerSettings.cameraEnabled) {
+    if ((state?.autoOpenCamera || state?.scanCabinet || state?.returnToMaterialForm || state?.scanPatientBarcode || state?.inventoryCheck) && scannerSettings.cameraEnabled) {
       console.log('Auto-opening camera:', state);
       setCameraOpen(true);
     }
@@ -394,14 +397,33 @@ const BarcodeScanner: React.FC = () => {
                     // Stream stoppen
                     stream.getTracks().forEach(track => track.stop());
                     
-                    // Check if we're scanning for MaterialForm
+                    // Check if we're scanning for MaterialForm or Inventory
                     const state = location.state as { 
                       scanCabinet?: boolean; 
                       returnTo?: string;
                       returnToMaterialForm?: boolean;
                       scanMode?: 'gs1' | 'qr';
                       materialId?: string;
+                      inventoryCheck?: boolean;
+                      cabinetId?: number;
+                      cabinetName?: string;
                     } | null;
+                    
+                    // Inventur-Prüfung: Zurück zur Inventur-Seite mit gescanntem Code
+                    if (state?.inventoryCheck) {
+                      console.log('Inventur-Scan mit Code:', scannedCode);
+                      setCameraOpen(false);
+                      setScanLineColor('red');
+                      navigate('/inventory', {
+                        state: {
+                          fromScanner: true,
+                          scannedCode: scannedCode,
+                          cabinetId: state.cabinetId,
+                          cabinetName: state.cabinetName,
+                        }
+                      });
+                      return;
+                    }
                     
                     if (state?.returnToMaterialForm) {
                       console.log('Rückkehr zu MaterialForm mit Code:', scannedCode);
@@ -1145,11 +1167,14 @@ const BarcodeScanner: React.FC = () => {
     console.log('=== handleScannedBarcode START ===');
     console.log('scannedCode:', scannedCode);
     
-    // Prüfe ob wir im Patienten-Barcode-Scan-Modus sind
+    // Prüfe ob wir im Patienten-Barcode-Scan-Modus oder Inventur-Modus sind
     const locState = location.state as { 
       scanPatientBarcode?: boolean; 
       returnTo?: string;
       assumeGS1?: boolean;
+      inventoryCheck?: boolean;
+      cabinetId?: number;
+      cabinetName?: string;
     } | null;
     
     if (locState?.scanPatientBarcode) {
@@ -1159,6 +1184,21 @@ const BarcodeScanner: React.FC = () => {
       navigate(locState.returnTo || '/', { 
         state: { scannedPatientBarcode: scannedCode },
         replace: true 
+      });
+      return;
+    }
+    
+    // Inventur-Modus: Barcode zur Inventur-Seite zurückgeben
+    if (locState?.inventoryCheck) {
+      console.log('Inventur-Modus: Barcode zurückgeben zur Inventur');
+      setCameraOpen(false);
+      navigate('/inventory', {
+        state: {
+          fromScanner: true,
+          scannedCode: scannedCode,
+          cabinetId: locState.cabinetId,
+          cabinetName: locState.cabinetName,
+        }
       });
       return;
     }

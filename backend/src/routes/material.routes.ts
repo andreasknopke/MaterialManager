@@ -653,11 +653,14 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 // POST Material-Eingang
 router.post('/:id/stock-in', async (req: Request, res: Response) => {
-  const { quantity, reference_number, notes } = req.body;
+  const { quantity, reference_number, notes, usage_type } = req.body;
   
   // user_id und user_name vom authentifizierten User
   const userId = req.user?.id;
   const userName = req.user?.fullName || req.user?.username || 'Unbekannt';
+  
+  // usage_type: stock_in (normal), correction (Inventur-Korrektur)
+  const validUsageType = ['stock_in', 'correction'].includes(usage_type) ? usage_type : 'stock_in';
   
   if (!quantity || quantity <= 0) {
     return res.status(400).json({ error: 'Ungültige Menge' });
@@ -702,12 +705,12 @@ router.post('/:id/stock-in', async (req: Request, res: Response) => {
       [newStock, req.params.id]
     );
     
-    // Transaktion aufzeichnen
+    // Transaktion aufzeichnen (mit usage_type)
     await connection.query(
       `INSERT INTO material_transactions 
-       (material_id, transaction_type, quantity, previous_stock, new_stock, reference_number, notes, user_id, user_name, unit_id)
-       VALUES (?, 'in', ?, ?, ?, ?, ?, ?, ?, (SELECT unit_id FROM materials WHERE id = ?))`,
-      [req.params.id, quantity, previousStock, newStock, reference_number, notes, userId, userName, req.params.id]
+       (material_id, transaction_type, usage_type, quantity, previous_stock, new_stock, reference_number, notes, user_id, user_name, unit_id)
+       VALUES (?, 'in', ?, ?, ?, ?, ?, ?, ?, ?, (SELECT unit_id FROM materials WHERE id = ?))`,
+      [req.params.id, validUsageType, quantity, previousStock, newStock, reference_number, notes, userId, userName, req.params.id]
     );
     
     await connection.commit();
