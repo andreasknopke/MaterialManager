@@ -16,6 +16,7 @@ import statisticsRoutes from './routes/statistics.routes';
 import shapeRoutes from './routes/shape.routes';
 import interventionRoutes from './routes/intervention.routes';
 import reorderRoutes from './routes/reorder.routes';
+import auditLogRoutes from './routes/auditLog.routes';
 
 dotenv.config();
 
@@ -76,6 +77,7 @@ app.use('/api/statistics', statisticsRoutes);
 app.use('/api/shapes', shapeRoutes);
 app.use('/api/interventions', interventionRoutes);
 app.use('/api/reorder', reorderRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 
 // Health Check
 app.get('/health', (req: Request, res: Response) => {

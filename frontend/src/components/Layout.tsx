@@ -37,6 +37,7 @@ import {
   Analytics as AnalyticsIcon,
   LocalHospital as HospitalIcon,
   ShoppingCart as ShoppingCartIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import ChangePasswordDialog from './ChangePasswordDialog';
@@ -102,6 +103,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const adminItems = [
     { text: 'Administration', icon: <SettingsIcon />, path: '/admin' },
     ...(isAdmin ? [{ text: 'Benutzerverwaltung', icon: <PeopleIcon />, path: '/users' }] : []),
+    ...(isAdmin ? [{ text: 'Audit-Log', icon: <HistoryIcon />, path: '/audit-logs' }] : []),
   ];
 
   const drawer = (

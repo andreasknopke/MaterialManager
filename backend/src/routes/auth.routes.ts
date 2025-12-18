@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import pool from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { generateToken, authenticate, requireAdmin, requireRoot } from '../middleware/auth';
+import { auditUser } from '../utils/auditLogger';
 
 const router = Router();
 
@@ -165,6 +166,9 @@ router.post('/login', async (req: Request, res: Response) => {
       'INSERT INTO user_audit_log (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)',
       [user.id, 'login', JSON.stringify({ method: 'password' }), req.ip]
     );
+
+    // Zentrales Audit-Log
+    await auditUser.login(req, { id: user.id, username: user.username });
 
     res.json({
       token,

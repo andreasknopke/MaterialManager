@@ -23,6 +23,7 @@ import Units from './pages/Units';
 import Users from './pages/Users';
 import InterventionProtocols from './pages/InterventionProtocols';
 import Reorder from './pages/Reorder';
+import AuditLogs from './pages/AuditLogs';
 import { extractAndSaveDbTokenFromUrl } from './utils/dbToken';
 
 function App() {
@@ -198,6 +199,16 @@ function App() {
               <ProtectedRoute requireAdmin>
                 <Layout>
                   <Users />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/audit-logs"
+            element={
+              <ProtectedRoute requireAdmin>
+                <Layout>
+                  <AuditLogs />
                 </Layout>
               </ProtectedRoute>
             }

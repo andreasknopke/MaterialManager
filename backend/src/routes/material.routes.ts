@@ -3,6 +3,7 @@ import pool from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { authenticate } from '../middleware/auth';
 import { getDepartmentFilter } from '../utils/departmentFilter';
+import { auditMaterial } from '../utils/auditLogger';
 
 const router = Router();
 
@@ -513,6 +514,12 @@ router.post('/', async (req: Request, res: Response) => {
     
     await connection.commit();
     
+    // Audit-Log erstellen
+    await auditMaterial.create(req, { id: materialId, name }, {
+      category_id, company_id, cabinet_id, compartment_id, 
+      current_stock: current_stock || 1, lot_number, article_number, unit_id: materialUnitId
+    });
+    
     res.status(201).json({
       id: materialId,
       message: 'Material erfolgreich erstellt'
@@ -632,6 +639,12 @@ router.put('/:id', async (req: Request, res: Response) => {
       // relatedUpdated entfernt - nicht mehr nötig mit normalisierter DB
       relatedUpdated: 0
     });
+    
+    // Audit-Log erstellen (nach Response für Performance)
+    await auditMaterial.update(req, { id: Number(req.params.id), name }, 
+      {}, // Old values - nicht einfach zu ermitteln ohne zusätzliche Query
+      { category_id, company_id, cabinet_id, name, lot_number, article_number, is_consignment }
+    );
   } catch (error) {
     console.error('Fehler beim Aktualisieren des Materials:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
@@ -698,6 +711,15 @@ router.post('/:id/stock-in', async (req: Request, res: Response) => {
     );
     
     await connection.commit();
+    
+    // Audit-Log für Stock-In
+    const [materialInfo] = await pool.query<RowDataPacket[]>(
+      'SELECT name FROM materials WHERE id = ?',
+      [req.params.id]
+    );
+    if (materialInfo.length > 0) {
+      await auditMaterial.stockIn(req, { id: Number(req.params.id), name: materialInfo[0].name }, quantity, previousStock);
+    }
     
     res.json({
       message: 'Eingang erfolgreich gebucht',
@@ -781,6 +803,15 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
     
     await connection.commit();
     
+    // Audit-Log für Stock-Out
+    const [materialInfo] = await pool.query<RowDataPacket[]>(
+      'SELECT name FROM materials WHERE id = ?',
+      [req.params.id]
+    );
+    if (materialInfo.length > 0) {
+      await auditMaterial.stockOut(req, { id: Number(req.params.id), name: materialInfo[0].name }, quantity, previousStock);
+    }
+    
     res.json({
       message: shouldDeactivate ? 'Ausgang gebucht - Material deaktiviert (Bestand 0)' : 'Ausgang erfolgreich gebucht',
       previous_stock: previousStock,
@@ -852,6 +883,15 @@ router.delete('/:id', async (req: Request, res: Response) => {
     );
     
     await connection.commit();
+    
+    // Audit-Log für Delete
+    const [materialInfo] = await pool.query<RowDataPacket[]>(
+      'SELECT name FROM materials WHERE id = ?',
+      [req.params.id]
+    );
+    if (materialInfo.length > 0) {
+      await auditMaterial.delete(req, { id: Number(req.params.id), name: materialInfo[0].name });
+    }
     
     res.json({ message: 'Material erfolgreich deaktiviert' });
   } catch (error) {

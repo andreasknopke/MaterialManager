@@ -244,3 +244,21 @@ export const interventionAPI = {
   }) => api.post('/interventions', data),
   delete: (id: number) => api.delete(`/interventions/${id}`),
 };
+
+// Audit-Logs (nur für Admins)
+export const auditLogAPI = {
+  getAll: (params?: { 
+    page?: number; 
+    limit?: number; 
+    action?: string; 
+    entity_type?: string; 
+    user_id?: number;
+    start_date?: string;
+    end_date?: string;
+    search?: string;
+  }) => api.get('/audit-logs', { params }),
+  getStats: () => api.get('/audit-logs/stats'),
+  getByEntity: (type: string, id: number) => api.get(`/audit-logs/entity/${type}/${id}`),
+  getActions: () => api.get('/audit-logs/actions'),
+  getEntityTypes: () => api.get('/audit-logs/entity-types'),
+};
