@@ -95,7 +95,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { text: 'Einheiten', icon: <BusinessIcon />, path: '/units' },
     { text: 'Kategorien', icon: <CategoryIcon />, path: '/categories' },
     { text: 'Firmen', icon: <BusinessIcon />, path: '/companies' },
-    { text: 'Barcode Scanner', icon: <QrCodeScannerIcon />, path: '/scanner' },
     { text: 'Berichte', icon: <AssessmentIcon />, path: '/reports' },
     { text: 'Statistiken', icon: <AnalyticsIcon />, path: '/statistics' },
   ];
