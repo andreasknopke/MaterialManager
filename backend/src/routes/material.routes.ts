@@ -22,13 +22,17 @@ router.get('/product-names', async (req: Request, res: Response) => {
     
     const searchTerm = `${search}%`;
     
-    // Suche einzigartige Produktnamen aus der products-Tabelle
+    // Kombiniere Produktnamen aus products-Tabelle UND product_name_suggestions
+    // Duplikate werden durch UNION automatisch entfernt
     const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT DISTINCT name FROM products 
-       WHERE name LIKE ? 
+      `SELECT DISTINCT name FROM (
+         SELECT name FROM products WHERE name LIKE ?
+         UNION
+         SELECT name FROM product_name_suggestions WHERE name LIKE ?
+       ) AS combined_names
        ORDER BY name 
        LIMIT 20`,
-      [searchTerm]
+      [searchTerm, searchTerm]
     );
     
     const names = rows.map((row: RowDataPacket) => row.name);
