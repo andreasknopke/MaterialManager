@@ -67,7 +67,7 @@ router.get('/', async (req: Request, res: Response) => {
     
     // Logs abrufen
     const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT al.*, u.display_name as user_display_name
+      `SELECT al.*, u.full_name as user_display_name
        FROM audit_logs al
        LEFT JOIN users u ON al.user_id = u.id
        WHERE ${whereClause}
@@ -142,29 +142,8 @@ router.get('/stats', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/audit-logs/entity/:type/:id - Logs für spezifische Entität
-router.get('/entity/:type/:id', async (req: Request, res: Response) => {
-  try {
-    const { type, id } = req.params;
-    
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT al.*, u.display_name as user_display_name
-       FROM audit_logs al
-       LEFT JOIN users u ON al.user_id = u.id
-       WHERE al.entity_type = ? AND al.entity_id = ?
-       ORDER BY al.created_at DESC
-       LIMIT 100`,
-      [type, id]
-    );
-    
-    res.json(rows);
-  } catch (error) {
-    console.error('Fehler beim Abrufen der Entity-Logs:', error);
-    res.status(500).json({ error: 'Datenbankfehler' });
-  }
-});
-
 // GET /api/audit-logs/actions - Alle verfügbaren Aktionstypen
+// WICHTIG: Diese Route muss VOR /entity/:type/:id stehen!
 router.get('/actions', async (_req: Request, res: Response) => {
   try {
     const [rows] = await pool.query<RowDataPacket[]>(
@@ -178,6 +157,7 @@ router.get('/actions', async (_req: Request, res: Response) => {
 });
 
 // GET /api/audit-logs/entity-types - Alle verfügbaren Entity-Typen
+// WICHTIG: Diese Route muss VOR /entity/:type/:id stehen!
 router.get('/entity-types', async (_req: Request, res: Response) => {
   try {
     const [rows] = await pool.query<RowDataPacket[]>(
@@ -186,6 +166,28 @@ router.get('/entity-types', async (_req: Request, res: Response) => {
     res.json(rows.map(r => r.entity_type));
   } catch (error) {
     console.error('Fehler beim Abrufen der Entity-Typen:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// GET /api/audit-logs/entity/:type/:id - Logs für spezifische Entität
+router.get('/entity/:type/:id', async (req: Request, res: Response) => {
+  try {
+    const { type, id } = req.params;
+    
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT al.*, u.full_name as user_display_name
+       FROM audit_logs al
+       LEFT JOIN users u ON al.user_id = u.id
+       WHERE al.entity_type = ? AND al.entity_id = ?
+       ORDER BY al.created_at DESC
+       LIMIT 100`,
+      [type, id]
+    );
+    
+    res.json(rows);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Entity-Logs:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
   }
 });
