@@ -21,6 +21,7 @@ import {
   Delete as DeleteIcon,
   QrCode2 as QrCodeIcon,
   Print as PrintIcon,
+  OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
 import { QRCodeSVG } from 'qrcode.react';
 import { categoryAPI, cabinetAPI } from '../services/api';
@@ -31,7 +32,7 @@ const Categories: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
-  const [formData, setFormData] = useState({ name: '', description: '', min_quantity: 0, ops_code: '', zusatzentgelt: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', min_quantity: 0, ops_code: '', zusatzentgelt: '', endo_today_link: '' });
 
   // QR-Code Dialog State
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
@@ -75,11 +76,12 @@ const Categories: React.FC = () => {
         description: category.description || '',
         min_quantity: category.min_quantity || 0,
         ops_code: category.ops_code || '',
-        zusatzentgelt: category.zusatzentgelt || ''
+        zusatzentgelt: category.zusatzentgelt || '',
+        endo_today_link: category.endo_today_link || ''
       });
     } else {
       setEditingCategory(null);
-      setFormData({ name: '', description: '', min_quantity: 0, ops_code: '', zusatzentgelt: '' });
+      setFormData({ name: '', description: '', min_quantity: 0, ops_code: '', zusatzentgelt: '', endo_today_link: '' });
     }
     setOpen(true);
   };
@@ -246,6 +248,24 @@ const Categories: React.FC = () => {
     { field: 'ops_code', headerName: 'OPS-Code', width: 120 },
     { field: 'zusatzentgelt', headerName: 'Zusatzentgelt (ZE)', width: 140 },
     { 
+      field: 'endo_today_link', 
+      headerName: 'Endo Today', 
+      width: 100,
+      renderCell: (params) => (
+        params.value ? (
+          <Tooltip title="Endovascular Today öffnen">
+            <IconButton 
+              size="small" 
+              onClick={() => window.open(params.value, '_blank')}
+              color="primary"
+            >
+              <OpenInNewIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        ) : <Typography variant="body2" color="text.disabled">-</Typography>
+      )
+    },
+    { 
       field: 'min_quantity', 
       headerName: 'Mindestmenge', 
       width: 130,
@@ -353,6 +373,15 @@ const Categories: React.FC = () => {
             margin="normal"
             helperText="Zusatzentgelt-Code für Krankenhausabrechnung (optional)"
             placeholder="z.B. ZE2025-123"
+          />
+          <TextField
+            fullWidth
+            label="Endovascular Today Link"
+            value={formData.endo_today_link}
+            onChange={(e) => setFormData({ ...formData, endo_today_link: e.target.value })}
+            margin="normal"
+            helperText="Link zur Endovascular Today Seite (optional)"
+            placeholder="https://evtoday.com/..."
           />
         </DialogContent>
         <DialogActions>

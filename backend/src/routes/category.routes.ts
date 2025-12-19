@@ -65,7 +65,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 // POST neue Kategorie
 router.post('/', async (req: Request, res: Response) => {
-  const { name, description, min_quantity, ops_code, zusatzentgelt } = req.body;
+  const { name, description, min_quantity, ops_code, zusatzentgelt, endo_today_link } = req.body;
   
   if (!name) {
     return res.status(400).json({ error: 'Name ist erforderlich' });
@@ -80,8 +80,8 @@ router.post('/', async (req: Request, res: Response) => {
   
   try {
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO categories (name, description, min_quantity, ops_code, zusatzentgelt, unit_id) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, description, min_quantity || 0, ops_code || null, zusatzentgelt || null, unit_id]
+      'INSERT INTO categories (name, description, min_quantity, ops_code, zusatzentgelt, endo_today_link, unit_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [name, description, min_quantity || 0, ops_code || null, zusatzentgelt || null, endo_today_link || null, unit_id]
     );
     
     res.status(201).json({
@@ -99,7 +99,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 // PUT Kategorie aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
-  const { name, description, min_quantity, ops_code, zusatzentgelt } = req.body;
+  const { name, description, min_quantity, ops_code, zusatzentgelt, endo_today_link } = req.body;
   
   try {
     // Non-Root User können nur Kategorien ihrer Abteilung bearbeiten
@@ -114,8 +114,8 @@ router.put('/:id', async (req: Request, res: Response) => {
     }
     
     const [result] = await pool.query<ResultSetHeader>(
-      'UPDATE categories SET name = ?, description = ?, min_quantity = ?, ops_code = ?, zusatzentgelt = ? WHERE id = ?',
-      [name, description, min_quantity || 0, ops_code || null, zusatzentgelt || null, req.params.id]
+      'UPDATE categories SET name = ?, description = ?, min_quantity = ?, ops_code = ?, zusatzentgelt = ?, endo_today_link = ? WHERE id = ?',
+      [name, description, min_quantity || 0, ops_code || null, zusatzentgelt || null, endo_today_link || null, req.params.id]
     );
     
     if (result.affectedRows === 0) {

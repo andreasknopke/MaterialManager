@@ -740,14 +740,6 @@ const Inventory: React.FC = () => {
             Schließen
           </Button>
           <Button 
-            onClick={handleStartRefill}
-            variant="contained"
-            startIcon={<QrCodeScannerIcon />}
-            color="primary"
-          >
-            Material scannen
-          </Button>
-          <Button 
             onClick={() => setClearDialogOpen(true)}
             variant="outlined"
             color="error"
