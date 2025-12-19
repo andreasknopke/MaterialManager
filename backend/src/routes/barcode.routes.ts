@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import pool from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { auditMaterial } from '../utils/auditLogger';
 
 const router = Router();
 
@@ -377,6 +378,13 @@ router.post('/material/:materialId/remove', async (req: Request, res: Response) 
     
     await connection.commit();
     
+    // Audit-Log für Stock-Out (für jedes betroffene Material)
+    for (const mat of materials) {
+      if (processedMaterials.includes(mat.id)) {
+        await auditMaterial.stockOut(req, { id: mat.id, name: mat.name }, quantity, mat.current_stock);
+      }
+    }
+    
     res.json({
       message: totalNewStock === 0 ? 'Material vollständig entnommen und deaktiviert' : 'Entnahme erfolgreich',
       material_ids: processedMaterials,
@@ -449,6 +457,9 @@ router.post('/material/:materialId/add', async (req: Request, res: Response) => 
     
     await connection.commit();
     
+    // Audit-Log für Stock-In
+    await auditMaterial.stockIn(req, { id: materialId, name: material.name }, quantity, previousStock);
+    
     res.json({
       message: 'Bestand erfolgreich hinzugefügt',
       material_id: materialId,
@@ -495,7 +506,7 @@ router.post('/scan-out', async (req: Request, res: Response) => {
     
     // Bestand prüfen und aktualisieren
     const [materials] = await connection.query<RowDataPacket[]>(
-      'SELECT current_stock FROM materials WHERE id = ?',
+      'SELECT current_stock, name FROM materials WHERE id = ?',
       [materialId]
     );
     
@@ -504,6 +515,7 @@ router.post('/scan-out', async (req: Request, res: Response) => {
     }
     
     const previousStock = materials[0].current_stock;
+    const materialName = materials[0].name;
     const newStock = previousStock - quantity;
     
     if (newStock < 0) {
@@ -524,6 +536,9 @@ router.post('/scan-out', async (req: Request, res: Response) => {
     );
     
     await connection.commit();
+    
+    // Audit-Log für Stock-Out
+    await auditMaterial.stockOut(req, { id: materialId, name: materialName }, quantity, previousStock);
     
     res.json({
       message: 'Ausgang erfolgreich gebucht',

@@ -237,6 +237,7 @@ export const interventionAPI = {
       materialName: string;
       articleNumber: string;
       lotNumber: string;
+      expiryDate?: string;
       gtin?: string;
       quantity: number;
       timestamp: string;

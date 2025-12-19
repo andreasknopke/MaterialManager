@@ -11,6 +11,23 @@ const toMySQLDatetime = (isoString: string | Date | null): string => {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 };
 
+// Hilfsfunktion: Verfallsdatum zu MySQL-DATE konvertieren (YYYY-MM-DD)
+const toMySQLDate = (dateString: string | null | undefined): string | null => {
+  if (!dateString) return null;
+  try {
+    // Falls bereits im Format YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return dateString;
+    }
+    // Falls ISO-Format oder anderes Datumsformat
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return null;
+    return date.toISOString().slice(0, 10); // YYYY-MM-DD
+  } catch {
+    return null;
+  }
+};
+
 // Interface für Protokoll-Item
 interface ProtocolItem {
   materialName: string;
@@ -209,7 +226,7 @@ router.post('/', async (req: Request, res: Response) => {
           item.materialName,
           item.articleNumber || null,
           item.lotNumber || null,
-          item.expiryDate || null,
+          toMySQLDate(item.expiryDate),
           item.gtin || null,
           item.quantity || 1,
           item.isConsignment ? 1 : 0,
@@ -225,10 +242,14 @@ router.post('/', async (req: Request, res: Response) => {
       protocol_id: protocolId,
       message: `Interventionsprotokoll mit ${items.length} Einträgen gespeichert`
     });
-  } catch (error) {
+  } catch (error: any) {
     await connection.rollback();
     console.error('Fehler beim Speichern des Protokolls:', error);
-    res.status(500).json({ error: 'Datenbankfehler beim Speichern' });
+    console.error('Error details:', error.message, error.code, error.sqlMessage);
+    res.status(500).json({ 
+      error: 'Datenbankfehler beim Speichern',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   } finally {
     connection.release();
   }
