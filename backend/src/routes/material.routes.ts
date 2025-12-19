@@ -10,6 +10,35 @@ const router = Router();
 // Alle Routes benötigen Authentifizierung
 router.use(authenticate);
 
+// GET Produktnamen-Vorschläge für Autocomplete
+router.get('/product-names', async (req: Request, res: Response) => {
+  try {
+    const { search } = req.query;
+    
+    // Wenn kein Suchbegriff, gib leere Liste zurück
+    if (!search || String(search).length < 1) {
+      return res.json([]);
+    }
+    
+    const searchTerm = `${search}%`;
+    
+    // Suche einzigartige Produktnamen aus der products-Tabelle
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT DISTINCT name FROM products 
+       WHERE name LIKE ? 
+       ORDER BY name 
+       LIMIT 20`,
+      [searchTerm]
+    );
+    
+    const names = rows.map((row: RowDataPacket) => row.name);
+    res.json(names);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Produktnamen:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 // GET Material-Template anhand Name (für Auto-Fill bei Namenseingabe)
 router.get('/by-name/:name', async (req: Request, res: Response) => {
   try {

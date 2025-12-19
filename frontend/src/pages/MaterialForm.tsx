@@ -24,6 +24,7 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Switch,
+  Autocomplete,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -226,6 +227,10 @@ const MaterialForm: React.FC = () => {
   const [units, setUnits] = useState<any[]>([]);
   const [compartments, setCompartments] = useState<Compartment[]>([]);
   const [shapes, setShapes] = useState<Shape[]>([]);
+  
+  // Produktnamen-Autocomplete
+  const [productNameSuggestions, setProductNameSuggestions] = useState<string[]>([]);
+  const [productNameLoading, setProductNameLoading] = useState(false);
 
   // EU-Firmen Dialog
   const [euCompaniesDialogOpen, setEuCompaniesDialogOpen] = useState(false);
@@ -564,58 +569,72 @@ const MaterialForm: React.FC = () => {
       const cabinetId = value ? Number(value) : '';
       setFormData(prev => ({ ...prev, cabinet_id: cabinetId, compartment_id: '' }));
     } else if (field === 'name') {
-      // Name-Feld: Datenbank-Lookup wenn Kategorie und Firma leer sind
+      // Name-Feld: nur Wert setzen, Vorschläge werden separat geladen
+      // DB-Lookup passiert erst bei Enter (siehe handleNameKeyDown)
       setFormData(prev => ({ ...prev, name: value }));
-      
-      // Debounced Name-Suche
-      if (nameSearchTimer) {
-        clearTimeout(nameSearchTimer);
-      }
-      
-      if (value.trim().length >= 3) {
-        nameSearchTimer = setTimeout(async () => {
-          // Prüfen ob Kategorie und Firma noch leer sind
-          setFormData(prev => {
-            // Nur suchen wenn beide Felder leer sind
-            if (!prev.category_id && !prev.company_id) {
-              (async () => {
-                try {
-                  console.log('Suche nach Materialname:', value);
-                  const response = await materialAPI.getByName(value.trim());
-                  if (response.data?.found && response.data?.template) {
-                    const template = response.data.template;
-                    console.log('Name Template gefunden:', template);
-                    
-                    setFormData(prevData => {
-                      const updates: Partial<MaterialFormData> = {};
-                      if (!prevData.category_id && template.category_id) {
-                        updates.category_id = template.category_id;
-                      }
-                      if (!prevData.company_id && template.company_id) {
-                        updates.company_id = template.company_id;
-                      }
-                      
-                      if (Object.keys(updates).length > 0) {
-                        console.log('Name-Lookup Updates:', updates);
-                        setSuccess(`Kategorie/Firma aus bestehendem Material "${template.name}" übernommen!`);
-                        setTimeout(() => setSuccess(null), 4000);
-                        return { ...prevData, ...updates };
-                      }
-                      return prevData;
-                    });
-                  }
-                } catch (err) {
-                  // 404 oder kein Match ist OK
-                  console.log('Kein exakter Name-Match gefunden');
-                }
-              })();
-            }
-            return prev;
-          });
-        }, 800); // Etwas länger warten für manuelle Eingabe
-      }
     } else {
       setFormData({ ...formData, [field]: value });
+    }
+  };
+
+  // Produktnamen-Vorschläge laden für Autocomplete
+  const fetchProductNameSuggestions = async (search: string) => {
+    if (!search || search.length < 1) {
+      setProductNameSuggestions([]);
+      return;
+    }
+    
+    // Debounced Suche
+    if (nameSearchTimer) {
+      clearTimeout(nameSearchTimer);
+    }
+    
+    nameSearchTimer = setTimeout(async () => {
+      setProductNameLoading(true);
+      try {
+        const response = await materialAPI.getProductNames(search);
+        setProductNameSuggestions(response.data || []);
+      } catch (error) {
+        console.error('Fehler beim Laden der Produktnamen:', error);
+        setProductNameSuggestions([]);
+      } finally {
+        setProductNameLoading(false);
+      }
+    }, 200);
+  };
+
+  // DB-Lookup für Kategorie/Firma bei Enter im Namensfeld
+  const handleNameLookup = async (name: string) => {
+    if (!name || name.trim().length < 3) return;
+    
+    // Nur suchen wenn Kategorie und Firma leer sind
+    if (formData.category_id || formData.company_id) return;
+    
+    try {
+      console.log('Suche nach Materialname:', name);
+      const response = await materialAPI.getByName(name.trim());
+      if (response.data?.found && response.data?.template) {
+        const template = response.data.template;
+        console.log('Name Template gefunden:', template);
+        
+        const updates: Partial<MaterialFormData> = {};
+        if (!formData.category_id && template.category_id) {
+          updates.category_id = template.category_id;
+        }
+        if (!formData.company_id && template.company_id) {
+          updates.company_id = template.company_id;
+        }
+        
+        if (Object.keys(updates).length > 0) {
+          console.log('Name-Lookup Updates:', updates);
+          setFormData(prev => ({ ...prev, ...updates }));
+          setSuccess(`Kategorie/Firma aus bestehendem Material "${template.name}" übernommen!`);
+          setTimeout(() => setSuccess(null), 4000);
+        }
+      }
+    } catch (err) {
+      // 404 oder kein Match ist OK
+      console.log('Kein exakter Name-Match gefunden');
     }
   };
 
@@ -1225,12 +1244,37 @@ const MaterialForm: React.FC = () => {
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <TextField
-                required
-                fullWidth
-                label="Bezeichnung"
+              <Autocomplete
+                freeSolo
+                options={productNameSuggestions}
+                loading={productNameLoading}
                 value={formData.name}
-                onChange={handleChange('name')}
+                onInputChange={(_, value) => {
+                  setFormData(prev => ({ ...prev, name: value }));
+                  fetchProductNameSuggestions(value);
+                }}
+                onChange={(_, value) => {
+                  if (value) {
+                    setFormData(prev => ({ ...prev, name: value }));
+                    // Bei Auswahl aus der Liste direkt Lookup machen
+                    handleNameLookup(value);
+                  }
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    required
+                    fullWidth
+                    label="Bezeichnung"
+                    helperText="Tippen Sie für Vorschläge, Enter für Kategorie/Firma-Lookup"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleNameLookup(formData.name);
+                      }
+                    }}
+                  />
+                )}
               />
             </Grid>
 
