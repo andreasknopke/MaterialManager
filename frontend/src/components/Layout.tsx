@@ -38,7 +38,6 @@ import {
   LocalHospital as HospitalIcon,
   ShoppingCart as ShoppingCartIcon,
   History as HistoryIcon,
-  Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import ChangePasswordDialog from './ChangePasswordDialog';
@@ -93,7 +92,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { text: 'Schränke', icon: <StorageIcon />, path: '/cabinets' },
     { text: 'Inventur', icon: <ChecklistIcon />, path: '/inventory' },
     { text: 'Interventionen', icon: <HospitalIcon />, path: '/interventions' },
-    { text: 'Patientenzuordnung', icon: <AssignmentIcon />, path: '/patient-assignment' },
     { text: 'Nachbestellung', icon: <ShoppingCartIcon />, path: '/reorder' },
     { text: 'Einheiten', icon: <BusinessIcon />, path: '/units' },
     { text: 'Kategorien', icon: <CategoryIcon />, path: '/categories' },
