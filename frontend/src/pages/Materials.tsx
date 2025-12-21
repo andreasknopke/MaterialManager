@@ -106,15 +106,41 @@ const emptyFilters: FilterState = {
   is_consignment: '',
 };
 
+// SessionStorage Key für Filter-Persistenz
+const MATERIALS_FILTER_KEY = 'materials_filter_state';
+
+// Gespeicherte Filter aus SessionStorage laden
+const loadSavedFilters = (): { 
+  searchTerm: string; 
+  filters: FilterState; 
+  hideZeroStock: boolean; 
+  groupIdentical: boolean;
+  showFilters: boolean;
+  activeFilter: string | null;
+} | null => {
+  try {
+    const saved = sessionStorage.getItem(MATERIALS_FILTER_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Fehler beim Laden der gespeicherten Filter:', e);
+  }
+  return null;
+};
+
 const Materials: React.FC = () => {
+  // Gespeicherte Filter laden
+  const savedFilters = loadSavedFilters();
+  
   const [materials, setMaterials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [hideZeroStock, setHideZeroStock] = useState(true);
-  const [groupIdentical, setGroupIdentical] = useState(true);
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<FilterState>(emptyFilters);
+  const [searchTerm, setSearchTerm] = useState(savedFilters?.searchTerm || '');
+  const [activeFilter, setActiveFilter] = useState<string | null>(savedFilters?.activeFilter || null);
+  const [hideZeroStock, setHideZeroStock] = useState(savedFilters?.hideZeroStock ?? true);
+  const [groupIdentical, setGroupIdentical] = useState(savedFilters?.groupIdentical ?? true);
+  const [showFilters, setShowFilters] = useState(savedFilters?.showFilters ?? false);
+  const [filters, setFilters] = useState<FilterState>(savedFilters?.filters || emptyFilters);
   
   // Dropdown-Daten für Filter
   const [categories, setCategories] = useState<any[]>([]);
@@ -124,6 +150,19 @@ const Materials: React.FC = () => {
   
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Filter in SessionStorage speichern bei Änderungen
+  useEffect(() => {
+    const filterState = {
+      searchTerm,
+      filters,
+      hideZeroStock,
+      groupIdentical,
+      showFilters,
+      activeFilter,
+    };
+    sessionStorage.setItem(MATERIALS_FILTER_KEY, JSON.stringify(filterState));
+  }, [searchTerm, filters, hideZeroStock, groupIdentical, showFilters, activeFilter]);
 
   useEffect(() => {
     const filter = location.state?.filter;
