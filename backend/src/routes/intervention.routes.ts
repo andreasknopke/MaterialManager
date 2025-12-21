@@ -1,8 +1,12 @@
 import { Router, Request, Response } from 'express';
 import pool from '../config/database';
 import { RowDataPacket, ResultSetHeader, PoolConnection } from 'mysql2/promise';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
+
+// Authentifizierung für alle Routen in diesem Router erforderlich
+router.use(authenticate);
 
 // Helper: Get department filter from user context
 const getDepartmentFilter = (req: Request, tableAlias: string = 'm'): { whereClause: string; params: any[] } => {
