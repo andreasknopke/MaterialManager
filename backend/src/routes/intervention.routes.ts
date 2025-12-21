@@ -699,33 +699,8 @@ router.delete('/:protocolId/items/:itemId', async (req: Request, res: Response) 
   }
 });
 
-// PUT Protokoll-Details aktualisieren
-router.put('/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { patient_id, patient_name, notes } = req.body;
-    
-    if (!patient_id) {
-      return res.status(400).json({ error: 'Patienten-ID ist erforderlich' });
-    }
-    
-    const [result] = await pool.query<ResultSetHeader>(
-      'UPDATE intervention_protocols SET patient_id = ?, patient_name = ?, notes = ? WHERE id = ?',
-      [patient_id, patient_name || null, notes || null, id]
-    );
-    
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Protokoll nicht gefunden' });
-    }
-    
-    res.json({ success: true, message: 'Protokoll aktualisiert' });
-  } catch (error) {
-    console.error('Fehler beim Aktualisieren des Protokolls:', error);
-    res.status(500).json({ error: 'Datenbankfehler' });
-  }
-});
-
 // PUT LOT-Nummer einer Transaktion korrigieren (nur Root-Admin)
+// WICHTIG: Diese Route muss VOR /:id stehen, da sonst "transactions" als :id gematched wird
 router.put('/transactions/:transactionId/lot', async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
@@ -771,6 +746,32 @@ router.put('/transactions/:transactionId/lot', async (req: Request, res: Respons
     res.json({ success: true, message: 'LOT-Nummer erfolgreich aktualisiert' });
   } catch (error) {
     console.error('Fehler beim Aktualisieren der LOT-Nummer:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
+// PUT Protokoll-Details aktualisieren
+router.put('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { patient_id, patient_name, notes } = req.body;
+    
+    if (!patient_id) {
+      return res.status(400).json({ error: 'Patienten-ID ist erforderlich' });
+    }
+    
+    const [result] = await pool.query<ResultSetHeader>(
+      'UPDATE intervention_protocols SET patient_id = ?, patient_name = ?, notes = ? WHERE id = ?',
+      [patient_id, patient_name || null, notes || null, id]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Protokoll nicht gefunden' });
+    }
+    
+    res.json({ success: true, message: 'Protokoll aktualisiert' });
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren des Protokolls:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
   }
 });
