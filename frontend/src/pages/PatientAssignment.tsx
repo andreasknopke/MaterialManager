@@ -44,8 +44,10 @@ import {
   FilterList as FilterIcon,
   Clear as ClearIcon,
   Visibility as ViewIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
 import { interventionAPI, categoryAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface UnassignedTransaction {
   transaction_id: number;
@@ -138,6 +140,15 @@ const PatientAssignment: React.FC = () => {
   const [showAddToProtocolDialog, setShowAddToProtocolDialog] = useState(false);
   const [selectedProtocol, setSelectedProtocol] = useState<Protocol | null>(null);
   const [adding, setAdding] = useState(false);
+  
+  // Dialog: LOT-Nummer bearbeiten (nur Root)
+  const [showEditLotDialog, setShowEditLotDialog] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<UnassignedTransaction | null>(null);
+  const [editLotNumber, setEditLotNumber] = useState('');
+  const [updatingLot, setUpdatingLot] = useState(false);
+  
+  // Auth Context für Root-Check
+  const { isRoot } = useAuth();
 
   // Kategorien laden
   useEffect(() => {
@@ -294,6 +305,33 @@ const PatientAssignment: React.FC = () => {
       setError(err.response?.data?.error || 'Fehler beim Hinzufügen zum Protokoll');
     } finally {
       setAdding(false);
+    }
+  };
+
+  // LOT-Nummer bearbeiten (nur Root)
+  const handleOpenEditLot = (transaction: UnassignedTransaction, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setEditingTransaction(transaction);
+    setEditLotNumber(transaction.lot_number || '');
+    setShowEditLotDialog(true);
+  };
+
+  const handleUpdateLot = async () => {
+    if (!editingTransaction) return;
+    
+    setUpdatingLot(true);
+    setError('');
+    try {
+      await interventionAPI.updateTransactionLot(editingTransaction.transaction_id, editLotNumber);
+      setSuccess(`LOT-Nummer für "${editingTransaction.material_name}" aktualisiert`);
+      setShowEditLotDialog(false);
+      setEditingTransaction(null);
+      setEditLotNumber('');
+      loadTransactions();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fehler beim Aktualisieren der LOT-Nummer');
+    } finally {
+      setUpdatingLot(false);
     }
   };
 
@@ -524,9 +562,22 @@ const PatientAssignment: React.FC = () => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" fontFamily="monospace">
-                          {transaction.lot_number || '-'}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant="body2" fontFamily="monospace">
+                            {transaction.lot_number || '-'}
+                          </Typography>
+                          {isRoot && (
+                            <Tooltip title="LOT-Nummer bearbeiten">
+                              <IconButton 
+                                size="small" 
+                                onClick={(e) => handleOpenEditLot(transaction, e)}
+                                sx={{ p: 0.25 }}
+                              >
+                                <EditIcon fontSize="small" sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell align="center">
                         <Chip label={transaction.quantity} size="small" color="error" variant="outlined" />
@@ -732,6 +783,56 @@ const PatientAssignment: React.FC = () => {
             startIcon={adding ? <CircularProgress size={16} /> : <AddIcon />}
           >
             Hinzufügen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog: LOT-Nummer bearbeiten (nur Root) */}
+      <Dialog 
+        open={showEditLotDialog} 
+        onClose={() => setShowEditLotDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <EditIcon color="primary" />
+          LOT-Nummer korrigieren
+        </DialogTitle>
+        <DialogContent>
+          {editingTransaction && (
+            <Box sx={{ pt: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Material: <strong>{editingTransaction.material_name}</strong>
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Artikelnummer: <strong>{editingTransaction.article_number || '-'}</strong>
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Transaktion vom: <strong>{formatDateTime(editingTransaction.transaction_date)}</strong>
+              </Typography>
+              <TextField
+                label="LOT-Nummer"
+                value={editLotNumber}
+                onChange={(e) => setEditLotNumber(e.target.value)}
+                fullWidth
+                autoFocus
+                placeholder="Neue LOT-Nummer eingeben"
+                helperText="Leer lassen, um die LOT-Nummer zu entfernen"
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowEditLotDialog(false)}>
+            Abbrechen
+          </Button>
+          <Button
+            onClick={handleUpdateLot}
+            variant="contained"
+            disabled={updatingLot}
+            startIcon={updatingLot ? <CircularProgress size={16} /> : <EditIcon />}
+          >
+            Speichern
           </Button>
         </DialogActions>
       </Dialog>

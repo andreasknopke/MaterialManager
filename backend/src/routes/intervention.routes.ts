@@ -725,4 +725,54 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// PUT LOT-Nummer einer Transaktion korrigieren (nur Root-Admin)
+router.put('/transactions/:transactionId/lot', async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    
+    // Nur Root-Admins dürfen LOT-Nummern korrigieren
+    if (!user?.isRoot) {
+      return res.status(403).json({ error: 'Keine Berechtigung. Nur Root-Admins können LOT-Nummern korrigieren.' });
+    }
+    
+    const { transactionId } = req.params;
+    const { lot_number } = req.body;
+    
+    if (lot_number === undefined) {
+      return res.status(400).json({ error: 'LOT-Nummer ist erforderlich' });
+    }
+    
+    // Prüfen ob die Transaktion existiert und vom Typ 'out' ist
+    const [transactions] = await pool.query<RowDataPacket[]>(
+      'SELECT id, transaction_type FROM material_transactions WHERE id = ?',
+      [transactionId]
+    );
+    
+    if (transactions.length === 0) {
+      return res.status(404).json({ error: 'Transaktion nicht gefunden' });
+    }
+    
+    if (transactions[0].transaction_type !== 'out') {
+      return res.status(400).json({ error: 'Nur Materialausgänge (Stock Outs) können korrigiert werden' });
+    }
+    
+    // LOT-Nummer aktualisieren
+    const [result] = await pool.query<ResultSetHeader>(
+      'UPDATE material_transactions SET lot_number = ? WHERE id = ?',
+      [lot_number || null, transactionId]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Transaktion nicht gefunden' });
+    }
+    
+    console.log(`LOT-Nummer für Transaktion ${transactionId} aktualisiert auf: ${lot_number || '(leer)'} durch User ${user.username}`);
+    
+    res.json({ success: true, message: 'LOT-Nummer erfolgreich aktualisiert' });
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren der LOT-Nummer:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 export default router;

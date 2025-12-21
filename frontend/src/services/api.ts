@@ -272,6 +272,9 @@ export const interventionAPI = {
   
   removeItem: (protocolId: number, itemId: number) => 
     api.delete(`/interventions/${protocolId}/items/${itemId}`),
+  
+  updateTransactionLot: (transactionId: number, lot_number: string) =>
+    api.put(`/interventions/transactions/${transactionId}/lot`, { lot_number }),
 };
 
 // Audit-Logs (nur für Admins)
