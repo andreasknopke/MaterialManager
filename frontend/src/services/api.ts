@@ -245,6 +245,33 @@ export const interventionAPI = {
     }>;
   }) => api.post('/interventions', data),
   delete: (id: number) => api.delete(`/interventions/${id}`),
+  update: (id: number, data: { patient_id: string; patient_name?: string; notes?: string }) => 
+    api.put(`/interventions/${id}`, data),
+  
+  // Nachträgliche Patientenzuordnung
+  getUnassignedTransactions: (params?: { 
+    search?: string; 
+    from_date?: string; 
+    to_date?: string; 
+    gtin?: string; 
+    lot_number?: string; 
+    category_id?: number;
+    limit?: number; 
+    offset?: number 
+  }) => api.get('/interventions/unassigned/transactions', { params }),
+  
+  addItemsToProtocol: (protocolId: number, transaction_ids: number[]) => 
+    api.post(`/interventions/${protocolId}/add-items`, { transaction_ids }),
+  
+  createFromTransactions: (data: { 
+    patient_id: string; 
+    patient_name?: string; 
+    notes?: string; 
+    transaction_ids: number[] 
+  }) => api.post('/interventions/create-from-transactions', data),
+  
+  removeItem: (protocolId: number, itemId: number) => 
+    api.delete(`/interventions/${protocolId}/items/${itemId}`),
 };
 
 // Audit-Logs (nur für Admins)

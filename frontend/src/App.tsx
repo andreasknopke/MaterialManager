@@ -22,6 +22,7 @@ import Admin from './pages/Admin';
 import Units from './pages/Units';
 import Users from './pages/Users';
 import InterventionProtocols from './pages/InterventionProtocols';
+import PatientAssignment from './pages/PatientAssignment';
 import Reorder from './pages/Reorder';
 import AuditLogs from './pages/AuditLogs';
 import { extractAndSaveDbTokenFromUrl } from './utils/dbToken';
@@ -219,6 +220,16 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <InterventionProtocols />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient-assignment"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <PatientAssignment />
                 </Layout>
               </ProtectedRoute>
             }

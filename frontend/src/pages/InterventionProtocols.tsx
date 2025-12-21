@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -31,6 +32,9 @@ import {
   Close as CloseIcon,
   Receipt as ReceiptIcon,
   LocalHospital as HospitalIcon,
+  Edit as EditIcon,
+  Add as AddIcon,
+  Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import { interventionAPI } from '../services/api';
 
@@ -59,6 +63,7 @@ interface Protocol {
 }
 
 const InterventionProtocols: React.FC = () => {
+  const navigate = useNavigate();
   const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -264,10 +269,20 @@ const InterventionProtocols: React.FC = () => {
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2 } }}>
-      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <HospitalIcon color="primary" />
-        Gespeicherte Interventionsprotokolle
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <HospitalIcon color="primary" />
+          Gespeicherte Interventionsprotokolle
+        </Typography>
+        <Button
+          variant="contained"
+          color="secondary"
+          startIcon={<AssignmentIcon />}
+          onClick={() => navigate('/patient-assignment')}
+        >
+          Nachträgliche Zuordnung
+        </Button>
+      </Box>
 
       {/* Suchbereich */}
       <Paper sx={{ p: 2, mb: 3 }}>

@@ -117,6 +117,7 @@ const EU_REGISTERED_COMPANIES = [
   "Shape Memory Medical",
   "Shockwave Medical",
   "Simeks Medical",
+  "Sirtex Medical Europe",
   "STARmed",
   "Stryker",
   "Teleflex (Biotronik)",
