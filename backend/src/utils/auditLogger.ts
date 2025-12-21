@@ -183,3 +183,16 @@ export const auditIntervention = {
     await logFromRequest(req, 'DELETE', 'INTERVENTION', intervention.id, `Intervention #${intervention.id}`);
   }
 };
+
+/**
+ * Helper für Transaktionen (Stock-Bewegungen)
+ */
+export const auditTransaction = {
+  updateLot: async (req: Request, transaction: { id: number; material_name?: string }, oldLot: string | null, newLot: string | null) => {
+    await logFromRequest(req, 'UPDATE', 'TRANSACTION', transaction.id, 
+      transaction.material_name || `Transaktion #${transaction.id}`,
+      { lot_number: oldLot },
+      { lot_number: newLot }
+    );
+  }
+};

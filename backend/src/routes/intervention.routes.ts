@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import pool from '../config/database';
 import { RowDataPacket, ResultSetHeader, PoolConnection } from 'mysql2/promise';
 import { authenticate } from '../middleware/auth';
+import { auditTransaction } from '../utils/auditLogger';
 
 const router = Router();
 
@@ -721,9 +722,12 @@ router.put('/transactions/:transactionId/lot', async (req: Request, res: Respons
       return res.status(400).json({ error: 'LOT-Nummer ist erforderlich' });
     }
     
-    // Prüfen ob die Transaktion existiert und vom Typ 'out' ist
+    // Prüfen ob die Transaktion existiert und vom Typ 'out' ist, inkl. Material-Name für Audit
     const [transactions] = await pool.query<RowDataPacket[]>(
-      'SELECT id, transaction_type FROM material_transactions WHERE id = ?',
+      `SELECT t.id, t.transaction_type, t.lot_number AS old_lot, m.name AS material_name
+       FROM material_transactions t
+       LEFT JOIN materials m ON t.material_id = m.id
+       WHERE t.id = ?`,
       [transactionId]
     );
     
@@ -735,6 +739,9 @@ router.put('/transactions/:transactionId/lot', async (req: Request, res: Respons
       return res.status(400).json({ error: 'Nur Materialausgänge (Stock Outs) können korrigiert werden' });
     }
     
+    const oldLot = transactions[0].old_lot;
+    const materialName = transactions[0].material_name;
+    
     // LOT-Nummer aktualisieren
     const [result] = await pool.query<ResultSetHeader>(
       'UPDATE material_transactions SET lot_number = ? WHERE id = ?',
@@ -744,6 +751,14 @@ router.put('/transactions/:transactionId/lot', async (req: Request, res: Respons
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Transaktion nicht gefunden' });
     }
+    
+    // Audit-Log erstellen
+    await auditTransaction.updateLot(
+      req,
+      { id: Number(transactionId), material_name: materialName },
+      oldLot,
+      lot_number || null
+    );
     
     console.log(`LOT-Nummer für Transaktion ${transactionId} aktualisiert auf: ${lot_number || '(leer)'} durch User ${user.username}`);
     
