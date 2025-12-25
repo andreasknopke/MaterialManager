@@ -107,12 +107,15 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
     if (!gtin || gtin.length < 8) {
       return res.status(400).json({ error: 'Ungültige GTIN' });
     }
+
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
     
     // Department-Filter
     const departmentFilter = getDepartmentFilter(req, '');
     
     // === Zuerst in products-Tabelle suchen (normalisierte Stammdaten) ===
-    const [products] = await pool.query<RowDataPacket[]>(
+    const [products] = await currentPool.query<RowDataPacket[]>(
       `SELECT p.id as product_id, p.gtin, p.name, p.description, p.size,
               p.company_id, co.name as company_name,
               p.shape_id, p.shaft_length, p.device_length, p.device_diameter, 
@@ -141,7 +144,7 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
       }
       instanceQuery += ' ORDER BY m.created_at DESC LIMIT 1';
       
-      const [instances] = await pool.query<RowDataPacket[]>(instanceQuery, instanceParams);
+      const [instances] = await currentPool.query<RowDataPacket[]>(instanceQuery, instanceParams);
       const lastInstance = instances[0] || {};
       
       return res.json({
@@ -298,6 +301,9 @@ router.get('/', async (req: Request, res: Response) => {
     console.log('=== GET /api/materials ===');
     console.log('User:', { id: req.user?.id, isRoot: req.user?.isRoot, departmentId: req.user?.departmentId });
     
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
+    
     const { category, cabinet, company, search, lowStock, expiring } = req.query;
     
     // Basis-Query mit offenen Bestellungen als Subquery
@@ -346,7 +352,7 @@ router.get('/', async (req: Request, res: Response) => {
     
     query += ' ORDER BY v.name';
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der Materialien:', error);
@@ -357,6 +363,9 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Material nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
+    
     // Department-Filter (View braucht keinen Prefix)
     const departmentFilter = getDepartmentFilter(req, '');
     let query = 'SELECT * FROM v_materials_overview WHERE id = ?';
@@ -367,14 +376,14 @@ router.get('/:id', async (req: Request, res: Response) => {
       params.push(...departmentFilter.params);
     }
     
-    const [materialRows] = await pool.query<RowDataPacket[]>(query, params);
+    const [materialRows] = await currentPool.query<RowDataPacket[]>(query, params);
     
     if (materialRows.length === 0) {
       return res.status(404).json({ error: 'Material nicht gefunden oder kein Zugriff' });
     }
     
     // Benutzerdefinierte Felder abrufen
-    const [customFields] = await pool.query<RowDataPacket[]>(
+    const [customFields] = await currentPool.query<RowDataPacket[]>(
       `SELECT mcf.*, fc.field_name, fc.field_label, fc.field_type 
        FROM material_custom_fields mcf
        JOIN field_configurations fc ON mcf.field_config_id = fc.id
