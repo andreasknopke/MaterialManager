@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { authenticate } from '../middleware/auth';
 import { getDepartmentFilter } from '../utils/departmentFilter';
@@ -22,9 +22,12 @@ router.get('/product-names', async (req: Request, res: Response) => {
     
     const searchTerm = `${search}%`;
     
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
+    
     // Kombiniere Produktnamen aus products-Tabelle UND product_name_suggestions
     // Duplikate werden durch UNION automatisch entfernt
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       `SELECT DISTINCT name FROM (
          SELECT name FROM products WHERE name LIKE ?
          UNION

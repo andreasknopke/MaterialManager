@@ -17,6 +17,7 @@ import shapeRoutes from './routes/shape.routes';
 import interventionRoutes from './routes/intervention.routes';
 import reorderRoutes from './routes/reorder.routes';
 import auditLogRoutes from './routes/auditLog.routes';
+import { extractDbToken } from './middleware/dbToken';
 
 dotenv.config();
 
@@ -54,6 +55,9 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// DB Token Middleware - Extrahiert X-DB-Token Header
+app.use(extractDbToken);
 
 // Logging Middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
