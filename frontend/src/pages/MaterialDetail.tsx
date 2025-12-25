@@ -149,7 +149,7 @@ const MaterialDetail: React.FC = () => {
               <TextField
                 fullWidth
                 label="Kosten pro Einheit"
-                value={material?.cost ? `${material.cost.toFixed(2)} €` : 'Nicht angegeben'}
+                value={material?.cost ? `${Number(material.cost).toFixed(2)} €` : 'Nicht angegeben'}
                 disabled
               />
             </Grid>
