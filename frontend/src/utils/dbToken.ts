@@ -1,5 +1,6 @@
 // DB Token Management Utilities
 // Token-Format: Base64-kodiertes JSON mit { host, user, password, database, port, ssl }
+// Speichert in localStorage UND IndexedDB für PWA-Kompatibilität
 
 export interface DbCredentials {
   host: string;
@@ -11,6 +12,73 @@ export interface DbCredentials {
 }
 
 const DB_TOKEN_KEY = 'db_token';
+const IDB_NAME = 'MaterialManagerConfig';
+const IDB_STORE = 'config';
+
+// IndexedDB Helper für PWA-Persistenz
+const openConfigDb = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(IDB_NAME, 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+  });
+};
+
+const saveToIndexedDB = async (key: string, value: string): Promise<void> => {
+  try {
+    const db = await openConfigDb();
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    store.put(value, key);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch (e) {
+    console.warn('[dbToken] IndexedDB save failed:', e);
+  }
+};
+
+const loadFromIndexedDB = async (key: string): Promise<string | null> => {
+  try {
+    const db = await openConfigDb();
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const store = tx.objectStore(IDB_STORE);
+    const request = store.get(key);
+    const result = await new Promise<string | null>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    return result;
+  } catch (e) {
+    console.warn('[dbToken] IndexedDB load failed:', e);
+    return null;
+  }
+};
+
+const deleteFromIndexedDB = async (key: string): Promise<void> => {
+  try {
+    const db = await openConfigDb();
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    store.delete(key);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch (e) {
+    console.warn('[dbToken] IndexedDB delete failed:', e);
+  }
+};
 
 /**
  * Dekodiert einen Base64 DB-Token zu Credentials
@@ -56,30 +124,62 @@ export const encodeDbToken = (credentials: DbCredentials): string => {
 };
 
 /**
- * Speichert DB-Token im localStorage (persistent auch für PWA)
+ * Speichert DB-Token in localStorage UND IndexedDB (für PWA-Persistenz)
  */
 export const saveDbToken = (token: string): boolean => {
   const credentials = decodeDbToken(token);
   if (!credentials) {
     return false;
   }
+  // Speichere in localStorage (synchron, schnell)
   localStorage.setItem(DB_TOKEN_KEY, token);
-  console.log('DB Token gespeichert für:', credentials.host);
+  // Speichere auch in IndexedDB (für PWA-Kompatibilität)
+  saveToIndexedDB(DB_TOKEN_KEY, token);
+  console.log('[dbToken] Token gespeichert für:', credentials.host);
   return true;
 };
 
 /**
- * Lädt DB-Token aus localStorage
+ * Lädt DB-Token aus localStorage (sync) - für normale Requests
  */
 export const getDbToken = (): string | null => {
   return localStorage.getItem(DB_TOKEN_KEY);
 };
 
 /**
- * Entfernt DB-Token aus localStorage
+ * Lädt DB-Token aus IndexedDB und synchronisiert mit localStorage
+ * Sollte beim App-Start aufgerufen werden
+ */
+export const syncDbTokenFromIndexedDB = async (): Promise<string | null> => {
+  const localToken = localStorage.getItem(DB_TOKEN_KEY);
+  const idbToken = await loadFromIndexedDB(DB_TOKEN_KEY);
+  
+  console.log('[dbToken] Sync check - localStorage:', !!localToken, 'IndexedDB:', !!idbToken);
+  
+  // Wenn IndexedDB Token hat, aber localStorage nicht -> übertragen
+  if (idbToken && !localToken) {
+    localStorage.setItem(DB_TOKEN_KEY, idbToken);
+    console.log('[dbToken] Token aus IndexedDB in localStorage übertragen');
+    return idbToken;
+  }
+  
+  // Wenn localStorage Token hat, aber IndexedDB nicht -> IndexedDB aktualisieren
+  if (localToken && !idbToken) {
+    await saveToIndexedDB(DB_TOKEN_KEY, localToken);
+    console.log('[dbToken] Token aus localStorage in IndexedDB übertragen');
+  }
+  
+  return localToken || idbToken;
+};
+
+/**
+ * Entfernt DB-Token aus localStorage UND IndexedDB
  */
 export const clearDbToken = (): void => {
   localStorage.removeItem(DB_TOKEN_KEY);
+  deleteFromIndexedDB(DB_TOKEN_KEY);
+  console.log('[dbToken] Token gelöscht');
+};
 };
 
 /**

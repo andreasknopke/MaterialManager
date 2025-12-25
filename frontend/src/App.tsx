@@ -25,12 +25,16 @@ import InterventionProtocols from './pages/InterventionProtocols';
 import PatientAssignment from './pages/PatientAssignment';
 import Reorder from './pages/Reorder';
 import AuditLogs from './pages/AuditLogs';
-import { extractAndSaveDbTokenFromUrl } from './utils/dbToken';
+import { extractAndSaveDbTokenFromUrl, syncDbTokenFromIndexedDB } from './utils/dbToken';
 
 function App() {
-  // Bei App-Start: DB-Token aus URL extrahieren falls vorhanden
+  // Bei App-Start: DB-Token aus IndexedDB laden und aus URL extrahieren
   useEffect(() => {
-    extractAndSaveDbTokenFromUrl();
+    // Zuerst IndexedDB mit localStorage synchronisieren (für PWA)
+    syncDbTokenFromIndexedDB().then(() => {
+      // Dann prüfen ob Token in URL vorhanden
+      extractAndSaveDbTokenFromUrl();
+    });
   }, []);
 
   return (
