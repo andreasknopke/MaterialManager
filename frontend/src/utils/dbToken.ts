@@ -180,7 +180,6 @@ export const clearDbToken = (): void => {
   deleteFromIndexedDB(DB_TOKEN_KEY);
   console.log('[dbToken] Token gelöscht');
 };
-};
 
 /**
  * Prüft ob ein gültiger DB-Token vorhanden ist
