@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 
 const router = Router();
 
 // POST /api/admin/reset-database - Löscht alle Daten aus der Datenbank
 router.post('/reset-database', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     await connection.beginTransaction();
@@ -84,7 +85,8 @@ router.post('/reset-database', async (req: Request, res: Response) => {
 
 // POST /api/admin/run-migration - Führt die Units-Migration aus
 router.post('/run-migration', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     console.log('🔄 Starting migration 002_add_units_system...');
@@ -256,7 +258,8 @@ router.post('/run-migration', async (req: Request, res: Response) => {
 
 // POST /api/admin/run-user-migration - Führt die User-Management-Migration aus
 router.post('/run-user-migration', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     console.log('🔄 Starting migration 003_add_user_management...');
@@ -418,7 +421,8 @@ router.post('/run-user-migration', async (req: Request, res: Response) => {
 
 // POST /api/admin/run-department-migration - Führt die Department-Migration aus
 router.post('/run-department-migration', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     console.log('🔄 Starting migration 004_add_department_access...');
@@ -500,13 +504,14 @@ router.post('/run-department-migration', async (req: Request, res: Response) => 
 // POST /api/admin/update-root-password - Aktualisiert Root-User Passwort (für Railway Setup)
 router.post('/update-root-password', async (req: Request, res: Response) => {
   const bcrypt = require('bcrypt');
+  const currentPool = getPoolForRequest(req);
   
   try {
     // Generiere korrekten bcrypt Hash für Passwort "root"
     const passwordHash = await bcrypt.hash('root', 10);
     
     // Update Root-User mit korrektem Hash
-    const [result] = await pool.query(
+    const [result] = await currentPool.query(
       'UPDATE users SET password_hash = ? WHERE username = ? AND is_root = TRUE',
       [passwordHash, 'root']
     );
@@ -530,11 +535,12 @@ router.post('/update-root-password', async (req: Request, res: Response) => {
 
 // POST /api/admin/run-category-migration - Führt Migration für Category min_quantity aus
 router.post('/run-category-migration', async (req: Request, res: Response) => {
+  const currentPool = getPoolForRequest(req);
   try {
     console.log('Starting category min_quantity migration...');
     
     // Prüfen ob Spalte bereits existiert
-    const [columns] = await pool.query<any[]>(`
+    const [columns] = await currentPool.query<any[]>(`
       SELECT COLUMN_NAME 
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE() 
@@ -551,14 +557,14 @@ router.post('/run-category-migration', async (req: Request, res: Response) => {
     }
     
     // Spalte hinzufügen
-    await pool.query(`
+    await currentPool.query(`
       ALTER TABLE categories 
       ADD COLUMN min_quantity INT DEFAULT 0 COMMENT 'Mindestmenge für die gesamte Kategorie'
     `);
     console.log('✓ Added min_quantity column');
     
     // Index hinzufügen
-    await pool.query(`
+    await currentPool.query(`
       CREATE INDEX idx_min_quantity ON categories(min_quantity)
     `);
     console.log('✓ Added index on min_quantity');
@@ -579,11 +585,12 @@ router.post('/run-category-migration', async (req: Request, res: Response) => {
 
 // POST /api/admin/run-cabinet-department-migration
 router.post('/run-cabinet-department-migration', async (req: Request, res: Response) => {
+  const currentPool = getPoolForRequest(req);
   try {
     console.log('Starting cabinet department_id migration...');
     
     // Prüfen ob Spalte bereits existiert
-    const [cols] = await pool.query<any[]>(`
+    const [cols] = await currentPool.query<any[]>(`
       SELECT COUNT(*) as count
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE()
@@ -600,21 +607,21 @@ router.post('/run-cabinet-department-migration', async (req: Request, res: Respo
     }
     
     // Spalte hinzufügen
-    await pool.query(`
+    await currentPool.query(`
       ALTER TABLE cabinets 
       ADD COLUMN department_id INT AFTER id
     `);
     console.log('✓ Added department_id column');
     
     // Foreign Key hinzufügen
-    await pool.query(`
+    await currentPool.query(`
       ALTER TABLE cabinets
       ADD FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE RESTRICT
     `);
     console.log('✓ Added foreign key constraint');
     
     // Bestehende Schränke den Departments zuordnen
-    await pool.query(`
+    await currentPool.query(`
       UPDATE cabinets 
       SET department_id = CASE 
         WHEN location = 'Angiographie' THEN 1
@@ -626,7 +633,7 @@ router.post('/run-cabinet-department-migration', async (req: Request, res: Respo
     console.log('✓ Updated existing cabinets with department_id');
     
     // Index hinzufügen
-    await pool.query(`
+    await currentPool.query(`
       CREATE INDEX idx_department ON cabinets(department_id)
     `);
     console.log('✓ Added index on department_id');
@@ -647,18 +654,19 @@ router.post('/run-cabinet-department-migration', async (req: Request, res: Respo
 
 // POST /api/admin/fix-cabinet-departments - Setzt department_id für alle Schränke auf Radiologie
 router.post('/fix-cabinet-departments', async (req: Request, res: Response) => {
+  const currentPool = getPoolForRequest(req);
   try {
     console.log('Fixing cabinet department IDs...');
     
     // Alle Schränke ohne department_id auf Radiologie (ID 3) setzen
-    const [result] = await pool.query<any>(
+    const [result] = await currentPool.query<any>(
       'UPDATE cabinets SET department_id = 3 WHERE department_id IS NULL OR department_id = 0'
     );
     
     console.log('✓ Updated cabinets:', result.affectedRows);
     
     // Alle Schränke abrufen zur Bestätigung
-    const [cabinets] = await pool.query<any[]>(
+    const [cabinets] = await currentPool.query<any[]>(
       'SELECT id, name, location, department_id FROM cabinets'
     );
     
@@ -679,9 +687,10 @@ router.post('/fix-cabinet-departments', async (req: Request, res: Response) => {
 
 // GET /api/admin/debug-cabinets - Debug endpoint für Cabinet-Daten
 router.get('/debug-cabinets', async (req: Request, res: Response) => {
+  const currentPool = getPoolForRequest(req);
   try {
     // Alle Schränke mit allen Spalten
-    const [cabinets] = await pool.query<any[]>(
+    const [cabinets] = await currentPool.query<any[]>(
       'SELECT * FROM cabinets'
     );
     

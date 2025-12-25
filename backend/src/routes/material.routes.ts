@@ -55,6 +55,9 @@ router.get('/by-name/:name', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Name zu kurz (min. 3 Zeichen)' });
     }
     
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
+    
     // Department-Filter
     const departmentFilter = getDepartmentFilter(req, '');
     
@@ -75,7 +78,7 @@ router.get('/by-name/:name', async (req: Request, res: Response) => {
     
     query += ' ORDER BY m.created_at DESC LIMIT 1';
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Kein Material mit diesem Namen gefunden' });
@@ -195,7 +198,7 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
     
     query += ' ORDER BY m.created_at DESC LIMIT 1';
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Kein Material mit dieser GTIN gefunden' });
@@ -240,6 +243,9 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
 // POST erweiterte Suche für Materialien
 router.post('/search', async (req: Request, res: Response) => {
   try {
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
+    
     const { lot_number, expiry_months, query: searchQuery, category_id, is_consignment } = req.body;
     
     let sql = 'SELECT * FROM v_materials_overview WHERE active = TRUE';
@@ -287,7 +293,7 @@ router.post('/search', async (req: Request, res: Response) => {
     
     sql += ' ORDER BY expiry_date ASC, name ASC';
     
-    const [rows] = await pool.query<RowDataPacket[]>(sql, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(sql, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler bei der Suche:', error);
@@ -392,7 +398,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     );
     
     // Barcodes abrufen
-    const [barcodes] = await pool.query<RowDataPacket[]>(
+    const [barcodes] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM barcodes WHERE material_id = ?',
       [req.params.id]
     );
@@ -411,10 +417,13 @@ router.get('/:id', async (req: Request, res: Response) => {
 // GET Transaktionshistorie eines Materials
 router.get('/:id/transactions', async (req: Request, res: Response) => {
   try {
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
+    
     // Department-Validierung: Material muss zugänglich sein
     const departmentFilter = getDepartmentFilter(req, '');
     if (departmentFilter.whereClause) {
-      const [materials] = await pool.query<RowDataPacket[]>(
+      const [materials] = await currentPool.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
         [req.params.id, ...departmentFilter.params]
       );
@@ -424,7 +433,7 @@ router.get('/:id/transactions', async (req: Request, res: Response) => {
       }
     }
     
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       `SELECT * FROM material_transactions 
        WHERE material_id = ? 
        ORDER BY transaction_date DESC 
@@ -452,6 +461,9 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Name ist erforderlich' });
   }
   
+  // Verwende dynamischen Pool basierend auf DB-Token
+  const currentPool = getPoolForRequest(req);
+  
   // Department (unit_id) bestimmen: Entweder vom Request oder vom User
   let materialUnitId = unit_id;
   if (!materialUnitId && req.user?.departmentId) {
@@ -460,7 +472,7 @@ router.post('/', async (req: Request, res: Response) => {
   
   // Department-Validierung: Schrank muss im erlaubten Department sein
   if (cabinet_id && req.user?.departmentId && !req.user?.isRoot) {
-    const [cabinets] = await pool.query<RowDataPacket[]>(
+    const [cabinets] = await currentPool.query<RowDataPacket[]>(
       'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
       [cabinet_id, req.user.departmentId]
     );
@@ -470,7 +482,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
   }
   
-  const connection = await pool.getConnection();
+  const connection = await currentPool.getConnection();
   
   try {
     await connection.beginTransaction();
@@ -558,6 +570,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
     
     await connection.commit();
+    connection.release();
     
     // Audit-Log erstellen
     await auditMaterial.create(req, { id: materialId, name }, {
@@ -571,10 +584,9 @@ router.post('/', async (req: Request, res: Response) => {
     });
   } catch (error) {
     await connection.rollback();
+    connection.release();
     console.error('Fehler beim Erstellen des Materials:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
-  } finally {
-    connection.release();
   }
 });
 
@@ -588,10 +600,13 @@ router.put('/:id', async (req: Request, res: Response) => {
   } = req.body;
   
   try {
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
+    
     // Department-Validierung: Material muss im erlaubten Department sein
     const departmentFilter = getDepartmentFilter(req, '');
     if (departmentFilter.whereClause) {
-      const [materials] = await pool.query<RowDataPacket[]>(
+      const [materials] = await currentPool.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
         [req.params.id, ...departmentFilter.params]
       );
@@ -603,7 +618,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     
     // Department-Validierung: Neuer Schrank muss im erlaubten Department sein (nur für nicht-Root)
     if (cabinet_id && req.user?.departmentId && !req.user?.isRoot) {
-      const [cabinets] = await pool.query<RowDataPacket[]>(
+      const [cabinets] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [cabinet_id, req.user.departmentId]
       );
@@ -622,7 +637,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       materialUnitId = req.user.departmentId;
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       `UPDATE materials 
        SET category_id = ?, company_id = ?, cabinet_id = ?, compartment_id = ?, unit_id = ?, name = ?,
            description = ?, size = ?, unit = ?, min_stock = ?,
@@ -649,14 +664,14 @@ router.put('/:id', async (req: Request, res: Response) => {
     let productUpdated = false;
     if (article_number && article_number.trim() !== '') {
       // Prüfen ob Produkt mit dieser GTIN existiert
-      const [existingProduct] = await pool.query<RowDataPacket[]>(
+      const [existingProduct] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM products WHERE gtin = ?',
         [article_number]
       );
       
       if (existingProduct.length > 0) {
         // Produkt-Stammdaten aktualisieren
-        await pool.query(
+        await currentPool.query(
           `UPDATE products SET
             name = ?, description = ?, size = ?, company_id = ?,
             shape_id = ?, shaft_length = ?, device_length = ?, device_diameter = ?,
@@ -671,7 +686,7 @@ router.put('/:id', async (req: Request, res: Response) => {
         console.log(`Produkt-Stammdaten für GTIN ${article_number} aktualisiert`);
         
         // Material mit Produkt verknüpfen falls noch nicht geschehen
-        await pool.query(
+        await currentPool.query(
           'UPDATE materials SET product_id = ? WHERE id = ? AND product_id IS NULL',
           [existingProduct[0].id, req.params.id]
         );
@@ -700,6 +715,9 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.post('/:id/stock-in', async (req: Request, res: Response) => {
   const { quantity, reference_number, notes, usage_type } = req.body;
   
+  // Verwende dynamischen Pool basierend auf DB-Token
+  const currentPool = getPoolForRequest(req);
+  
   // user_id und user_name vom authentifizierten User
   const userId = req.user?.id;
   const userName = req.user?.fullName || req.user?.username || 'Unbekannt';
@@ -711,7 +729,7 @@ router.post('/:id/stock-in', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Ungültige Menge' });
   }
   
-  const connection = await pool.getConnection();
+  const connection = await currentPool.getConnection();
   
   try {
     await connection.beginTransaction();
@@ -759,9 +777,10 @@ router.post('/:id/stock-in', async (req: Request, res: Response) => {
     );
     
     await connection.commit();
+    connection.release();
     
     // Audit-Log für Stock-In
-    const [materialInfo] = await pool.query<RowDataPacket[]>(
+    const [materialInfo] = await currentPool.query<RowDataPacket[]>(
       'SELECT name FROM materials WHERE id = ?',
       [req.params.id]
     );
@@ -776,16 +795,18 @@ router.post('/:id/stock-in', async (req: Request, res: Response) => {
     });
   } catch (error) {
     await connection.rollback();
+    connection.release();
     console.error('Fehler beim Materialeingang:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
-  } finally {
-    connection.release();
   }
 });
 
 // POST Material-Ausgang
 router.post('/:id/stock-out', async (req: Request, res: Response) => {
   const { quantity, reference_number, notes, usage_type } = req.body;
+  
+  // Verwende dynamischen Pool basierend auf DB-Token
+  const currentPool = getPoolForRequest(req);
   
   // user_id und user_name vom authentifizierten User
   const userId = req.user?.id;
@@ -798,7 +819,7 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Ungültige Menge' });
   }
   
-  const connection = await pool.getConnection();
+  const connection = await currentPool.getConnection();
   
   try {
     await connection.beginTransaction();
@@ -850,9 +871,10 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
     );
     
     await connection.commit();
+    connection.release();
     
     // Audit-Log für Stock-Out
-    const [materialInfo] = await pool.query<RowDataPacket[]>(
+    const [materialInfo] = await currentPool.query<RowDataPacket[]>(
       'SELECT name FROM materials WHERE id = ?',
       [req.params.id]
     );
@@ -868,16 +890,18 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
     });
   } catch (error) {
     await connection.rollback();
+    connection.release();
     console.error('Fehler beim Materialausgang:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Datenbankfehler' });
-  } finally {
-    connection.release();
   }
 });
 
 // DELETE Material (soft delete) - mit Correction-Protokollierung
 router.delete('/:id', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  // Verwende dynamischen Pool basierend auf DB-Token
+  const currentPool = getPoolForRequest(req);
+  
+  const connection = await currentPool.getConnection();
   
   try {
     await connection.beginTransaction();
@@ -931,9 +955,10 @@ router.delete('/:id', async (req: Request, res: Response) => {
     );
     
     await connection.commit();
+    connection.release();
     
     // Audit-Log für Delete
-    const [materialInfo] = await pool.query<RowDataPacket[]>(
+    const [materialInfo] = await currentPool.query<RowDataPacket[]>(
       'SELECT name FROM materials WHERE id = ?',
       [req.params.id]
     );
@@ -944,20 +969,22 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.json({ message: 'Material erfolgreich deaktiviert' });
   } catch (error) {
     await connection.rollback();
+    connection.release();
     console.error('Fehler beim Löschen des Materials:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
-  } finally {
-    connection.release();
   }
 });
 
 // POST Material reaktivieren
 router.post('/:id/reactivate', async (req: Request, res: Response) => {
   try {
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
+    
     // Department-Validierung
     const departmentFilter = getDepartmentFilter(req, '');
     if (departmentFilter.whereClause) {
-      const [materials] = await pool.query<RowDataPacket[]>(
+      const [materials] = await currentPool.query<RowDataPacket[]>(
         `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
         [req.params.id, ...departmentFilter.params]
       );
@@ -967,7 +994,7 @@ router.post('/:id/reactivate', async (req: Request, res: Response) => {
       }
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'UPDATE materials SET active = TRUE WHERE id = ?',
       [req.params.id]
     );
@@ -986,6 +1013,9 @@ router.post('/:id/reactivate', async (req: Request, res: Response) => {
 // GET ablaufende Materialien
 router.get('/reports/expiring', async (req: Request, res: Response) => {
   try {
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
+    
     // Views verwenden direkt die Spalten ohne Alias, daher '' statt 'm'
     const departmentFilter = getDepartmentFilter(req, '');
     let query = 'SELECT * FROM v_expiring_materials';
@@ -997,7 +1027,7 @@ router.get('/reports/expiring', async (req: Request, res: Response) => {
     }
     
     console.log('[REPORTS] Expiring materials query:', query, 'params:', params);
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     console.log('[REPORTS] Expiring materials found:', rows.length);
     res.json(rows);
   } catch (error) {
@@ -1009,6 +1039,9 @@ router.get('/reports/expiring', async (req: Request, res: Response) => {
 // GET Kategorien mit niedrigem Bestand (basierend auf category.min_quantity)
 router.get('/reports/low-stock', async (req: Request, res: Response) => {
   try {
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
+    
     let query = 'SELECT * FROM v_low_stock_categories';
     const params: any[] = [];
     
@@ -1019,7 +1052,7 @@ router.get('/reports/low-stock', async (req: Request, res: Response) => {
     }
     
     console.log('[REPORTS] Low stock categories query:', query, 'params:', params);
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     console.log('[REPORTS] Low stock categories found:', rows.length);
     res.json(rows);
   } catch (error) {
@@ -1031,6 +1064,9 @@ router.get('/reports/low-stock', async (req: Request, res: Response) => {
 // GET Inaktive Bestände - Materialien, die lange nicht bewegt wurden
 router.get('/reports/inactive', async (req: Request, res: Response) => {
   try {
+    // Verwende dynamischen Pool basierend auf DB-Token
+    const currentPool = getPoolForRequest(req);
+    
     const months = parseInt(req.query.months as string) || 6;
     const cutoffDate = new Date();
     cutoffDate.setMonth(cutoffDate.getMonth() - months);
@@ -1074,7 +1110,7 @@ router.get('/reports/inactive', async (req: Request, res: Response) => {
     query += ' ORDER BY days_inactive DESC';
     
     console.log('[REPORTS] Inactive materials query, months:', months, 'cutoff:', cutoffDate);
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     console.log('[REPORTS] Inactive materials found:', rows.length);
     res.json(rows);
   } catch (error) {

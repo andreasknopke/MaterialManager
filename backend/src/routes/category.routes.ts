@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { authenticate } from '../middleware/auth';
 
@@ -11,6 +11,7 @@ router.use(authenticate);
 // GET alle Kategorien (gefiltert nach Abteilung)
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     let query = 'SELECT * FROM categories';
     const params: any[] = [];
     const conditions: string[] = [];
@@ -30,7 +31,7 @@ router.get('/', async (req: Request, res: Response) => {
     
     query += ' ORDER BY name';
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der Kategorien:', error);
@@ -41,6 +42,7 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Kategorie nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     let query = 'SELECT * FROM categories WHERE id = ?';
     const params: any[] = [req.params.id];
     
@@ -50,7 +52,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       params.push(req.user.departmentId);
     }
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Kategorie nicht gefunden' });
@@ -79,7 +81,8 @@ router.post('/', async (req: Request, res: Response) => {
   }
   
   try {
-    const [result] = await pool.query<ResultSetHeader>(
+    const currentPool = getPoolForRequest(req);
+    const [result] = await currentPool.query<ResultSetHeader>(
       'INSERT INTO categories (name, description, min_quantity, ops_code, zusatzentgelt, endo_today_link, unit_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [name, description, min_quantity || 0, ops_code || null, zusatzentgelt || null, endo_today_link || null, unit_id]
     );
@@ -102,9 +105,10 @@ router.put('/:id', async (req: Request, res: Response) => {
   const { name, description, min_quantity, ops_code, zusatzentgelt, endo_today_link } = req.body;
   
   try {
+    const currentPool = getPoolForRequest(req);
     // Non-Root User können nur Kategorien ihrer Abteilung bearbeiten
     if (!req.user?.isRoot && req.user?.departmentId) {
-      const [categoryCheck] = await pool.query<RowDataPacket[]>(
+      const [categoryCheck] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM categories WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
@@ -113,7 +117,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       }
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'UPDATE categories SET name = ?, description = ?, min_quantity = ?, ops_code = ?, zusatzentgelt = ?, endo_today_link = ? WHERE id = ?',
       [name, description, min_quantity || 0, ops_code || null, zusatzentgelt || null, endo_today_link || null, req.params.id]
     );
@@ -132,6 +136,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 // GET Kategorie-Bestände (Summe aller Materialien pro Kategorie)
 router.get('/stats/inventory', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     let query = `
       SELECT 
         c.id,
@@ -161,7 +166,7 @@ router.get('/stats/inventory', async (req: Request, res: Response) => {
     
     query += ' GROUP BY c.id, c.name, c.description, c.min_quantity, c.unit_id ORDER BY c.name';
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     
     res.json(rows);
   } catch (error) {
@@ -173,9 +178,10 @@ router.get('/stats/inventory', async (req: Request, res: Response) => {
 // DELETE Kategorie
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     // Non-Root User können nur Kategorien ihrer Abteilung löschen
     if (!req.user?.isRoot && req.user?.departmentId) {
-      const [categoryCheck] = await pool.query<RowDataPacket[]>(
+      const [categoryCheck] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM categories WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
@@ -184,7 +190,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       }
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'DELETE FROM categories WHERE id = ?',
       [req.params.id]
     );

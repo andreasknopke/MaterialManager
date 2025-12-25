@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 const router = Router();
@@ -7,6 +7,7 @@ const router = Router();
 // GET alle Einheiten
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { active } = req.query;
     
     let query = 'SELECT * FROM units';
@@ -18,7 +19,7 @@ router.get('/', async (req: Request, res: Response) => {
     
     query += ' ORDER BY name';
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der Einheiten:', error);
@@ -29,7 +30,8 @@ router.get('/', async (req: Request, res: Response) => {
 // GET eine Einheit nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM units WHERE id = ?',
       [req.params.id]
     );
@@ -48,34 +50,35 @@ router.get('/:id', async (req: Request, res: Response) => {
 // GET Statistiken einer Einheit
 router.get('/:id/stats', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const unitId = req.params.id;
     
     // Material-Anzahl
-    const [materialCount] = await pool.query<RowDataPacket[]>(
+    const [materialCount] = await currentPool.query<RowDataPacket[]>(
       'SELECT COUNT(*) as count FROM materials WHERE unit_id = ? AND active = TRUE',
       [unitId]
     );
     
     // Schrank-Anzahl
-    const [cabinetCount] = await pool.query<RowDataPacket[]>(
+    const [cabinetCount] = await currentPool.query<RowDataPacket[]>(
       'SELECT COUNT(*) as count FROM cabinets WHERE unit_id = ? AND active = TRUE',
       [unitId]
     );
     
     // Gesamtbestand
-    const [stockSum] = await pool.query<RowDataPacket[]>(
+    const [stockSum] = await currentPool.query<RowDataPacket[]>(
       'SELECT COALESCE(SUM(current_stock), 0) as total FROM materials WHERE unit_id = ? AND active = TRUE',
       [unitId]
     );
     
     // Materialien mit niedrigem Bestand
-    const [lowStock] = await pool.query<RowDataPacket[]>(
+    const [lowStock] = await currentPool.query<RowDataPacket[]>(
       'SELECT COUNT(*) as count FROM materials WHERE unit_id = ? AND current_stock <= min_stock AND active = TRUE',
       [unitId]
     );
     
     // Ablaufende Materialien (30 Tage)
-    const [expiring] = await pool.query<RowDataPacket[]>(
+    const [expiring] = await currentPool.query<RowDataPacket[]>(
       `SELECT COUNT(*) as count FROM materials 
        WHERE unit_id = ? 
        AND expiry_date IS NOT NULL 
@@ -100,18 +103,19 @@ router.get('/:id/stats', async (req: Request, res: Response) => {
 // POST neue Einheit erstellen
 router.post('/', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { name, description, color, active } = req.body;
     
     if (!name) {
       return res.status(400).json({ error: 'Name ist erforderlich' });
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'INSERT INTO units (name, description, color, active) VALUES (?, ?, ?, ?)',
       [name, description || null, color || '#1976d2', active !== false]
     );
     
-    const [newUnit] = await pool.query<RowDataPacket[]>(
+    const [newUnit] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM units WHERE id = ?',
       [result.insertId]
     );
@@ -131,6 +135,7 @@ router.post('/', async (req: Request, res: Response) => {
 // PUT Einheit aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { name, description, color, active } = req.body;
     
     if (!name) {
@@ -139,14 +144,14 @@ router.put('/:id', async (req: Request, res: Response) => {
     
     const isActive = active !== false;
     
-    await pool.query(
+    await currentPool.query(
       `UPDATE units 
        SET name = ?, description = ?, color = ?, active = ?
        WHERE id = ?`,
       [name, description || null, color || '#1976d2', isActive, req.params.id]
     );
     
-    const [updated] = await pool.query<RowDataPacket[]>(
+    const [updated] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM units WHERE id = ?',
       [req.params.id]
     );
@@ -170,13 +175,14 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE Einheit löschen
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     // Prüfe ob Einheit noch verwendet wird
-    const [materials] = await pool.query<RowDataPacket[]>(
+    const [materials] = await currentPool.query<RowDataPacket[]>(
       'SELECT COUNT(*) as count FROM materials WHERE unit_id = ?',
       [req.params.id]
     );
     
-    const [cabinets] = await pool.query<RowDataPacket[]>(
+    const [cabinets] = await currentPool.query<RowDataPacket[]>(
       'SELECT COUNT(*) as count FROM cabinets WHERE unit_id = ?',
       [req.params.id]
     );
@@ -189,7 +195,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       });
     }
     
-    await pool.query('DELETE FROM units WHERE id = ?', [req.params.id]);
+    await currentPool.query('DELETE FROM units WHERE id = ?', [req.params.id]);
     
     res.json({ message: 'Einheit erfolgreich gelöscht' });
   } catch (error) {
@@ -201,6 +207,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // GET Material-Transfers einer Einheit
 router.get('/:id/transfers', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const unitId = req.params.id;
     const { type } = req.query; // 'incoming' oder 'outgoing'
     
@@ -235,7 +242,7 @@ router.get('/:id/transfers', async (req: Request, res: Response) => {
     
     query += ' ORDER BY mt.transfer_date DESC LIMIT 100';
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der Transfers:', error);

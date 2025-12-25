@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { authenticate } from '../middleware/auth';
 import { getDepartmentFilter } from '../utils/departmentFilter';
@@ -12,6 +12,7 @@ router.use(authenticate);
 // Aggregiert nach Produkt (GTIN) mit Gesamtbestand
 router.get('/stock-outs', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { period } = req.query; // 'today', '3days', 'week', 'month'
     
     // Zeitraum-Filter berechnen
@@ -76,7 +77,7 @@ router.get('/stock-outs', async (req: Request, res: Response) => {
       ORDER BY total_out DESC, p.name
     `;
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     
     // Sicherstellen dass total_out numerisch ist
     const totalQuantity = rows.reduce((sum: number, r: any) => sum + (Number(r.total_out) || 0), 0);
@@ -96,6 +97,7 @@ router.get('/stock-outs', async (req: Request, res: Response) => {
 // GET Einzelne Transaktionen für ein Produkt (für Detail-Ansicht)
 router.get('/stock-outs/:productId/transactions', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { period } = req.query;
     const { productId } = req.params;
     
@@ -117,7 +119,7 @@ router.get('/stock-outs/:productId/transactions', async (req: Request, res: Resp
         dateFilter = 'DATE(mt.transaction_date) = CURDATE()';
     }
     
-    const [rows] = await pool.query<RowDataPacket[]>(`
+    const [rows] = await currentPool.query<RowDataPacket[]>(`
       SELECT 
         mt.id,
         mt.quantity,
@@ -151,6 +153,7 @@ router.get('/stock-outs/:productId/transactions', async (req: Request, res: Resp
 // POST - Material als nachbestellt markieren
 router.post('/mark-ordered', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { product_id, gtin, product_name, quantity_ordered, notes } = req.body;
     
     if (!product_id || !product_name) {
@@ -160,7 +163,7 @@ router.post('/mark-ordered', async (req: Request, res: Response) => {
     const userId = req.user?.id || null;
     const userName = req.user?.fullName || req.user?.username || 'Unbekannt';
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       `INSERT INTO reorder_history (product_id, gtin, product_name, quantity_ordered, ordered_by, ordered_by_name, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [product_id, gtin || null, product_name, quantity_ordered || 1, userId, userName, notes || null]
@@ -179,6 +182,7 @@ router.post('/mark-ordered', async (req: Request, res: Response) => {
 // GET - Bestellhistorie abrufen
 router.get('/history', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { status, search, period } = req.query;
     
     let query = `
@@ -231,7 +235,7 @@ router.get('/history', async (req: Request, res: Response) => {
     
     query += ` ORDER BY rh.ordered_at DESC`;
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     
     res.json(rows);
   } catch (error) {
@@ -243,6 +247,7 @@ router.get('/history', async (req: Request, res: Response) => {
 // PUT - Bestellung-Status aktualisieren (z.B. als empfangen markieren)
 router.put('/history/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { id } = req.params;
     const { status, notes } = req.body;
     
@@ -252,7 +257,7 @@ router.put('/history/:id', async (req: Request, res: Response) => {
     
     const receivedAt = status === 'received' ? 'NOW()' : 'NULL';
     
-    await pool.query(
+    await currentPool.query(
       `UPDATE reorder_history SET status = ?, notes = COALESCE(?, notes), received_at = ${receivedAt} WHERE id = ?`,
       [status, notes || null, id]
     );
@@ -267,9 +272,10 @@ router.put('/history/:id', async (req: Request, res: Response) => {
 // DELETE - Bestellung aus Historie löschen
 router.delete('/history/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { id } = req.params;
     
-    await pool.query('DELETE FROM reorder_history WHERE id = ?', [id]);
+    await currentPool.query('DELETE FROM reorder_history WHERE id = ?', [id]);
     
     res.json({ message: 'Eintrag gelöscht' });
   } catch (error) {
@@ -281,9 +287,10 @@ router.delete('/history/:id', async (req: Request, res: Response) => {
 // GET - Prüfen ob Produkt bereits als nachbestellt markiert ist (noch offen)
 router.get('/is-ordered/:productId', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { productId } = req.params;
     
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       `SELECT id, ordered_at, ordered_by_name FROM reorder_history 
        WHERE product_id = ? AND status = 'ordered' 
        ORDER BY ordered_at DESC LIMIT 1`,

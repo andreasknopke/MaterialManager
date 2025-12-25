@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { RowDataPacket, ResultSetHeader, PoolConnection } from 'mysql2/promise';
 import { authenticate } from '../middleware/auth';
 import { auditTransaction } from '../utils/auditLogger';
@@ -64,6 +64,7 @@ interface ProtocolItem {
 // GET alle Interventionsprotokolle (mit Suche)
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { search, from_date, to_date, gtin, lot_number, limit = 50, offset = 0 } = req.query;
     
     // Wenn nach GTIN oder LOT gefiltert wird, brauchen wir einen JOIN
@@ -112,7 +113,7 @@ router.get('/', async (req: Request, res: Response) => {
     sql += ` ORDER BY ip.started_at DESC LIMIT ? OFFSET ?`;
     params.push(Number(limit), Number(offset));
     
-    const [protocols] = await pool.query<RowDataPacket[]>(sql, params);
+    const [protocols] = await currentPool.query<RowDataPacket[]>(sql, params);
     
     // Gesamtanzahl für Pagination
     let countSql = `
@@ -149,7 +150,7 @@ router.get('/', async (req: Request, res: Response) => {
       countParams.push(`%${lot_number}%`);
     }
     
-    const [countResult] = await pool.query<RowDataPacket[]>(countSql, countParams);
+    const [countResult] = await currentPool.query<RowDataPacket[]>(countSql, countParams);
     
     res.json({
       protocols,
@@ -171,6 +172,7 @@ router.get('/', async (req: Request, res: Response) => {
 // GET nicht zugeordnete Materialausgänge (Stock-Outs ohne Patientenzuordnung)
 router.get('/unassigned/transactions', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { 
       search, 
       from_date, 
@@ -258,7 +260,7 @@ router.get('/unassigned/transactions', async (req: Request, res: Response) => {
     sql += ` ORDER BY t.transaction_date DESC LIMIT ? OFFSET ?`;
     params.push(Number(limit), Number(offset));
     
-    const [transactions] = await pool.query<RowDataPacket[]>(sql, params);
+    const [transactions] = await currentPool.query<RowDataPacket[]>(sql, params);
     
     // Gesamtanzahl für Pagination
     let countSql = `
@@ -306,7 +308,7 @@ router.get('/unassigned/transactions', async (req: Request, res: Response) => {
       countParams.push(category_id);
     }
     
-    const [countResult] = await pool.query<RowDataPacket[]>(countSql, countParams);
+    const [countResult] = await currentPool.query<RowDataPacket[]>(countSql, countParams);
     
     res.json({
       transactions,
@@ -322,7 +324,8 @@ router.get('/unassigned/transactions', async (req: Request, res: Response) => {
 
 // POST Neues Protokoll aus nicht zugeordneten Transaktionen erstellen
 router.post('/create-from-transactions', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     const { patient_id, patient_name, notes, transaction_ids } = req.body;
@@ -429,10 +432,11 @@ router.post('/create-from-transactions', async (req: Request, res: Response) => 
 // GET einzelnes Protokoll mit Items
 router.get('/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { id } = req.params;
     
     // Protokoll laden
-    const [protocols] = await pool.query<RowDataPacket[]>(
+    const [protocols] = await currentPool.query<RowDataPacket[]>(
       `SELECT 
         ip.*,
         u.username as created_by_name
@@ -447,7 +451,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
     
     // Items laden
-    const [items] = await pool.query<RowDataPacket[]>(
+    const [items] = await currentPool.query<RowDataPacket[]>(
       `SELECT * FROM intervention_protocol_items 
        WHERE protocol_id = ? 
        ORDER BY taken_at ASC`,
@@ -466,7 +470,8 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 // POST neues Interventionsprotokoll speichern
 router.post('/', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     const { patient_id, patient_name, started_at, notes, items } = req.body;
@@ -542,16 +547,17 @@ router.post('/', async (req: Request, res: Response) => {
 // DELETE Protokoll löschen
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { id } = req.params;
     
     // Verknüpfungen in material_transactions aufheben
-    await pool.query(
+    await currentPool.query(
       'UPDATE material_transactions SET protocol_item_id = NULL WHERE protocol_item_id IN (SELECT id FROM intervention_protocol_items WHERE protocol_id = ?)',
       [id]
     );
     
     // Items werden durch CASCADE automatisch gelöscht
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'DELETE FROM intervention_protocols WHERE id = ?',
       [id]
     );
@@ -569,7 +575,8 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
 // POST Items zu bestehendem Protokoll hinzufügen (aus nicht zugeordneten Transaktionen)
 router.post('/:id/add-items', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     const { id } = req.params;
@@ -662,7 +669,8 @@ router.post('/:id/add-items', async (req: Request, res: Response) => {
 
 // DELETE Item aus Protokoll entfernen (Zuordnung aufheben)
 router.delete('/:protocolId/items/:itemId', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     const { protocolId, itemId } = req.params;
@@ -708,6 +716,7 @@ router.delete('/:protocolId/items/:itemId', async (req: Request, res: Response) 
 // WICHTIG: Diese Route muss VOR /:id stehen, da sonst "transactions" als :id gematched wird
 router.put('/transactions/:transactionId/lot', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const user = (req as any).user;
     
     // Nur Root-Admins dürfen LOT-Nummern korrigieren
@@ -723,7 +732,7 @@ router.put('/transactions/:transactionId/lot', async (req: Request, res: Respons
     }
     
     // Prüfen ob die Transaktion existiert und vom Typ 'out' ist, inkl. Material-Name für Audit
-    const [transactions] = await pool.query<RowDataPacket[]>(
+    const [transactions] = await currentPool.query<RowDataPacket[]>(
       `SELECT t.id, t.transaction_type, t.lot_number AS old_lot, m.name AS material_name
        FROM material_transactions t
        LEFT JOIN materials m ON t.material_id = m.id
@@ -743,7 +752,7 @@ router.put('/transactions/:transactionId/lot', async (req: Request, res: Respons
     const materialName = transactions[0].material_name;
     
     // LOT-Nummer aktualisieren
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'UPDATE material_transactions SET lot_number = ? WHERE id = ?',
       [lot_number || null, transactionId]
     );
@@ -772,6 +781,7 @@ router.put('/transactions/:transactionId/lot', async (req: Request, res: Respons
 // PUT Protokoll-Details aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { id } = req.params;
     const { patient_id, patient_name, notes } = req.body;
     
@@ -779,7 +789,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Patienten-ID ist erforderlich' });
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'UPDATE intervention_protocols SET patient_id = ?, patient_name = ?, notes = ? WHERE id = ?',
       [patient_id, patient_name || null, notes || null, id]
     );

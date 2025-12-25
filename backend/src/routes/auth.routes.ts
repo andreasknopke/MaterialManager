@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { generateToken, authenticate, requireAdmin, requireRoot } from '../middleware/auth';
 import { auditUser } from '../utils/auditLogger';
@@ -10,7 +10,8 @@ const router = Router();
 
 // POST /api/auth/register - Neuen Benutzer registrieren
 router.post('/register', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     const { username, email, password, fullName } = req.body;
@@ -65,7 +66,8 @@ router.post('/register', async (req: Request, res: Response) => {
 
 // POST /api/auth/login - Benutzer anmelden
 router.post('/login', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     const { username, password } = req.body;
@@ -195,15 +197,16 @@ router.post('/login', async (req: Request, res: Response) => {
 // POST /api/auth/logout - Benutzer abmelden
 router.post('/logout', authenticate, async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const authHeader = req.headers.authorization;
     const token = authHeader!.substring(7);
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
     // Session löschen
-    await pool.query('DELETE FROM user_sessions WHERE token_hash = ?', [tokenHash]);
+    await currentPool.query('DELETE FROM user_sessions WHERE token_hash = ?', [tokenHash]);
 
     // Audit-Log
-    await pool.query(
+    await currentPool.query(
       'INSERT INTO user_audit_log (user_id, action, ip_address) VALUES (?, ?, ?)',
       [req.user!.id, 'logout', req.ip]
     );
@@ -218,7 +221,8 @@ router.post('/logout', authenticate, async (req: Request, res: Response) => {
 // GET /api/auth/me - Aktuellen Benutzer abrufen
 router.get('/me', authenticate, async (req: Request, res: Response) => {
   try {
-    const [users] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [users] = await currentPool.query<RowDataPacket[]>(
       `SELECT id, username, email, full_name, role, is_root, department_id, active, 
               email_verified, must_change_password, last_login, created_at 
        FROM users WHERE id = ?`,
@@ -251,6 +255,7 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
 // POST /api/auth/change-password - Passwort ändern
 router.post('/change-password', authenticate, async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
@@ -262,7 +267,7 @@ router.post('/change-password', authenticate, async (req: Request, res: Response
     }
 
     // Aktuelles Passwort prüfen
-    const [users] = await pool.query<RowDataPacket[]>(
+    const [users] = await currentPool.query<RowDataPacket[]>(
       'SELECT password_hash FROM users WHERE id = ?',
       [req.user!.id]
     );
@@ -277,7 +282,7 @@ router.post('/change-password', authenticate, async (req: Request, res: Response
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
     // Passwort aktualisieren
-    await pool.query(
+    await currentPool.query(
       'UPDATE users SET password_hash = ?, must_change_password = FALSE WHERE id = ?',
       [newPasswordHash, req.user!.id]
     );
@@ -287,13 +292,13 @@ router.post('/change-password', authenticate, async (req: Request, res: Response
     const currentToken = authHeader!.substring(7);
     const currentTokenHash = crypto.createHash('sha256').update(currentToken).digest('hex');
     
-    await pool.query(
+    await currentPool.query(
       'DELETE FROM user_sessions WHERE user_id = ? AND token_hash != ?',
       [req.user!.id, currentTokenHash]
     );
 
     // Audit-Log
-    await pool.query(
+    await currentPool.query(
       'INSERT INTO user_audit_log (user_id, action, ip_address) VALUES (?, ?, ?)',
       [req.user!.id, 'password_change', req.ip]
     );

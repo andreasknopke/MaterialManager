@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { authenticate } from '../middleware/auth';
 
@@ -11,6 +11,7 @@ router.use(authenticate);
 // GET alle Produkte (mit Aggregat-Daten)
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { search, company_id } = req.query;
     
     let query = `
@@ -39,7 +40,7 @@ router.get('/', async (req: Request, res: Response) => {
     
     query += ` ORDER BY p.name`;
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der Produkte:', error);
@@ -50,7 +51,8 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Produkt nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       `SELECT p.*, 
               co.name as company_name,
               s.name as shape_name
@@ -66,7 +68,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
     
     // Material-Instanzen dieses Produkts abrufen
-    const [materials] = await pool.query<RowDataPacket[]>(
+    const [materials] = await currentPool.query<RowDataPacket[]>(
       `SELECT m.id, m.lot_number, m.expiry_date, m.current_stock, m.is_consignment,
               c.name as cabinet_name, cat.name as category_name
        FROM materials m
@@ -90,7 +92,8 @@ router.get('/:id', async (req: Request, res: Response) => {
 // GET Produkt nach GTIN
 router.get('/gtin/:gtin', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       `SELECT p.*, 
               co.name as company_name,
               s.name as shape_name
@@ -115,6 +118,7 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
 // POST neues Produkt
 router.post('/', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const {
       gtin, name, description, size, company_id, shape_id,
       shaft_length, device_length, device_diameter, french_size,
@@ -126,7 +130,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
     
     // Prüfen ob GTIN bereits existiert
-    const [existing] = await pool.query<RowDataPacket[]>(
+    const [existing] = await currentPool.query<RowDataPacket[]>(
       'SELECT id FROM products WHERE gtin = ?',
       [gtin]
     );
@@ -138,7 +142,7 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       `INSERT INTO products 
        (gtin, name, description, size, company_id, shape_id,
         shaft_length, device_length, device_diameter, french_size,
@@ -162,6 +166,7 @@ router.post('/', async (req: Request, res: Response) => {
 // PUT Produkt aktualisieren
 router.put('/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const {
       name, description, size, company_id, shape_id,
       shaft_length, device_length, device_diameter, french_size,
@@ -169,7 +174,7 @@ router.put('/:id', async (req: Request, res: Response) => {
     } = req.body;
     
     // GTIN kann nicht geändert werden (unique identifier)
-    await pool.query(
+    await currentPool.query(
       `UPDATE products SET
         name = ?, description = ?, size = ?, company_id = ?, shape_id = ?,
         shaft_length = ?, device_length = ?, device_diameter = ?, french_size = ?,
@@ -190,8 +195,9 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE Produkt (nur wenn keine Materialien verknüpft)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     // Prüfen ob noch Materialien verknüpft sind
-    const [materials] = await pool.query<RowDataPacket[]>(
+    const [materials] = await currentPool.query<RowDataPacket[]>(
       'SELECT COUNT(*) as count FROM materials WHERE product_id = ?',
       [req.params.id]
     );
@@ -202,7 +208,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       });
     }
     
-    await pool.query('DELETE FROM products WHERE id = ?', [req.params.id]);
+    await currentPool.query('DELETE FROM products WHERE id = ?', [req.params.id]);
     res.json({ message: 'Produkt gelöscht' });
   } catch (error) {
     console.error('Fehler beim Löschen des Produkts:', error);

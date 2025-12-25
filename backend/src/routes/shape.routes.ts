@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { authenticate } from '../middleware/auth';
 
@@ -11,7 +11,8 @@ router.use(authenticate);
 // GET alle Shapes
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM shapes WHERE active = TRUE ORDER BY sort_order, name'
     );
     res.json(rows);
@@ -29,7 +30,8 @@ router.get('/all', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
     
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM shapes ORDER BY sort_order, name'
     );
     res.json(rows);
@@ -53,7 +55,8 @@ router.post('/', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Name ist erforderlich' });
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const currentPool = getPoolForRequest(req);
+    const [result] = await currentPool.query<ResultSetHeader>(
       'INSERT INTO shapes (name, description, sort_order) VALUES (?, ?, ?)',
       [name, description || null, sort_order || 0]
     );
@@ -81,7 +84,8 @@ router.put('/:id', async (req: Request, res: Response) => {
     
     const { name, description, sort_order, active } = req.body;
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const currentPool = getPoolForRequest(req);
+    const [result] = await currentPool.query<ResultSetHeader>(
       'UPDATE shapes SET name = ?, description = ?, sort_order = ?, active = ? WHERE id = ?',
       [name, description || null, sort_order || 0, active !== false, req.params.id]
     );
@@ -108,7 +112,8 @@ router.delete('/:id', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Keine Berechtigung' });
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const currentPool = getPoolForRequest(req);
+    const [result] = await currentPool.query<ResultSetHeader>(
       'UPDATE shapes SET active = FALSE WHERE id = ?',
       [req.params.id]
     );

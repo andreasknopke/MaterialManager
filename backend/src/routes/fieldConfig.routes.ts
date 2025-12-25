@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 const router = Router();
@@ -7,7 +7,8 @@ const router = Router();
 // GET alle Feldkonfigurationen
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM field_configurations WHERE active = TRUE ORDER BY display_order'
     );
     res.json(rows);
@@ -20,7 +21,8 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Feldkonfiguration nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM field_configurations WHERE id = ?',
       [req.params.id]
     );
@@ -45,7 +47,8 @@ router.post('/', async (req: Request, res: Response) => {
   }
   
   try {
-    const [result] = await pool.query<ResultSetHeader>(
+    const currentPool = getPoolForRequest(req);
+    const [result] = await currentPool.query<ResultSetHeader>(
       `INSERT INTO field_configurations 
        (field_name, field_label, field_type, is_required, display_order, options)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -70,7 +73,8 @@ router.put('/:id', async (req: Request, res: Response) => {
   const { field_name, field_label, field_type, is_required, display_order, active, options } = req.body;
   
   try {
-    const [result] = await pool.query<ResultSetHeader>(
+    const currentPool = getPoolForRequest(req);
+    const [result] = await currentPool.query<ResultSetHeader>(
       `UPDATE field_configurations 
        SET field_name = ?, field_label = ?, field_type = ?, 
            is_required = ?, display_order = ?, active = ?, options = ?
@@ -92,7 +96,8 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE Feldkonfiguration (soft delete)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const [result] = await pool.query<ResultSetHeader>(
+    const currentPool = getPoolForRequest(req);
+    const [result] = await currentPool.query<ResultSetHeader>(
       'UPDATE field_configurations SET active = FALSE WHERE id = ?',
       [req.params.id]
     );

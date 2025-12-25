@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { auditMaterial } from '../utils/auditLogger';
 
@@ -9,8 +9,9 @@ const router = Router();
 // Nutzt jetzt die normalisierte products-Tabelle für GTIN-basierte Stammdaten
 router.get('/gtin/:gtin', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     // Zuerst in der products-Tabelle suchen (normalisierte Stammdaten)
-    const [products] = await pool.query<RowDataPacket[]>(
+    const [products] = await currentPool.query<RowDataPacket[]>(
       `SELECT p.id as product_id, p.gtin, p.name, p.description, p.size,
               p.company_id, co.name as company_name,
               p.shape_id, s.name as shape_name,
@@ -26,7 +27,7 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
     
     if (products.length > 0) {
       // Produkt gefunden - hole zusätzlich letzte Instanz-Daten (Kategorie, Schrank, etc.)
-      const [lastMaterial] = await pool.query<RowDataPacket[]>(
+      const [lastMaterial] = await currentPool.query<RowDataPacket[]>(
         `SELECT m.category_id, c.name as category_name, 
                 m.cabinet_id, cab.name as cabinet_name, m.unit, m.unit_id
          FROM materials m
@@ -70,7 +71,7 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
     }
     
     // Fallback: Suche in alten materials (für noch nicht migrierte Daten)
-    const [materials] = await pool.query<RowDataPacket[]>(
+    const [materials] = await currentPool.query<RowDataPacket[]>(
       `SELECT m.name, m.description, m.category_id, m.company_id, m.unit, m.size,
               m.cabinet_id, cab.name as cabinet_name,
               c.name as category_name, co.name as company_name
@@ -115,6 +116,7 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
 // Aggregiert nach Schrank und Charge (gleiche Charge im gleichen Schrank = 1 Eintrag)
 router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { lot } = req.query; // Optional: Batch/Lot-Nummer für direkte Suche
     
     let query = `SELECT 
@@ -150,7 +152,7 @@ router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
        ORDER BY MIN(m.expiry_date) ASC, MIN(m.created_at) ASC`;
     
     // Materialien mit gleicher GTIN, Schrank und Charge zusammenfassen
-    const [materials] = await pool.query<RowDataPacket[]>(query, params);
+    const [materials] = await currentPool.query<RowDataPacket[]>(query, params);
     
     res.json({
       materials: materials,
@@ -165,7 +167,8 @@ router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
 // GET Barcode suchen
 router.get('/search/:barcode', async (req: Request, res: Response) => {
   try {
-    const [barcodeRows] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [barcodeRows] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM barcodes WHERE barcode = ?',
       [req.params.barcode]
     );
@@ -177,7 +180,7 @@ router.get('/search/:barcode', async (req: Request, res: Response) => {
     const barcode = barcodeRows[0];
     
     // Material-Informationen abrufen
-    const [materialRows] = await pool.query<RowDataPacket[]>(
+    const [materialRows] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM v_materials_overview WHERE id = ?',
       [barcode.material_id]
     );
@@ -199,7 +202,8 @@ router.get('/search/:barcode', async (req: Request, res: Response) => {
 // GET alle Barcodes eines Materials
 router.get('/material/:materialId', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM barcodes WHERE material_id = ? ORDER BY is_primary DESC, created_at',
       [req.params.materialId]
     );
@@ -219,15 +223,16 @@ router.post('/', async (req: Request, res: Response) => {
   }
   
   try {
+    const currentPool = getPoolForRequest(req);
     // Wenn is_primary = true, alle anderen Barcodes des Materials auf false setzen
     if (is_primary) {
-      await pool.query(
+      await currentPool.query(
         'UPDATE barcodes SET is_primary = FALSE WHERE material_id = ?',
         [material_id]
       );
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'INSERT INTO barcodes (material_id, barcode, barcode_type, is_primary) VALUES (?, ?, ?, ?)',
       [material_id, barcode, barcode_type || 'CODE128', is_primary || false]
     );
@@ -250,22 +255,23 @@ router.put('/:id', async (req: Request, res: Response) => {
   const { barcode, barcode_type, is_primary } = req.body;
   
   try {
+    const currentPool = getPoolForRequest(req);
     // Wenn is_primary = true, Material-ID ermitteln und andere Barcodes auf false setzen
     if (is_primary) {
-      const [existingBarcode] = await pool.query<RowDataPacket[]>(
+      const [existingBarcode] = await currentPool.query<RowDataPacket[]>(
         'SELECT material_id FROM barcodes WHERE id = ?',
         [req.params.id]
       );
       
       if (existingBarcode.length > 0) {
-        await pool.query(
+        await currentPool.query(
           'UPDATE barcodes SET is_primary = FALSE WHERE material_id = ? AND id != ?',
           [existingBarcode[0].material_id, req.params.id]
         );
       }
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'UPDATE barcodes SET barcode = ?, barcode_type = ?, is_primary = ? WHERE id = ?',
       [barcode, barcode_type, is_primary, req.params.id]
     );
@@ -284,7 +290,8 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE Barcode
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const [result] = await pool.query<ResultSetHeader>(
+    const currentPool = getPoolForRequest(req);
+    const [result] = await currentPool.query<ResultSetHeader>(
       'DELETE FROM barcodes WHERE id = ?',
       [req.params.id]
     );
@@ -321,7 +328,8 @@ router.post('/material/:materialId/remove', async (req: Request, res: Response) 
     return res.status(400).json({ error: 'Keine gültige Material-ID angegeben' });
   }
   
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     await connection.beginTransaction();
@@ -422,7 +430,8 @@ router.post('/material/:materialId/add', async (req: Request, res: Response) => 
   // Nur erste ID verwenden für Rückgängig-Aktion
   const materialId = materialIds[0];
   
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     await connection.beginTransaction();
@@ -487,7 +496,8 @@ router.post('/scan-out', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Barcode und Menge sind erforderlich' });
   }
   
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     await connection.beginTransaction();

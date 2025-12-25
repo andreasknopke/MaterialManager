@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { RowDataPacket } from 'mysql2';
 import { authenticate } from '../middleware/auth';
 import { getDepartmentFilter } from '../utils/departmentFilter';
@@ -17,6 +17,7 @@ router.use(authenticate);
  */
 router.get('/transactions', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { 
       startDate, 
       endDate, 
@@ -97,7 +98,7 @@ router.get('/transactions', async (req: Request, res: Response) => {
     query += ` LIMIT ?`;
     params.push(parseInt(limit as string) || 100);
 
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der Transaktionen:', error);
@@ -111,6 +112,7 @@ router.get('/transactions', async (req: Request, res: Response) => {
  */
 router.get('/summary', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { startDate, endDate, unitId } = req.query;
 
     // Base filter condition
@@ -161,7 +163,7 @@ router.get('/summary', async (req: Request, res: Response) => {
       ${dateFilter}
     `;
 
-    const [summaryRows] = await pool.query<RowDataPacket[]>(summaryQuery, params);
+    const [summaryRows] = await currentPool.query<RowDataPacket[]>(summaryQuery, params);
 
     // Top-Materialien nach Bewegung
     const topMaterialsQuery = `
@@ -181,7 +183,7 @@ router.get('/summary', async (req: Request, res: Response) => {
       LIMIT 10
     `;
 
-    const [topMaterials] = await pool.query<RowDataPacket[]>(topMaterialsQuery, paramsForSecondQuery);
+    const [topMaterials] = await currentPool.query<RowDataPacket[]>(topMaterialsQuery, paramsForSecondQuery);
 
     res.json({
       summary: summaryRows[0] || {
@@ -209,6 +211,7 @@ router.get('/summary', async (req: Request, res: Response) => {
  */
 router.get('/daily', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { startDate, endDate, unitId } = req.query;
 
     // Default: Letzte 30 Tage
@@ -248,7 +251,7 @@ router.get('/daily', async (req: Request, res: Response) => {
     query += ' GROUP BY DATE(t.transaction_date), t.transaction_type';
     query += ' ORDER BY date ASC';
 
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der täglichen Statistiken:', error);
@@ -262,6 +265,7 @@ router.get('/daily', async (req: Request, res: Response) => {
  */
 router.get('/monthly', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { year, unitId } = req.query;
     const targetYear = year || new Date().getFullYear();
 
@@ -296,7 +300,7 @@ router.get('/monthly', async (req: Request, res: Response) => {
     query += ' GROUP BY YEAR(t.transaction_date), MONTH(t.transaction_date)';
     query += ' ORDER BY year, month';
 
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der monatlichen Statistiken:', error);
@@ -310,6 +314,7 @@ router.get('/monthly', async (req: Request, res: Response) => {
  */
 router.get('/material-stats', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { unitId, sortBy = 'transaction_count', order = 'desc' } = req.query;
 
     let query = `
@@ -361,7 +366,7 @@ router.get('/material-stats', async (req: Request, res: Response) => {
     
     query += ` ORDER BY ${sortColumn} ${sortOrder}`;
 
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der Material-Statistiken:', error);
@@ -375,6 +380,7 @@ router.get('/material-stats', async (req: Request, res: Response) => {
  */
 router.get('/user-activity', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { startDate, endDate, unitId } = req.query;
 
     let query = `
@@ -421,7 +427,7 @@ router.get('/user-activity', async (req: Request, res: Response) => {
     query += ' GROUP BY t.user_id, COALESCE(u.full_name, u.username, t.user_name, \'Unbekannt\')';
     query += ' ORDER BY total_transactions DESC';
 
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Fehler beim Abrufen der Benutzeraktivität:', error);

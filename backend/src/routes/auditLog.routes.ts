@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { RowDataPacket } from 'mysql2';
 import { authenticate, requireAdmin } from '../middleware/auth';
 
@@ -12,6 +12,7 @@ router.use(requireAdmin);
 // GET /api/audit-logs - Alle Audit-Logs abrufen
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { 
       page = 1, 
       limit = 50, 
@@ -59,14 +60,14 @@ router.get('/', async (req: Request, res: Response) => {
     }
     
     // Gesamtanzahl für Pagination
-    const [countResult] = await pool.query<RowDataPacket[]>(
+    const [countResult] = await currentPool.query<RowDataPacket[]>(
       `SELECT COUNT(*) as total FROM audit_logs al WHERE ${whereClause}`,
       params
     );
     const total = countResult[0].total;
     
     // Logs abrufen
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       `SELECT al.*, u.full_name as user_display_name
        FROM audit_logs al
        LEFT JOIN users u ON al.user_id = u.id
@@ -94,8 +95,9 @@ router.get('/', async (req: Request, res: Response) => {
 // GET /api/audit-logs/stats - Statistiken für Dashboard
 router.get('/stats', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     // Aktionen der letzten 24 Stunden
-    const [last24h] = await pool.query<RowDataPacket[]>(`
+    const [last24h] = await currentPool.query<RowDataPacket[]>(`
       SELECT action, COUNT(*) as count 
       FROM audit_logs 
       WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
@@ -103,7 +105,7 @@ router.get('/stats', async (req: Request, res: Response) => {
     `);
     
     // Aktionen der letzten 7 Tage nach Tag
-    const [last7days] = await pool.query<RowDataPacket[]>(`
+    const [last7days] = await currentPool.query<RowDataPacket[]>(`
       SELECT DATE(created_at) as date, action, COUNT(*) as count
       FROM audit_logs
       WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
@@ -112,7 +114,7 @@ router.get('/stats', async (req: Request, res: Response) => {
     `);
     
     // Aktivste Benutzer
-    const [activeUsers] = await pool.query<RowDataPacket[]>(`
+    const [activeUsers] = await currentPool.query<RowDataPacket[]>(`
       SELECT al.user_id, al.username, COUNT(*) as action_count
       FROM audit_logs al
       WHERE al.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
@@ -122,7 +124,7 @@ router.get('/stats', async (req: Request, res: Response) => {
     `);
     
     // Häufigste Entity-Typen
-    const [entityTypes] = await pool.query<RowDataPacket[]>(`
+    const [entityTypes] = await currentPool.query<RowDataPacket[]>(`
       SELECT entity_type, COUNT(*) as count
       FROM audit_logs
       WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
@@ -144,9 +146,10 @@ router.get('/stats', async (req: Request, res: Response) => {
 
 // GET /api/audit-logs/actions - Alle verfügbaren Aktionstypen
 // WICHTIG: Diese Route muss VOR /entity/:type/:id stehen!
-router.get('/actions', async (_req: Request, res: Response) => {
+router.get('/actions', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       'SELECT DISTINCT action FROM audit_logs ORDER BY action'
     );
     res.json(rows.map(r => r.action));
@@ -158,9 +161,10 @@ router.get('/actions', async (_req: Request, res: Response) => {
 
 // GET /api/audit-logs/entity-types - Alle verfügbaren Entity-Typen
 // WICHTIG: Diese Route muss VOR /entity/:type/:id stehen!
-router.get('/entity-types', async (_req: Request, res: Response) => {
+router.get('/entity-types', async (req: Request, res: Response) => {
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const currentPool = getPoolForRequest(req);
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       'SELECT DISTINCT entity_type FROM audit_logs ORDER BY entity_type'
     );
     res.json(rows.map(r => r.entity_type));
@@ -173,9 +177,10 @@ router.get('/entity-types', async (_req: Request, res: Response) => {
 // GET /api/audit-logs/entity/:type/:id - Logs für spezifische Entität
 router.get('/entity/:type/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     const { type, id } = req.params;
     
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       `SELECT al.*, u.full_name as user_display_name
        FROM audit_logs al
        LEFT JOIN users u ON al.user_id = u.id

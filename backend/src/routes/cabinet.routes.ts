@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import pool from '../config/database';
+import pool, { getPoolForRequest } from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { authenticate } from '../middleware/auth';
 
@@ -11,6 +11,7 @@ router.use(authenticate);
 // GET alle Schränke
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     console.log('=== GET /api/cabinets ===');
     console.log('User:', { id: req.user?.id, isRoot: req.user?.isRoot, departmentId: req.user?.departmentId });
     
@@ -44,7 +45,7 @@ router.get('/', async (req: Request, res: Response) => {
     console.log('Query params:', params);
     
     console.log('Executing query...');
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     console.log('Query executed successfully');
     console.log('Rows returned:', rows.length);
     console.log('Rows data:', JSON.stringify(rows));
@@ -61,6 +62,7 @@ router.get('/', async (req: Request, res: Response) => {
 // GET Schrank nach ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     let query = 'SELECT * FROM cabinets WHERE id = ?';
     const params: any[] = [req.params.id];
     
@@ -70,7 +72,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       params.push(req.user.departmentId);
     }
     
-    const [rows] = await pool.query<RowDataPacket[]>(query, params);
+    const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
     
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Schrank nicht gefunden oder kein Zugriff' });
@@ -86,10 +88,11 @@ router.get('/:id', async (req: Request, res: Response) => {
 // GET Materialien eines Schranks
 router.get('/:id/materials', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     // Non-Root User können nur Materialien aus Schränken ihrer Abteilung sehen
     if (!req.user?.isRoot && req.user?.departmentId) {
       // Prüfe ob der Schrank zur Abteilung (unit_id) des Users gehört
-      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+      const [cabinetCheck] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
@@ -98,7 +101,7 @@ router.get('/:id/materials', async (req: Request, res: Response) => {
       }
     }
     
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       `SELECT m.*, c.name as category_name, co.name as company_name 
        FROM materials m
        LEFT JOIN categories c ON m.category_id = c.id
@@ -117,9 +120,10 @@ router.get('/:id/materials', async (req: Request, res: Response) => {
 // GET Schrank-Infoblatt (Fächer mit Materialien und Custom Fields)
 router.get('/:id/infosheet', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     // Prüfe Zugriff auf den Schrank
     if (!req.user?.isRoot && req.user?.departmentId) {
-      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+      const [cabinetCheck] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
@@ -129,7 +133,7 @@ router.get('/:id/infosheet', async (req: Request, res: Response) => {
     }
 
     // Hole Schrank-Infos
-    const [cabinetRows] = await pool.query<RowDataPacket[]>(
+    const [cabinetRows] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM cabinets WHERE id = ?',
       [req.params.id]
     );
@@ -141,7 +145,7 @@ router.get('/:id/infosheet', async (req: Request, res: Response) => {
     const cabinet = cabinetRows[0];
 
     // Hole alle Fächer des Schranks
-    const [compartments] = await pool.query<RowDataPacket[]>(
+    const [compartments] = await currentPool.query<RowDataPacket[]>(
       'SELECT * FROM compartments WHERE cabinet_id = ? ORDER BY position, name',
       [req.params.id]
     );
@@ -150,7 +154,7 @@ router.get('/:id/infosheet', async (req: Request, res: Response) => {
     const compartmentsWithMaterials = await Promise.all(
       compartments.map(async (comp: any) => {
         // Hole Materialien gruppiert nach GTIN (article_number)
-        const [materials] = await pool.query<RowDataPacket[]>(
+        const [materials] = await currentPool.query<RowDataPacket[]>(
           `SELECT 
              m.article_number,
              m.name,
@@ -223,7 +227,8 @@ router.post('/', async (req: Request, res: Response) => {
   }
   
   try {
-    const [result] = await pool.query<ResultSetHeader>(
+    const currentPool = getPoolForRequest(req);
+    const [result] = await currentPool.query<ResultSetHeader>(
       'INSERT INTO cabinets (name, location, description, capacity, unit_id) VALUES (?, ?, ?, ?, ?)',
       [name, location, description, capacity || 0, unit_id]
     );
@@ -243,9 +248,10 @@ router.put('/:id', async (req: Request, res: Response) => {
   const { name, location, description, capacity, active } = req.body;
   
   try {
+    const currentPool = getPoolForRequest(req);
     // Non-Root User können nur Schränke ihrer Abteilung bearbeiten
     if (!req.user?.isRoot && req.user?.departmentId) {
-      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+      const [cabinetCheck] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
@@ -254,7 +260,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       }
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       `UPDATE cabinets 
        SET name = ?, location = ?, description = ?, capacity = ?, active = ?
        WHERE id = ?`,
@@ -275,9 +281,10 @@ router.put('/:id', async (req: Request, res: Response) => {
 // DELETE Schrank (soft delete)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     // Non-Root User können nur Schränke ihrer Abteilung löschen
     if (!req.user?.isRoot && req.user?.departmentId) {
-      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+      const [cabinetCheck] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
@@ -286,7 +293,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       }
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'UPDATE cabinets SET active = FALSE WHERE id = ?',
       [req.params.id]
     );
@@ -307,9 +314,10 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // GET alle Fächer eines Schranks
 router.get('/:id/compartments', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     // Prüfe Zugriff auf den Schrank
     if (!req.user?.isRoot && req.user?.departmentId) {
-      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+      const [cabinetCheck] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
@@ -318,7 +326,7 @@ router.get('/:id/compartments', async (req: Request, res: Response) => {
       }
     }
     
-    const [rows] = await pool.query<RowDataPacket[]>(
+    const [rows] = await currentPool.query<RowDataPacket[]>(
       `SELECT c.*, 
               (SELECT COUNT(*) FROM materials m WHERE m.compartment_id = c.id AND m.active = TRUE) AS material_count
        FROM compartments c 
@@ -342,9 +350,10 @@ router.post('/:id/compartments', async (req: Request, res: Response) => {
   }
   
   try {
+    const currentPool = getPoolForRequest(req);
     // Prüfe Zugriff auf den Schrank
     if (!req.user?.isRoot && req.user?.departmentId) {
-      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+      const [cabinetCheck] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [req.params.id, req.user.departmentId]
       );
@@ -354,7 +363,7 @@ router.post('/:id/compartments', async (req: Request, res: Response) => {
     }
     
     // Prüfe ob Fachname bereits existiert
-    const [existing] = await pool.query<RowDataPacket[]>(
+    const [existing] = await currentPool.query<RowDataPacket[]>(
       'SELECT id FROM compartments WHERE cabinet_id = ? AND name = ?',
       [req.params.id, name]
     );
@@ -365,14 +374,14 @@ router.post('/:id/compartments', async (req: Request, res: Response) => {
     // Ermittle nächste Position falls nicht angegeben
     let pos = position;
     if (pos === undefined || pos === null) {
-      const [maxPos] = await pool.query<RowDataPacket[]>(
+      const [maxPos] = await currentPool.query<RowDataPacket[]>(
         'SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM compartments WHERE cabinet_id = ?',
         [req.params.id]
       );
       pos = maxPos[0].next_pos;
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'INSERT INTO compartments (cabinet_id, name, description, position) VALUES (?, ?, ?, ?)',
       [req.params.id, name, description || null, pos]
     );
@@ -400,9 +409,10 @@ router.put('/:cabinetId/compartments/:compartmentId', async (req: Request, res: 
   }
   
   try {
+    const currentPool = getPoolForRequest(req);
     // Prüfe Zugriff auf den Schrank
     if (!req.user?.isRoot && req.user?.departmentId) {
-      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+      const [cabinetCheck] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [req.params.cabinetId, req.user.departmentId]
       );
@@ -412,7 +422,7 @@ router.put('/:cabinetId/compartments/:compartmentId', async (req: Request, res: 
     }
     
     // Prüfe ob Fachname bereits von einem anderen Fach verwendet wird
-    const [existing] = await pool.query<RowDataPacket[]>(
+    const [existing] = await currentPool.query<RowDataPacket[]>(
       'SELECT id FROM compartments WHERE cabinet_id = ? AND name = ? AND id != ?',
       [req.params.cabinetId, name, req.params.compartmentId]
     );
@@ -420,7 +430,7 @@ router.put('/:cabinetId/compartments/:compartmentId', async (req: Request, res: 
       return res.status(400).json({ error: 'Ein anderes Fach mit diesem Namen existiert bereits' });
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'UPDATE compartments SET name = ?, description = ?, position = ? WHERE id = ? AND cabinet_id = ?',
       [name, description || null, position || 0, req.params.compartmentId, req.params.cabinetId]
     );
@@ -439,9 +449,10 @@ router.put('/:cabinetId/compartments/:compartmentId', async (req: Request, res: 
 // DELETE Fach (soft delete)
 router.delete('/:cabinetId/compartments/:compartmentId', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     // Prüfe Zugriff auf den Schrank
     if (!req.user?.isRoot && req.user?.departmentId) {
-      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+      const [cabinetCheck] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [req.params.cabinetId, req.user.departmentId]
       );
@@ -451,7 +462,7 @@ router.delete('/:cabinetId/compartments/:compartmentId', async (req: Request, re
     }
     
     // Prüfe ob Materialien im Fach sind
-    const [materials] = await pool.query<RowDataPacket[]>(
+    const [materials] = await currentPool.query<RowDataPacket[]>(
       'SELECT COUNT(*) AS count FROM materials WHERE compartment_id = ? AND active = TRUE',
       [req.params.compartmentId]
     );
@@ -461,7 +472,7 @@ router.delete('/:cabinetId/compartments/:compartmentId', async (req: Request, re
       });
     }
     
-    const [result] = await pool.query<ResultSetHeader>(
+    const [result] = await currentPool.query<ResultSetHeader>(
       'UPDATE compartments SET active = FALSE WHERE id = ? AND cabinet_id = ?',
       [req.params.compartmentId, req.params.cabinetId]
     );
@@ -480,9 +491,10 @@ router.delete('/:cabinetId/compartments/:compartmentId', async (req: Request, re
 // GET Materialien eines Fachs (für QR-Code-Ausdruck)
 router.get('/:cabinetId/compartments/:compartmentId/materials', async (req: Request, res: Response) => {
   try {
+    const currentPool = getPoolForRequest(req);
     // Prüfe Zugriff auf den Schrank
     if (!req.user?.isRoot && req.user?.departmentId) {
-      const [cabinetCheck] = await pool.query<RowDataPacket[]>(
+      const [cabinetCheck] = await currentPool.query<RowDataPacket[]>(
         'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
         [req.params.cabinetId, req.user.departmentId]
       );
@@ -492,7 +504,7 @@ router.get('/:cabinetId/compartments/:compartmentId/materials', async (req: Requ
     }
     
     // Hole Fach-Info
-    const [compartmentRows] = await pool.query<RowDataPacket[]>(
+    const [compartmentRows] = await currentPool.query<RowDataPacket[]>(
       `SELECT c.*, cab.name AS cabinet_name, cab.location AS cabinet_location
        FROM compartments c
        JOIN cabinets cab ON c.cabinet_id = cab.id
@@ -505,7 +517,7 @@ router.get('/:cabinetId/compartments/:compartmentId/materials', async (req: Requ
     }
     
     // Hole Materialien im Fach (gruppiert nach Name um Mehrfachnennung zu vermeiden)
-    const [materials] = await pool.query<RowDataPacket[]>(
+    const [materials] = await currentPool.query<RowDataPacket[]>(
       `SELECT 
          m.name,
          m.article_number,
@@ -539,7 +551,8 @@ router.get('/:cabinetId/compartments/:compartmentId/materials', async (req: Requ
 // POST Schrank leeren (alle Materialien mit correction protokollieren)
 // Fächerstruktur bleibt erhalten!
 router.post('/:id/clear', async (req: Request, res: Response) => {
-  const connection = await pool.getConnection();
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
   
   try {
     await connection.beginTransaction();
