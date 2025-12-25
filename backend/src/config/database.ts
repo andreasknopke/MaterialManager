@@ -75,7 +75,7 @@ export const getDynamicPool = (credentials: DbCredentials): mysql.Pool => {
     waitForConnections: true,
     connectionLimit: 5, // Kleinere Limits für dynamische Pools
     queueLimit: 0,
-    ssl: credentials.ssl ? {} : false
+    ...(credentials.ssl ? { ssl: {} } : {})
   });
   
   dynamicPools.set(poolKey, newPool);
