@@ -56,30 +56,30 @@ export const encodeDbToken = (credentials: DbCredentials): string => {
 };
 
 /**
- * Speichert DB-Token im SessionStorage
+ * Speichert DB-Token im localStorage (persistent auch für PWA)
  */
 export const saveDbToken = (token: string): boolean => {
   const credentials = decodeDbToken(token);
   if (!credentials) {
     return false;
   }
-  sessionStorage.setItem(DB_TOKEN_KEY, token);
+  localStorage.setItem(DB_TOKEN_KEY, token);
   console.log('DB Token gespeichert für:', credentials.host);
   return true;
 };
 
 /**
- * Lädt DB-Token aus SessionStorage
+ * Lädt DB-Token aus localStorage
  */
 export const getDbToken = (): string | null => {
-  return sessionStorage.getItem(DB_TOKEN_KEY);
+  return localStorage.getItem(DB_TOKEN_KEY);
 };
 
 /**
- * Entfernt DB-Token aus SessionStorage
+ * Entfernt DB-Token aus localStorage
  */
 export const clearDbToken = (): void => {
-  sessionStorage.removeItem(DB_TOKEN_KEY);
+  localStorage.removeItem(DB_TOKEN_KEY);
 };
 
 /**
