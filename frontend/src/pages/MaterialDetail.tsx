@@ -11,8 +11,12 @@ import {
   Tabs,
   Tab,
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
-import { materialAPI } from '../services/api';
+import { 
+  ArrowBack as ArrowBackIcon,
+  Search as SearchIcon,
+} from '@mui/icons-material';
+import { materialAPI, aiAPI } from '../services/api';
+import MaterialLookupDialog from '../components/MaterialLookupDialog';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -35,6 +39,12 @@ const MaterialDetail: React.FC = () => {
   const [material, setMaterial] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
+  
+  // Lookup Dialog State
+  const [lookupDialogOpen, setLookupDialogOpen] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [lookupResults, setLookupResults] = useState<any>(null);
 
   useEffect(() => {
     if (id && id !== 'new') {
@@ -56,6 +66,31 @@ const MaterialDetail: React.FC = () => {
     }
   };
 
+  const handleLookupClick = async () => {
+    if (!material?.id) return;
+    
+    setLookupDialogOpen(true);
+    setLookupLoading(true);
+    setLookupError(null);
+    setLookupResults(null);
+    
+    try {
+      const response = await aiAPI.lookupMaterial(material.id);
+      setLookupResults(response.data);
+    } catch (error: any) {
+      console.error('Fehler beim Material-Lookup:', error);
+      setLookupError(
+        error.response?.data?.message || 
+        error.response?.data?.error || 
+        'Fehler beim Laden der ähnlichen Produkte'
+      );
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const hasEndoTodayLink = material?.endo_today_link && material.endo_today_link.trim().length > 0;
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -73,14 +108,26 @@ const MaterialDetail: React.FC = () => {
         >
           Zurück
         </Button>
-        {material && (
-          <Button
-            variant="contained"
-            onClick={() => navigate(`/materials/${id}/edit`)}
-          >
-            Bearbeiten
-          </Button>
-        )}
+        <Box display="flex" gap={1}>
+          {material && hasEndoTodayLink && (
+            <Button
+              variant="outlined"
+              startIcon={<SearchIcon />}
+              onClick={handleLookupClick}
+              color="primary"
+            >
+              Ähnliche Produkte suchen
+            </Button>
+          )}
+          {material && (
+            <Button
+              variant="contained"
+              onClick={() => navigate(`/materials/${id}/edit`)}
+            >
+              Bearbeiten
+            </Button>
+          )}
+        </Box>
       </Box>
 
       <Typography variant="h4" gutterBottom>
@@ -289,6 +336,17 @@ const MaterialDetail: React.FC = () => {
           </Typography>
         </TabPanel>
       </Paper>
+
+      {/* Material Lookup Dialog */}
+      <MaterialLookupDialog
+        open={lookupDialogOpen}
+        onClose={() => setLookupDialogOpen(false)}
+        loading={lookupLoading}
+        error={lookupError}
+        material={lookupResults?.material}
+        sourceUrl={lookupResults?.sourceUrl}
+        results={lookupResults?.results}
+      />
     </Box>
   );
 };

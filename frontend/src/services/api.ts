@@ -294,3 +294,16 @@ export const auditLogAPI = {
   getActions: () => api.get('/audit-logs/actions'),
   getEntityTypes: () => api.get('/audit-logs/entity-types'),
 };
+
+// AI / Mistral Integration
+export const aiAPI = {
+  getStatus: () => api.get('/ai/status'),
+  suggestProducts: (query: string, includeContext: boolean = false) => 
+    api.post('/ai/suggest-products', { query, includeContext }),
+  analyzeBarcode: (barcode: string, scannedText?: string) => 
+    api.post('/ai/analyze-barcode', { barcode, scannedText }),
+  autocomplete: (input: string) => 
+    api.post('/ai/autocomplete', { input }),
+  lookupMaterial: (materialId: number) => 
+    api.post('/ai/lookup-material', { materialId }),
+};

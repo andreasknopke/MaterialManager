@@ -19,3 +19,6 @@ yarn-error.log*
 
 # Railway deployment information (contains secrets)
 .railway-info.md
+
+# Integration documentation (local only)
+DB_TOKEN_INTEGRATION.md

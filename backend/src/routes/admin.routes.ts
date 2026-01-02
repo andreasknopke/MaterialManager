@@ -729,4 +729,89 @@ router.get('/db-credentials', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/admin/run-endo-link-migration - Fügt endo_today_link zur v_materials_overview View hinzu
+router.post('/run-endo-link-migration', async (req: Request, res: Response) => {
+  const currentPool = getPoolForRequest(req);
+  
+  try {
+    console.log('🔄 Starting migration 020_add_endo_today_link_to_view...');
+    
+    // View neu erstellen mit endo_today_link
+    await currentPool.query('DROP VIEW IF EXISTS v_materials_overview');
+    
+    await currentPool.query(`
+      CREATE VIEW v_materials_overview AS
+      SELECT 
+          m.id,
+          m.name,
+          m.description,
+          m.size,
+          m.unit,
+          m.current_stock,
+          m.min_stock,
+          m.expiry_date,
+          m.lot_number,
+          m.article_number,
+          m.location_in_cabinet,
+          m.active,
+          m.is_consignment,
+          m.cost,
+          m.shape_id,
+          m.shaft_length,
+          m.device_length,
+          m.device_diameter,
+          m.french_size,
+          m.guidewire_acceptance,
+          m.compartment_id,
+          m.product_id,
+          m.category_id,
+          m.company_id,
+          m.cabinet_id,
+          m.unit_id,
+          c.name AS category_name,
+          c.min_quantity AS category_min_quantity,
+          c.endo_today_link,
+          co.name AS company_name,
+          cab.name AS cabinet_name,
+          cab.department_id AS cabinet_department_id,
+          cab.location AS cabinet_location,
+          comp.name AS compartment_name,
+          comp.position AS compartment_position,
+          p.name AS product_name,
+          p.gtin AS product_gtin,
+          s.name AS shape_name,
+          CASE 
+              WHEN m.current_stock <= m.min_stock THEN 'LOW'
+              WHEN m.expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'EXPIRING'
+              ELSE 'OK'
+          END AS stock_status,
+          m.created_at,
+          m.updated_at
+      FROM materials m
+      LEFT JOIN categories c ON m.category_id = c.id
+      LEFT JOIN companies co ON m.company_id = co.id
+      LEFT JOIN cabinets cab ON m.cabinet_id = cab.id
+      LEFT JOIN compartments comp ON m.compartment_id = comp.id
+      LEFT JOIN products p ON m.product_id = p.id
+      LEFT JOIN shapes s ON m.shape_id = s.id
+    `);
+    
+    console.log('✓ v_materials_overview updated with endo_today_link');
+    console.log('✅ Migration 020_add_endo_today_link_to_view completed!');
+    
+    res.json({ 
+      success: true, 
+      message: 'Endo Today Link Migration completed - v_materials_overview now includes endo_today_link from categories',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Endo Link Migration failed:', error);
+    res.status(500).json({ 
+      error: 'Migration failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

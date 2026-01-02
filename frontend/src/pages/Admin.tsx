@@ -210,6 +210,23 @@ const Admin: React.FC = () => {
     setError(null);
   };
 
+  // Migration: Endo Today Link zur View hinzufügen
+  const runEndoLinkMigration = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      await axios.post('/api/admin/run-endo-link-migration');
+      setSuccess('Endo Today Link Migration erfolgreich durchgeführt!');
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err: any) {
+      console.error('Migration error:', err);
+      setError(err.response?.data?.error || 'Migration fehlgeschlagen');
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
 
   return (
@@ -243,6 +260,51 @@ const Admin: React.FC = () => {
 
 
 
+
+        {/* Datenbank-Migrationen - Nur für Root */}
+        {isRoot && (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                  <RefreshIcon color="primary" />
+                  <Typography variant="h6">
+                    Datenbank-Migrationen
+                  </Typography>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                <Typography variant="body2" color="text.secondary" paragraph>
+                  Führen Sie hier Datenbank-Migrationen aus, um neue Features zu aktivieren.
+                </Typography>
+                
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Typography variant="subtitle1" gutterBottom>
+                          Material Lookup: Endo Today Link
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                          Fügt das <code>endo_today_link</code> Feld aus der Kategorie zur Material-Übersichtsview hinzu.
+                          Erforderlich für die LLM-basierte Produktsuche.
+                        </Typography>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          onClick={runEndoLinkMigration}
+                          disabled={loading}
+                          fullWidth
+                        >
+                          {loading ? 'Migration läuft...' : 'Endo Link Migration ausführen'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
 
         {/* Datenbank-Management - Nur für Root */}
         {isRoot && (
