@@ -36,7 +36,7 @@ SELECT
     c.endo_today_link,
     co.name AS company_name,
     cab.name AS cabinet_name,
-    cab.department_id AS cabinet_department_id,
+    cab.unit_id AS cabinet_department_id,
     cab.location AS cabinet_location,
     comp.name AS compartment_name,
     comp.position AS compartment_position,
