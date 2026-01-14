@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -14,8 +14,9 @@ import {
   MenuItem,
   Collapse,
   Badge,
+  Tooltip,
 } from '@mui/material';
-import { DataGrid, GridColDef } from '@mui/x-data-grid';
+import { DataGrid, GridColDef, GridColumnVisibilityModel } from '@mui/x-data-grid';
 import { 
   Add as AddIcon, 
   Edit as EditIcon, 
@@ -23,8 +24,10 @@ import {
   FilterList as FilterListIcon,
   Clear as ClearIcon,
   ShoppingCart as ShoppingCartIcon,
+  ViewColumn as ViewColumnIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { materialAPI, categoryAPI, companyAPI, cabinetAPI, shapeAPI } from '../services/api';
 
 // Guidewire-Acceptance Optionen
@@ -109,6 +112,46 @@ const emptyFilters: FilterState = {
 // SessionStorage Key für Filter-Persistenz
 const MATERIALS_FILTER_KEY = 'materials_filter_state';
 
+// LocalStorage Key für Spalten-Einstellungen (benutzer-spezifisch)
+const getColumnsSettingsKey = (userId: number) => `materials_columns_settings_${userId}`;
+
+// Standard-Spaltenreihenfolge
+const DEFAULT_COLUMN_ORDER = [
+  'id', 'name', 'article_number', 'description', 'category_name', 'company_name', 
+  'cabinet_name', 'compartment_name', 'location_in_cabinet', 'size', 'unit',
+  'current_stock', 'min_stock', 'pending_orders', 'cost', 'expiry_date', 'lot_number',
+  'shape_name', 'french_size', 'device_length', 'shaft_length', 'device_diameter', 
+  'guidewire_acceptance', 'notes', 'stock_status', 'actions'
+];
+
+// Standard-Sichtbarkeit
+const DEFAULT_COLUMN_VISIBILITY: GridColumnVisibilityModel = {
+  id: false,
+  description: false,
+  category_name: false,
+  company_name: false,
+  cabinet_name: false,
+  location_in_cabinet: false,
+  size: false,
+  unit: false,
+  min_stock: false,
+  cost: false,
+  expiry_date: false,
+  lot_number: false,
+  shape_name: false,
+  french_size: false,
+  device_length: false,
+  shaft_length: false,
+  device_diameter: false,
+  guidewire_acceptance: false,
+  notes: false,
+};
+
+interface ColumnSettings {
+  order: string[];
+  visibility: GridColumnVisibilityModel;
+}
+
 // Gespeicherte Filter aus SessionStorage laden
 const loadSavedFilters = (): { 
   searchTerm: string; 
@@ -130,8 +173,30 @@ const loadSavedFilters = (): {
 };
 
 const Materials: React.FC = () => {
+  const { user } = useAuth();
+  
   // Gespeicherte Filter laden
   const savedFilters = loadSavedFilters();
+  
+  // Spalteneinstellungen laden
+  const loadColumnSettings = useCallback((): ColumnSettings => {
+    if (!user?.id) return { order: DEFAULT_COLUMN_ORDER, visibility: DEFAULT_COLUMN_VISIBILITY };
+    try {
+      const saved = localStorage.getItem(getColumnsSettingsKey(user.id));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          order: parsed.order || DEFAULT_COLUMN_ORDER,
+          visibility: { ...DEFAULT_COLUMN_VISIBILITY, ...parsed.visibility },
+        };
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden der Spalteneinstellungen:', e);
+    }
+    return { order: DEFAULT_COLUMN_ORDER, visibility: DEFAULT_COLUMN_VISIBILITY };
+  }, [user?.id]);
+  
+  const [columnSettings, setColumnSettings] = useState<ColumnSettings>(() => loadColumnSettings());
   
   const [materials, setMaterials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,6 +215,13 @@ const Materials: React.FC = () => {
   
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Spalteneinstellungen in localStorage speichern bei Änderungen
+  useEffect(() => {
+    if (user?.id) {
+      localStorage.setItem(getColumnsSettingsKey(user.id), JSON.stringify(columnSettings));
+    }
+  }, [columnSettings, user?.id]);
 
   // Filter in SessionStorage speichern bei Änderungen
   useEffect(() => {
@@ -237,7 +309,8 @@ const Materials: React.FC = () => {
     }
   };
 
-  const columns: GridColDef[] = [
+  // Alle verfügbaren Spalten definieren
+  const allColumns: GridColDef[] = useMemo(() => [
     { field: 'id', headerName: 'ID', width: 70 },
     { 
       field: 'name', 
@@ -286,6 +359,7 @@ const Materials: React.FC = () => {
       },
     },
     { field: 'article_number', headerName: 'GTIN/Art.Nr.', width: 130 },
+    { field: 'description', headerName: 'Beschreibung', width: 200 },
     { field: 'category_name', headerName: 'Kategorie', width: 120 },
     { field: 'company_name', headerName: 'Firma', width: 120 },
     { 
@@ -295,7 +369,9 @@ const Materials: React.FC = () => {
       valueGetter: (params) => groupIdentical && params.row.locations ? params.row.locations : params.value,
     },
     { field: 'compartment_name', headerName: 'Fach', width: 80 },
+    { field: 'location_in_cabinet', headerName: 'Lagerort', width: 100 },
     { field: 'size', headerName: 'Einh./Pkg.', width: 80 },
+    { field: 'unit', headerName: 'Einheit', width: 80 },
     { 
       field: 'current_stock', 
       headerName: 'Bestand', 
@@ -332,12 +408,41 @@ const Materials: React.FC = () => {
       },
     },
     {
+      field: 'cost',
+      headerName: 'Kosten',
+      width: 90,
+      type: 'number',
+      valueFormatter: (params) => {
+        return params.value ? `${Number(params.value).toFixed(2)} €` : '-';
+      },
+    },
+    {
       field: 'expiry_date',
       headerName: 'Verfallsdatum',
       width: 110,
       valueFormatter: (params) => {
         return params.value ? new Date(params.value).toLocaleDateString('de-DE') : '-';
       },
+    },
+    { field: 'lot_number', headerName: 'LOT/Charge', width: 110 },
+    // Device-Eigenschaften
+    { field: 'shape_name', headerName: 'Shape/Form', width: 100 },
+    { field: 'french_size', headerName: 'French-Size', width: 90 },
+    { field: 'device_length', headerName: 'Device-Länge', width: 100 },
+    { field: 'shaft_length', headerName: 'Schaftlänge', width: 100 },
+    { field: 'device_diameter', headerName: 'Durchmesser', width: 100 },
+    { field: 'guidewire_acceptance', headerName: 'Guidewire', width: 90 },
+    { 
+      field: 'notes', 
+      headerName: 'Notizen', 
+      width: 150,
+      renderCell: (params) => (
+        <Tooltip title={params.value || ''} placement="top">
+          <Typography variant="body2" noWrap sx={{ maxWidth: 140 }}>
+            {params.value || '-'}
+          </Typography>
+        </Tooltip>
+      ),
     },
     {
       field: 'stock_status',
@@ -350,6 +455,7 @@ const Materials: React.FC = () => {
       headerName: 'Aktionen',
       width: 100,
       sortable: false,
+      disableColumnMenu: true,
       renderCell: (params) => (
         <>
           <IconButton
@@ -367,7 +473,35 @@ const Materials: React.FC = () => {
         </>
       ),
     },
-  ];
+  ], [groupIdentical, navigate]);
+
+  // Spalten nach gespeicherter Reihenfolge sortieren
+  const columns = useMemo(() => {
+    const columnMap = new Map(allColumns.map(col => [col.field, col]));
+    const orderedColumns: GridColDef[] = [];
+    
+    // Erst die Spalten in der gespeicherten Reihenfolge
+    for (const field of columnSettings.order) {
+      const col = columnMap.get(field);
+      if (col) {
+        orderedColumns.push(col);
+        columnMap.delete(field);
+      }
+    }
+    
+    // Dann alle neuen Spalten, die noch nicht in der Reihenfolge sind
+    columnMap.forEach(col => orderedColumns.push(col));
+    
+    return orderedColumns;
+  }, [allColumns, columnSettings.order]);
+
+  // Handler für Spaltenreihenfolge-Änderung
+  const handleColumnOrderChange = useCallback(() => {
+    // Das DataGrid gibt uns keine direkte Info über die neue Reihenfolge
+    // Wir müssen sie aus dem DOM oder den Column-API auslesen
+    // Da MUI DataGrid Community keine onColumnOrderChange hat,
+    // verwenden wir stattdessen die Spalten-Menü Funktion
+  }, []);
 
   // Zähle aktive Filter
   const activeFilterCount = Object.values(filters).filter(v => v !== '').length;
@@ -716,17 +850,10 @@ const Materials: React.FC = () => {
           pageSizeOptions={[10, 25, 50, 100]}
           initialState={{
             pagination: { paginationModel: { pageSize: 25 } },
-            columns: {
-              columnVisibilityModel: {
-                id: false,
-                category_name: false,
-                company_name: false,
-                cabinet_name: false,
-                size: false,
-                min_stock: false,
-                expiry_date: false,
-              },
-            },
+          }}
+          columnVisibilityModel={columnSettings.visibility}
+          onColumnVisibilityModelChange={(newModel) => {
+            setColumnSettings(prev => ({ ...prev, visibility: newModel }));
           }}
           disableRowSelectionOnClick
           sx={{

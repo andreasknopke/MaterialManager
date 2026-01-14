@@ -25,6 +25,7 @@ SELECT
     m.device_diameter,
     m.french_size,
     m.guidewire_acceptance,
+    m.notes,
     m.compartment_id,
     m.product_id,
     m.category_id,
