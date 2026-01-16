@@ -814,4 +814,73 @@ router.post('/run-endo-link-migration', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/admin/run-product-minstock-migration - Fügt min_stock zur products-Tabelle hinzu
+router.post('/run-product-minstock-migration', async (req: Request, res: Response) => {
+  const currentPool = getPoolForRequest(req);
+  
+  try {
+    console.log('🔄 Starting migration 021_add_product_min_stock...');
+    
+    // Schritt 1: min_stock Spalte zur products-Tabelle hinzufügen
+    try {
+      await currentPool.query(`
+        ALTER TABLE products 
+        ADD COLUMN min_stock INT DEFAULT 0 COMMENT 'Mindestbestand für dieses Produkt'
+      `);
+      console.log('✓ Added min_stock column to products table');
+    } catch (err: any) {
+      if (err.code === 'ER_DUP_FIELDNAME') {
+        console.log('✓ min_stock column already exists in products table');
+      } else {
+        throw err;
+      }
+    }
+    
+    // Schritt 2: Bestehende min_stock Werte aus materials übernehmen
+    const [result] = await currentPool.query(`
+      UPDATE products p
+      SET p.min_stock = (
+          SELECT MAX(m.min_stock)
+          FROM materials m
+          WHERE m.product_id = p.id
+            AND m.min_stock > 0
+      )
+      WHERE EXISTS (
+          SELECT 1 FROM materials m 
+          WHERE m.product_id = p.id 
+            AND m.min_stock > 0
+      )
+      AND (p.min_stock IS NULL OR p.min_stock = 0)
+    `);
+    console.log('✓ Migrated min_stock values from materials to products');
+    
+    // Schritt 3: Index für schnelle Low-Stock-Abfragen
+    try {
+      await currentPool.query('CREATE INDEX idx_products_min_stock ON products(min_stock)');
+      console.log('✓ Created index idx_products_min_stock');
+    } catch (err: any) {
+      if (err.code === 'ER_DUP_KEYNAME') {
+        console.log('✓ Index idx_products_min_stock already exists');
+      } else {
+        throw err;
+      }
+    }
+    
+    console.log('✅ Migration 021_add_product_min_stock completed!');
+    
+    res.json({ 
+      success: true, 
+      message: 'Product Min-Stock Migration completed - products table now has min_stock column',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Product Min-Stock Migration failed:', error);
+    res.status(500).json({ 
+      error: 'Migration failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

@@ -227,6 +227,23 @@ const Admin: React.FC = () => {
     }
   };
 
+  // Migration: Product Min-Stock
+  const runProductMinStockMigration = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      await axios.post('/api/admin/run-product-minstock-migration');
+      setSuccess('Product Min-Stock Migration erfolgreich durchgeführt! Mindestmengen werden jetzt auf Produkt-Ebene (GTIN) verwaltet.');
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err: any) {
+      console.error('Migration error:', err);
+      setError(err.response?.data?.error || 'Migration fehlgeschlagen');
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
 
   return (
@@ -296,6 +313,28 @@ const Admin: React.FC = () => {
                           fullWidth
                         >
                           {loading ? 'Migration läuft...' : 'Endo Link Migration ausführen'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Typography variant="subtitle1" gutterBottom>
+                          Product Min-Stock Migration
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" paragraph>
+                          Verschiebt die Mindestmenge auf Produkt-Ebene (GTIN). Identische Materialien 
+                          (gleiche GTIN) teilen sich eine Mindestmenge. Erforderlich für korrekte Low-Stock-Berichte.
+                        </Typography>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          onClick={runProductMinStockMigration}
+                          disabled={loading}
+                          fullWidth
+                        >
+                          {loading ? 'Migration läuft...' : 'Product Min-Stock Migration ausführen'}
                         </Button>
                       </CardContent>
                     </Card>
