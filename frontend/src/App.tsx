@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -26,6 +26,21 @@ import PatientAssignment from './pages/PatientAssignment';
 import Reorder from './pages/Reorder';
 import AuditLogs from './pages/AuditLogs';
 import { extractAndSaveDbTokenFromUrl, syncDbTokenFromIndexedDB } from './utils/dbToken';
+
+// Globaler Loading-Fallback für initiale Ladephase
+const AppLoadingFallback = () => (
+  <Box
+    sx={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh',
+      bgcolor: 'background.default',
+    }}
+  >
+    <CircularProgress size={48} />
+  </Box>
+);
 
 function App() {
   // Bei App-Start: DB-Token aus IndexedDB laden und aus URL extrahieren

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -17,11 +17,36 @@ import {
   PersonAdd as RegisterIcon,
   CheckCircle as SuccessIcon,
 } from '@mui/icons-material';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const Register: React.FC = () => {
-  const { register } = useAuth();
+  const navigate = useNavigate();
+  const { register, loading: authLoading, isAuthenticated } = useAuth();
+
+  // Redirect wenn bereits eingeloggt
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      navigate('/', { replace: true });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
+  // Zeige Loading-Spinner während Auth-Status geprüft wird
+  if (authLoading) {
+    return (
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: 'background.default',
+        }}
+      >
+        <CircularProgress size={48} />
+      </Box>
+    );
+  }
 
   const [formData, setFormData] = useState({
     username: '',

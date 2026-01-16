@@ -19,6 +19,14 @@ const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
 
+// Entferne initialen Loader sobald React gerendert hat
+const removeInitialLoader = () => {
+  const loader = document.getElementById('initial-loader');
+  if (loader) {
+    loader.style.display = 'none';
+  }
+};
+
 root.render(
   <React.StrictMode>
     <BrowserRouter>
@@ -29,3 +37,6 @@ root.render(
     </BrowserRouter>
   </React.StrictMode>
 );
+
+// Loader nach kurzem Delay entfernen (React sollte dann gerendert haben)
+setTimeout(removeInitialLoader, 100);
