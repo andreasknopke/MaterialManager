@@ -573,6 +573,10 @@ const Materials: React.FC = () => {
         if (material.cabinet_name) {
           existing.locations.add(material.cabinet_name);
         }
+        // Frühestes Verfallsdatum behalten für EXPIRING Status
+        if (material.expiry_date && (!existing.expiry_date || new Date(material.expiry_date) < new Date(existing.expiry_date))) {
+          existing.expiry_date = material.expiry_date;
+        }
       } else {
         groups.set(key, {
           ...material,
@@ -583,10 +587,28 @@ const Materials: React.FC = () => {
       }
     });
 
-    return Array.from(groups.values()).map(g => ({
-      ...g,
-      locations: Array.from(g.locations).join(', '),
-    }));
+    // Stock-Status für gruppierte Materialien neu berechnen
+    return Array.from(groups.values()).map(g => {
+      let stock_status = 'OK';
+      
+      // Prüfe auf niedrigen Bestand: Gesamtbestand < Mindestmenge
+      if (g.min_stock > 0 && g.current_stock < g.min_stock) {
+        stock_status = 'LOW';
+      }
+      // Prüfe auf ablaufend (innerhalb 30 Tagen)
+      else if (g.expiry_date) {
+        const daysUntilExpiry = Math.ceil((new Date(g.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        if (daysUntilExpiry <= 30) {
+          stock_status = 'EXPIRING';
+        }
+      }
+      
+      return {
+        ...g,
+        stock_status,
+        locations: Array.from(g.locations).join(', '),
+      };
+    });
   }, [filteredMaterials, groupIdentical]);
 
   const getFilterTitle = () => {
