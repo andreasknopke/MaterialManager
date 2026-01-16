@@ -1036,46 +1036,52 @@ router.get('/reports/expiring', async (req: Request, res: Response) => {
   }
 });
 
-// GET Materialien mit niedrigem Bestand (beide Typen: Material-spezifisch UND Kategorie-basiert)
+// GET Materialien mit niedrigem Bestand (beide Typen: Produkt-basiert UND Kategorie-basiert)
 router.get('/reports/low-stock', async (req: Request, res: Response) => {
   try {
     // Verwende dynamischen Pool basierend auf DB-Token
     const currentPool = getPoolForRequest(req);
     
-    // === 1. Material-spezifischer Low-Stock ===
-    // Materialien, die ihre eigene min_stock unterschreiten
-    let materialQuery = `
+    // === 1. Produkt-basierter Low-Stock ===
+    // Produkte, deren Gesamtbestand (aller Chargen) unter min_stock liegt
+    // Verwendet products.min_stock oder fallback auf materials.min_stock
+    let productQuery = `
       SELECT 
-        m.id,
-        m.name,
-        m.current_stock,
-        m.min_stock,
-        m.unit_id,
+        p.id AS product_id,
+        p.gtin,
+        p.name,
+        COALESCE(p.min_stock, MAX(m.min_stock), 0) AS min_stock,
+        SUM(m.current_stock) AS total_stock,
+        COUNT(m.id) AS lot_count,
         c.name AS category_name,
         co.name AS company_name,
-        cab.name AS cabinet_name,
-        'material' AS low_stock_type
-      FROM materials m
+        GROUP_CONCAT(DISTINCT cab.name SEPARATOR ', ') AS cabinet_names,
+        'product' AS low_stock_type
+      FROM products p
+      LEFT JOIN materials m ON m.product_id = p.id AND m.active = TRUE
       LEFT JOIN categories c ON m.category_id = c.id
-      LEFT JOIN companies co ON m.company_id = co.id
+      LEFT JOIN companies co ON p.company_id = co.id
       LEFT JOIN cabinets cab ON m.cabinet_id = cab.id
-      WHERE m.active = TRUE
-        AND m.min_stock > 0 
-        AND m.current_stock < m.min_stock
+      WHERE 1=1
     `;
-    const materialParams: any[] = [];
+    const productParams: any[] = [];
     
     // Department-Filter für Non-Root
     if (!req.user?.isRoot && req.user?.departmentId) {
-      materialQuery += ' AND m.unit_id = ?';
-      materialParams.push(req.user.departmentId);
+      productQuery += ' AND (m.unit_id = ? OR m.unit_id IS NULL)';
+      productParams.push(req.user.departmentId);
     }
     
-    materialQuery += ' ORDER BY (m.current_stock - m.min_stock) ASC';
+    productQuery += `
+      GROUP BY p.id, p.gtin, p.name, p.min_stock, c.name, co.name
+      HAVING COALESCE(p.min_stock, MAX(m.min_stock), 0) > 0 
+         AND COALESCE(SUM(m.current_stock), 0) < COALESCE(p.min_stock, MAX(m.min_stock), 0)
+      ORDER BY (COALESCE(SUM(m.current_stock), 0) - COALESCE(p.min_stock, MAX(m.min_stock), 0)) ASC
+    `;
     
-    console.log('[REPORTS] Low stock materials query, params:', materialParams);
-    const [materialRows] = await currentPool.query<RowDataPacket[]>(materialQuery, materialParams);
-    console.log('[REPORTS] Low stock materials found:', materialRows.length);
+    console.log('[REPORTS] Low stock products query, params:', productParams);
+    const [productRows] = await currentPool.query<RowDataPacket[]>(productQuery, productParams);
+    console.log('[REPORTS] Low stock products found:', productRows.length);
     
     // === 2. Kategorie-basierter Low-Stock ===
     // Kategorien, deren Gesamt-Bestand unter min_quantity liegt
@@ -1112,7 +1118,7 @@ router.get('/reports/low-stock', async (req: Request, res: Response) => {
     console.log('[REPORTS] Low stock categories found:', categoryRows.length);
     
     res.json({
-      materials: materialRows,
+      products: productRows,
       categories: categoryRows
     });
   } catch (error) {

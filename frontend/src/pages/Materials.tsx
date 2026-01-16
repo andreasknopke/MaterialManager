@@ -565,8 +565,9 @@ const Materials: React.FC = () => {
         existing.current_stock += material.current_stock || 0;
         existing.grouped_count += 1;
         existing.grouped_ids.push(material.id);
-        // Behalte die niedrigste min_stock
-        if (material.min_stock > 0 && (existing.min_stock === 0 || material.min_stock < existing.min_stock)) {
+        // min_stock sollte für alle identischen Produkte gleich sein
+        // Falls unterschiedlich, nimm den höchsten Wert (konservativ)
+        if (material.min_stock > existing.min_stock) {
           existing.min_stock = material.min_stock;
         }
         // Sammle alle Standorte

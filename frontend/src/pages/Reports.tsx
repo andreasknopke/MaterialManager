@@ -33,7 +33,7 @@ function TabPanel(props: TabPanelProps) {
 
 const Reports: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
-  const [lowStockMaterials, setLowStockMaterials] = useState<any[]>([]);
+  const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
   const [lowStockCategories, setLowStockCategories] = useState<any[]>([]);
   const [expiringMaterials, setExpiringMaterials] = useState<any[]>([]);
   const [inactiveMaterials, setInactiveMaterials] = useState<any[]>([]);
@@ -56,13 +56,13 @@ const Reports: React.FC = () => {
         materialAPI.getExpiring(),
       ]);
       
-      // Neues Format: { materials: [...], categories: [...] }
+      // Neues Format: { products: [...], categories: [...] }
       if (lowStock.data && typeof lowStock.data === 'object' && !Array.isArray(lowStock.data)) {
-        setLowStockMaterials(lowStock.data.materials || []);
+        setLowStockProducts(lowStock.data.products || lowStock.data.materials || []);
         setLowStockCategories(lowStock.data.categories || []);
       } else {
         // Fallback für altes Format
-        setLowStockMaterials(Array.isArray(lowStock.data) ? lowStock.data : []);
+        setLowStockProducts(Array.isArray(lowStock.data) ? lowStock.data : []);
         setLowStockCategories([]);
       }
       
@@ -70,7 +70,7 @@ const Reports: React.FC = () => {
       setExpiringMaterials(expiringData);
     } catch (error) {
       console.error('Fehler beim Laden der Berichte:', error);
-      setLowStockMaterials([]);
+      setLowStockProducts([]);
       setLowStockCategories([]);
       setExpiringMaterials([]);
     } finally {
@@ -92,20 +92,29 @@ const Reports: React.FC = () => {
     }
   };
 
-  const lowStockColumns: GridColDef[] = [
-    { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'name', headerName: 'Bezeichnung', width: 250 },
+  const lowStockProductColumns: GridColDef[] = [
+    { field: 'gtin', headerName: 'GTIN', width: 140 },
+    { field: 'name', headerName: 'Produkt', width: 250 },
     { field: 'category_name', headerName: 'Kategorie', width: 150 },
-    { field: 'current_stock', headerName: 'Bestand', width: 120, type: 'number' },
-    { field: 'min_stock', headerName: 'Min. Bestand', width: 120, type: 'number' },
+    { field: 'company_name', headerName: 'Firma', width: 130 },
+    { field: 'total_stock', headerName: 'Bestand', width: 100, type: 'number' },
+    { field: 'min_stock', headerName: 'Mindestmenge', width: 120, type: 'number' },
     {
       field: 'difference',
       headerName: 'Differenz',
-      width: 120,
+      width: 100,
       type: 'number',
-      valueGetter: (params) => params.row.current_stock - params.row.min_stock,
+      valueGetter: (params) => (params.row.total_stock || 0) - params.row.min_stock,
+      renderCell: (params) => (
+        <Chip 
+          label={params.value} 
+          color="error"
+          size="small"
+        />
+      ),
     },
-    { field: 'cabinet_name', headerName: 'Schrank', width: 150 },
+    { field: 'lot_count', headerName: 'Chargen', width: 90, type: 'number' },
+    { field: 'cabinet_names', headerName: 'Schränke', width: 150 },
   ];
 
   const lowStockCategoryColumns: GridColDef[] = [
@@ -193,13 +202,13 @@ const Reports: React.FC = () => {
 
       <Paper sx={{ mt: 3 }}>
         <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
-          <Tab label={`Niedriger Bestand (${lowStockMaterials.length + lowStockCategories.length})`} />
+          <Tab label={`Niedriger Bestand (${lowStockProducts.length + lowStockCategories.length})`} />
           <Tab label={`Ablaufende Materialien (${expiringMaterials.length})`} />
           <Tab label={`Inaktive Bestände (${inactiveMaterials.length})`} />
         </Tabs>
 
         <TabPanel value={tabValue} index={0}>
-          {(lowStockMaterials.length > 0 || lowStockCategories.length > 0) ? (
+          {(lowStockProducts.length > 0 || lowStockCategories.length > 0) ? (
             <>
               {/* Kategorie-basierter Low-Stock */}
               {lowStockCategories.length > 0 && (
@@ -227,20 +236,21 @@ const Reports: React.FC = () => {
                 </>
               )}
               
-              {/* Material-spezifischer Low-Stock */}
-              {lowStockMaterials.length > 0 && (
+              {/* Produkt-basierter Low-Stock */}
+              {lowStockProducts.length > 0 && (
                 <>
                   <Alert severity="warning" sx={{ mb: 2 }}>
-                    <strong>Einzelne Materialien unter Mindestmenge:</strong> {lowStockMaterials.length} Material(ien)
+                    <strong>Produkte unter Mindestmenge:</strong> {lowStockProducts.length} Produkt(e)
                   </Alert>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Materialien mit individueller Mindestmenge
+                    Produkte (GTIN-basiert, alle Chargen zusammengefasst)
                   </Typography>
                   <Box sx={{ height: 400 }}>
                     <DataGrid
-                      rows={lowStockMaterials}
-                      columns={lowStockColumns}
+                      rows={lowStockProducts}
+                      columns={lowStockProductColumns}
                       loading={loading}
+                      getRowId={(row) => row.product_id}
                       pageSizeOptions={[10, 25, 50]}
                       initialState={{
                         pagination: { paginationModel: { pageSize: 25 } },
@@ -251,15 +261,15 @@ const Reports: React.FC = () => {
                 </>
               )}
               
-              {lowStockMaterials.length === 0 && lowStockCategories.length > 0 && (
+              {lowStockProducts.length === 0 && lowStockCategories.length > 0 && (
                 <Alert severity="success" sx={{ mt: 2 }}>
-                  Alle einzelnen Materialien haben ausreichenden Bestand
+                  Alle Produkte haben ausreichenden Bestand
                 </Alert>
               )}
             </>
           ) : (
             <Alert severity="success">
-              Alle Materialien und Kategorien haben ausreichenden Bestand
+              Alle Produkte und Kategorien haben ausreichenden Bestand
             </Alert>
           )}
         </TabPanel>
