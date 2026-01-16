@@ -18,6 +18,7 @@ import {
   MenuItem,
   Avatar,
   Chip,
+  Badge,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -42,6 +43,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import ChangePasswordDialog from './ChangePasswordDialog';
 import OfflineIndicator from './OfflineIndicator';
+import api from '../services/api';
 
 const drawerWidth = 240;
 
@@ -53,9 +55,29 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [reportAlertCount, setReportAlertCount] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, isAdmin } = useAuth();
+
+  // Report-Zähler laden
+  useEffect(() => {
+    const fetchReportCounts = async () => {
+      try {
+        const response = await api.get('/materials/reports/counts');
+        setReportAlertCount(response.data.total || 0);
+      } catch (error) {
+        console.error('Fehler beim Laden der Report-Zähler:', error);
+      }
+    };
+
+    // Initial laden
+    fetchReportCounts();
+
+    // Alle 5 Minuten aktualisieren
+    const interval = setInterval(fetchReportCounts, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Automatisch Passwort-Dialog öffnen wenn mustChangePassword true ist
   useEffect(() => {
@@ -124,8 +146,37 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 setMobileOpen(false);
               }}
             >
-              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemIcon>
+                {item.path === '/reports' && reportAlertCount > 0 ? (
+                  <Badge 
+                    color="error" 
+                    variant="dot"
+                    sx={{
+                      '& .MuiBadge-badge': {
+                        right: -3,
+                        top: 3,
+                      }
+                    }}
+                  >
+                    {item.icon}
+                  </Badge>
+                ) : (
+                  item.icon
+                )}
+              </ListItemIcon>
               <ListItemText primary={item.text} />
+              {item.path === '/reports' && reportAlertCount > 0 && (
+                <Chip 
+                  label={reportAlertCount} 
+                  size="small" 
+                  color="error" 
+                  sx={{ 
+                    height: 20, 
+                    fontSize: '0.75rem',
+                    minWidth: 24
+                  }} 
+                />
+              )}
             </ListItemButton>
           </ListItem>
         ))}

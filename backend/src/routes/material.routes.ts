@@ -1010,6 +1010,111 @@ router.post('/:id/reactivate', async (req: Request, res: Response) => {
   }
 });
 
+// GET Report-Zähler für Badge-Anzeige in Navigation
+router.get('/reports/counts', async (req: Request, res: Response) => {
+  try {
+    const currentPool = getPoolForRequest(req);
+    
+    // === 1. Low-Stock Produkte zählen ===
+    let productQuery = `
+      SELECT COUNT(*) AS count FROM (
+        SELECT p.id
+        FROM products p
+        LEFT JOIN materials m ON m.product_id = p.id AND m.active = TRUE
+        LEFT JOIN categories c ON m.category_id = c.id
+        WHERE 1=1
+    `;
+    const productParams: any[] = [];
+    
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      productQuery += ' AND (m.unit_id = ? OR m.unit_id IS NULL)';
+      productParams.push(req.user.departmentId);
+    }
+    
+    productQuery += `
+        GROUP BY p.id
+        HAVING COALESCE(p.min_stock, MAX(m.min_stock), 0) > 0 
+           AND COALESCE(SUM(m.current_stock), 0) < COALESCE(p.min_stock, MAX(m.min_stock), 0)
+      ) AS low_stock_products
+    `;
+    
+    const [productCountRows] = await currentPool.query<RowDataPacket[]>(productQuery, productParams);
+    const lowStockProductCount = productCountRows[0]?.count || 0;
+    
+    // === 2. Low-Stock Kategorien zählen ===
+    let categoryQuery = `
+      SELECT COUNT(*) AS count FROM (
+        SELECT c.id
+        FROM categories c
+        LEFT JOIN materials m ON m.category_id = c.id AND m.active = TRUE
+        WHERE c.min_quantity IS NOT NULL AND c.min_quantity > 0
+    `;
+    const categoryParams: any[] = [];
+    
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      categoryQuery += ' AND (m.unit_id = ? OR m.unit_id IS NULL)';
+      categoryParams.push(req.user.departmentId);
+    }
+    
+    categoryQuery += `
+        GROUP BY c.id, c.min_quantity
+        HAVING COALESCE(SUM(m.current_stock), 0) < c.min_quantity
+      ) AS low_stock_categories
+    `;
+    
+    const [categoryCountRows] = await currentPool.query<RowDataPacket[]>(categoryQuery, categoryParams);
+    const lowStockCategoryCount = categoryCountRows[0]?.count || 0;
+    
+    // === 3. Ablaufende Materialien zählen ===
+    const departmentFilter = getDepartmentFilter(req, '');
+    let expiringQuery = 'SELECT COUNT(*) AS count FROM v_expiring_materials';
+    const expiringParams: any[] = [];
+    
+    if (departmentFilter.whereClause) {
+      expiringQuery += ` WHERE ${departmentFilter.whereClause}`;
+      expiringParams.push(...departmentFilter.params);
+    }
+    
+    const [expiringCountRows] = await currentPool.query<RowDataPacket[]>(expiringQuery, expiringParams);
+    const expiringCount = expiringCountRows[0]?.count || 0;
+    
+    // === 4. Inaktive Materialien zählen (6 Monate) ===
+    const cutoffDate = new Date();
+    cutoffDate.setMonth(cutoffDate.getMonth() - 6);
+    
+    let inactiveQuery = `
+      SELECT COUNT(*) AS count 
+      FROM materials m
+      WHERE m.active = TRUE
+        AND m.current_stock > 0
+        AND COALESCE(m.updated_at, m.created_at) < ?
+    `;
+    const inactiveParams: any[] = [cutoffDate.toISOString().slice(0, 19).replace('T', ' ')];
+    
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      inactiveQuery += ' AND m.unit_id = ?';
+      inactiveParams.push(req.user.departmentId);
+    }
+    
+    const [inactiveCountRows] = await currentPool.query<RowDataPacket[]>(inactiveQuery, inactiveParams);
+    const inactiveCount = inactiveCountRows[0]?.count || 0;
+    
+    // Gesamtzahl aller Alarme
+    const totalAlerts = lowStockProductCount + lowStockCategoryCount + expiringCount + inactiveCount;
+    
+    res.json({
+      lowStockProducts: lowStockProductCount,
+      lowStockCategories: lowStockCategoryCount,
+      expiring: expiringCount,
+      inactive: inactiveCount,
+      total: totalAlerts
+    });
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Report-Zähler:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 // GET ablaufende Materialien
 router.get('/reports/expiring', async (req: Request, res: Response) => {
   try {
