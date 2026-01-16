@@ -2,8 +2,12 @@ import { Router, Request, Response } from 'express';
 import pool, { getPoolForRequest } from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { auditMaterial } from '../utils/auditLogger';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
+
+// Alle Routes benötigen Authentifizierung
+router.use(authenticate);
 
 // GET Stammdaten nach GTIN (Artikelnummer) suchen - für Vorbelegung bei bekannter GTIN
 // Nutzt jetzt die normalisierte products-Tabelle für GTIN-basierte Stammdaten

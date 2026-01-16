@@ -58,7 +58,7 @@ export async function logFromRequest(
   
   await createAuditLog({
     user_id: user?.id,
-    username: user?.username || user?.display_name || 'Unbekannt',
+    username: user?.fullName || user?.username || 'Unbekannt',
     action,
     entity_type,
     entity_id,
