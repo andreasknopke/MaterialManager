@@ -11,6 +11,7 @@ import {
   Select,
   MenuItem,
   Chip,
+  Divider,
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { materialAPI } from '../services/api';
@@ -33,6 +34,7 @@ function TabPanel(props: TabPanelProps) {
 const Reports: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [lowStockMaterials, setLowStockMaterials] = useState<any[]>([]);
+  const [lowStockCategories, setLowStockCategories] = useState<any[]>([]);
   const [expiringMaterials, setExpiringMaterials] = useState<any[]>([]);
   const [inactiveMaterials, setInactiveMaterials] = useState<any[]>([]);
   const [inactiveMonths, setInactiveMonths] = useState<number>(6);
@@ -53,13 +55,23 @@ const Reports: React.FC = () => {
         materialAPI.getLowStock(),
         materialAPI.getExpiring(),
       ]);
-      const lowStockData = Array.isArray(lowStock.data) ? lowStock.data : [];
+      
+      // Neues Format: { materials: [...], categories: [...] }
+      if (lowStock.data && typeof lowStock.data === 'object' && !Array.isArray(lowStock.data)) {
+        setLowStockMaterials(lowStock.data.materials || []);
+        setLowStockCategories(lowStock.data.categories || []);
+      } else {
+        // Fallback für altes Format
+        setLowStockMaterials(Array.isArray(lowStock.data) ? lowStock.data : []);
+        setLowStockCategories([]);
+      }
+      
       const expiringData = Array.isArray(expiring.data) ? expiring.data : [];
-      setLowStockMaterials(lowStockData);
       setExpiringMaterials(expiringData);
     } catch (error) {
       console.error('Fehler beim Laden der Berichte:', error);
       setLowStockMaterials([]);
+      setLowStockCategories([]);
       setExpiringMaterials([]);
     } finally {
       setLoading(false);
@@ -94,6 +106,29 @@ const Reports: React.FC = () => {
       valueGetter: (params) => params.row.current_stock - params.row.min_stock,
     },
     { field: 'cabinet_name', headerName: 'Schrank', width: 150 },
+  ];
+
+  const lowStockCategoryColumns: GridColDef[] = [
+    { field: 'category_id', headerName: 'ID', width: 70 },
+    { field: 'category_name', headerName: 'Kategorie', width: 250 },
+    { field: 'total_stock', headerName: 'Gesamtbestand', width: 130, type: 'number' },
+    { field: 'min_quantity', headerName: 'Mindestmenge', width: 130, type: 'number' },
+    {
+      field: 'difference',
+      headerName: 'Differenz',
+      width: 120,
+      type: 'number',
+      valueGetter: (params) => (params.row.total_stock || 0) - params.row.min_quantity,
+      renderCell: (params) => (
+        <Chip 
+          label={params.value} 
+          color="error"
+          size="small"
+        />
+      ),
+    },
+    { field: 'material_count', headerName: 'Materialien', width: 110, type: 'number' },
+    { field: 'companies', headerName: 'Firmen', width: 200 },
   ];
 
   const expiringColumns: GridColDef[] = [
@@ -158,33 +193,73 @@ const Reports: React.FC = () => {
 
       <Paper sx={{ mt: 3 }}>
         <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)}>
-          <Tab label={`Niedriger Bestand (${lowStockMaterials.length})`} />
+          <Tab label={`Niedriger Bestand (${lowStockMaterials.length + lowStockCategories.length})`} />
           <Tab label={`Ablaufende Materialien (${expiringMaterials.length})`} />
           <Tab label={`Inaktive Bestände (${inactiveMaterials.length})`} />
         </Tabs>
 
         <TabPanel value={tabValue} index={0}>
-          {lowStockMaterials.length > 0 ? (
+          {(lowStockMaterials.length > 0 || lowStockCategories.length > 0) ? (
             <>
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                {lowStockMaterials.length} Material(ien) haben einen niedrigen Bestand
-              </Alert>
-              <Box sx={{ height: 500 }}>
-                <DataGrid
-                  rows={lowStockMaterials}
-                  columns={lowStockColumns}
-                  loading={loading}
-                  pageSizeOptions={[10, 25, 50]}
-                  initialState={{
-                    pagination: { paginationModel: { pageSize: 25 } },
-                  }}
-                  disableRowSelectionOnClick
-                />
-              </Box>
+              {/* Kategorie-basierter Low-Stock */}
+              {lowStockCategories.length > 0 && (
+                <>
+                  <Alert severity="error" sx={{ mb: 2 }}>
+                    <strong>Kategorien unter Mindestmenge:</strong> {lowStockCategories.length} Kategorie(n) haben insgesamt zu wenig Bestand
+                  </Alert>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Kategorien (z.B. "Re-Entry Device" - firmenübergreifend)
+                  </Typography>
+                  <Box sx={{ height: 300, mb: 3 }}>
+                    <DataGrid
+                      rows={lowStockCategories}
+                      columns={lowStockCategoryColumns}
+                      loading={loading}
+                      getRowId={(row) => row.category_id}
+                      pageSizeOptions={[10, 25]}
+                      initialState={{
+                        pagination: { paginationModel: { pageSize: 10 } },
+                      }}
+                      disableRowSelectionOnClick
+                    />
+                  </Box>
+                  <Divider sx={{ my: 3 }} />
+                </>
+              )}
+              
+              {/* Material-spezifischer Low-Stock */}
+              {lowStockMaterials.length > 0 && (
+                <>
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    <strong>Einzelne Materialien unter Mindestmenge:</strong> {lowStockMaterials.length} Material(ien)
+                  </Alert>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Materialien mit individueller Mindestmenge
+                  </Typography>
+                  <Box sx={{ height: 400 }}>
+                    <DataGrid
+                      rows={lowStockMaterials}
+                      columns={lowStockColumns}
+                      loading={loading}
+                      pageSizeOptions={[10, 25, 50]}
+                      initialState={{
+                        pagination: { paginationModel: { pageSize: 25 } },
+                      }}
+                      disableRowSelectionOnClick
+                    />
+                  </Box>
+                </>
+              )}
+              
+              {lowStockMaterials.length === 0 && lowStockCategories.length > 0 && (
+                <Alert severity="success" sx={{ mt: 2 }}>
+                  Alle einzelnen Materialien haben ausreichenden Bestand
+                </Alert>
+              )}
             </>
           ) : (
             <Alert severity="success">
-              Alle Materialien haben ausreichenden Bestand
+              Alle Materialien und Kategorien haben ausreichenden Bestand
             </Alert>
           )}
         </TabPanel>
