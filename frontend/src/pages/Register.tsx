@@ -24,6 +24,18 @@ const Register: React.FC = () => {
   const navigate = useNavigate();
   const { register, loading: authLoading, isAuthenticated } = useAuth();
 
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    fullName: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+
   // Redirect wenn bereits eingeloggt
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -47,18 +59,6 @@ const Register: React.FC = () => {
       </Box>
     );
   }
-
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    fullName: '',
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
