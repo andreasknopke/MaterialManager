@@ -25,6 +25,10 @@ import {
   Tooltip,
   InputAdornment,
   Paper,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  CircularProgress,
 } from '@mui/material';
 import {
   Inventory2 as InventoryIcon,
@@ -39,8 +43,11 @@ import {
   Save as SaveIcon,
   Close as CloseIcon,
   CameraAlt as CameraIcon,
+  ExpandMore as ExpandMoreIcon,
+  Psychology as AIIcon,
+  PhotoCamera as PhotoCameraIcon,
 } from '@mui/icons-material';
-import { cabinetAPI, materialAPI } from '../services/api';
+import { cabinetAPI, materialAPI, aiAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
 
 interface Cabinet {
@@ -83,6 +90,26 @@ interface ConfirmedMaterial {
   method: 'scan' | 'manual';
 }
 
+// Interface für gruppierte Materialien nach Fach
+interface CompartmentGroup {
+  compartmentId: number | null;
+  compartmentName: string;
+  materials: Material[];
+}
+
+// Interface für KI-Analyse-Ergebnis
+interface AIAnalysisResult {
+  overallMatch: number;
+  analysis: string;
+  compartmentResults: Array<{
+    compartmentName: string;
+    matchProbability: number;
+    notes: string;
+  }>;
+  discrepancies: string[];
+  recommendations: string[];
+}
+
 const Inventory: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -107,6 +134,15 @@ const Inventory: React.FC = () => {
   
   // Ref für Handscanner-Input
   const scannerInputRef = useRef<HTMLInputElement>(null);
+  
+  // Ref für Foto-Input
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  
+  // KI-Inhaltsabgleich States
+  const [aiAnalysisDialogOpen, setAiAnalysisDialogOpen] = useState(false);
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<AIAnalysisResult | null>(null);
+  const [aiAnalysisError, setAiAnalysisError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCabinets();
@@ -352,6 +388,86 @@ const Inventory: React.FC = () => {
     }
   };
 
+  // Materialien nach Fächern gruppieren
+  const groupMaterialsByCompartment = (materials: Material[]): CompartmentGroup[] => {
+    const groups: Map<string, CompartmentGroup> = new Map();
+    
+    materials.forEach(material => {
+      const key = material.compartment_name || '__OHNE_FACH__';
+      if (!groups.has(key)) {
+        groups.set(key, {
+          compartmentId: material.compartment_name ? null : null, // ID nicht verfügbar in Material
+          compartmentName: material.compartment_name || 'Ohne Fachzuordnung',
+          materials: []
+        });
+      }
+      groups.get(key)!.materials.push(material);
+    });
+
+    // Sortiere Fächer: Benannte Fächer zuerst (alphabetisch), dann "Ohne Fachzuordnung"
+    const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+      if (a.compartmentName === 'Ohne Fachzuordnung') return 1;
+      if (b.compartmentName === 'Ohne Fachzuordnung') return -1;
+      return a.compartmentName.localeCompare(b.compartmentName, 'de');
+    });
+
+    return sortedGroups;
+  };
+
+  // KI-Inhaltsabgleich starten
+  const handleOpenAIAnalysis = () => {
+    setAiAnalysisResult(null);
+    setAiAnalysisError(null);
+    setAiAnalysisDialogOpen(true);
+  };
+
+  // Foto aufnehmen für KI-Analyse
+  const handleCapturePhoto = () => {
+    photoInputRef.current?.click();
+  };
+
+  // Foto verarbeiten und an KI senden
+  const handlePhotoSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedCabinet) return;
+
+    setAiAnalysisLoading(true);
+    setAiAnalysisError(null);
+
+    try {
+      // Bild als Base64 konvertieren
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      // An Backend senden
+      const response = await aiAPI.analyzeInventoryPhoto(selectedCabinet.id, base64);
+      
+      setAiAnalysisResult(response.data.analysis);
+      setSuccess('KI-Analyse erfolgreich durchgeführt!');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      console.error('Fehler bei KI-Analyse:', err);
+      setAiAnalysisError(
+        err.response?.data?.message || 
+        err.response?.data?.error || 
+        'Fehler bei der KI-Analyse. Bitte versuchen Sie es erneut.'
+      );
+    } finally {
+      setAiAnalysisLoading(false);
+      // Input zurücksetzen für erneute Auswahl
+      if (photoInputRef.current) {
+        photoInputRef.current.value = '';
+      }
+    }
+  };
+
 
   const handleOpenInventory = async (cabinet: Cabinet) => {
     setSelectedCabinet(cabinet);
@@ -552,6 +668,17 @@ const Inventory: React.FC = () => {
                 Kamera-Scanner öffnen
               </Button>
               
+              <Button
+                size="small"
+                variant="outlined"
+                color="secondary"
+                startIcon={<AIIcon />}
+                onClick={handleOpenAIAnalysis}
+                sx={{ ml: 1 }}
+              >
+                KI Inhaltsabgleich
+              </Button>
+              
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                 Öffnet den vollständigen Barcode-Scanner mit GS1-Unterstützung und OCR
               </Typography>
@@ -560,19 +687,60 @@ const Inventory: React.FC = () => {
           
           <Divider sx={{ my: 2 }} />
           
-          <Typography variant="h6" gutterBottom>
-            Materialien im Schrank ({cabinetMaterials.length})
-          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">
+              Materialien im Schrank ({cabinetMaterials.length})
+            </Typography>
+            {!inventoryMode && cabinetMaterials.length > 0 && (
+              <Button
+                size="small"
+                variant="outlined"
+                color="secondary"
+                startIcon={<AIIcon />}
+                onClick={handleOpenAIAnalysis}
+              >
+                KI Inhaltsabgleich
+              </Button>
+            )}
+          </Box>
           
           {cabinetMaterials.length === 0 ? (
             <Alert severity="info" sx={{ mt: 2 }}>
               Dieser Schrank ist leer
             </Alert>
           ) : (
-            <List>
-              {cabinetMaterials.map((material) => {
-                const isConfirmed = confirmedMaterials.has(material.id);
-                const confirmation = confirmedMaterials.get(material.id);
+            /* Materialien nach Fächern gruppiert anzeigen */
+            groupMaterialsByCompartment(cabinetMaterials).map((compartmentGroup, groupIndex) => (
+              <Accordion 
+                key={compartmentGroup.compartmentName} 
+                defaultExpanded={groupIndex < 3}
+                sx={{ mb: 1 }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      📦 {compartmentGroup.compartmentName}
+                    </Typography>
+                    <Chip 
+                      label={`${compartmentGroup.materials.length} Material${compartmentGroup.materials.length !== 1 ? 'ien' : ''}`}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                    />
+                    {inventoryMode && (
+                      <Chip 
+                        label={`${compartmentGroup.materials.filter(m => confirmedMaterials.has(m.id)).length}/${compartmentGroup.materials.length} geprüft`}
+                        size="small"
+                        color={compartmentGroup.materials.every(m => confirmedMaterials.has(m.id)) ? 'success' : 'warning'}
+                      />
+                    )}
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails sx={{ p: 0 }}>
+                  <List dense>
+                    {compartmentGroup.materials.map((material) => {
+                      const isConfirmed = confirmedMaterials.has(material.id);
+                      const confirmation = confirmedMaterials.get(material.id);
                 
                 return (
                   <ListItem 
@@ -707,16 +875,11 @@ const Inventory: React.FC = () => {
                             </Box>
                           )}
                           
-                          {/* Zeile 3: Hersteller, Fach, Bestand */}
+                          {/* Zeile 3: Hersteller, Bestand */}
                           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                             {material.company_name && (
                               <Typography variant="body2" component="span">
                                 <strong>Hersteller:</strong> {material.company_name}
-                              </Typography>
-                            )}
-                            {material.compartment_name && (
-                              <Typography variant="body2" component="span">
-                                <strong>Fach:</strong> {material.compartment_name}
                               </Typography>
                             )}
                             <Typography variant="body2" component="span">
@@ -732,7 +895,10 @@ const Inventory: React.FC = () => {
                   </ListItem>
                 );
               })}
-            </List>
+                  </List>
+                </AccordionDetails>
+              </Accordion>
+            ))
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
@@ -860,6 +1026,197 @@ const Inventory: React.FC = () => {
             startIcon={<DeleteIcon />}
           >
             Ja, leeren
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* KI Inhaltsabgleich Dialog */}
+      <Dialog
+        open={aiAnalysisDialogOpen}
+        onClose={() => { setAiAnalysisDialogOpen(false); setAiAnalysisResult(null); setAiAnalysisError(null); }}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <AIIcon color="secondary" />
+          KI Inhaltsabgleich: {selectedCabinet?.name}
+        </DialogTitle>
+        <DialogContent>
+          {/* Verstecktes Input für Foto */}
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            ref={photoInputRef}
+            style={{ display: 'none' }}
+            onChange={handlePhotoSelected}
+          />
+
+          {!aiAnalysisResult && !aiAnalysisLoading && (
+            <>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <Typography variant="body2">
+                  <strong>So funktioniert der KI-Inhaltsabgleich:</strong>
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  1. Öffnen Sie den Schrank vollständig<br />
+                  2. Machen Sie ein Foto, auf dem der <strong>gesamte Schrankinhalt</strong> (nicht nur einzelne Fächer!) sichtbar ist<br />
+                  3. Die KI vergleicht das Foto mit der Materialliste und gibt Wahrscheinlichkeiten an
+                </Typography>
+              </Alert>
+
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  size="large"
+                  startIcon={<PhotoCameraIcon />}
+                  onClick={handleCapturePhoto}
+                  sx={{ px: 4, py: 2 }}
+                >
+                  Foto des Schrankinhalts aufnehmen
+                </Button>
+              </Box>
+
+              <Divider sx={{ my: 3 }} />
+
+              <Typography variant="subtitle2" gutterBottom>
+                Aktuelle Materialliste (nach Fächern sortiert):
+              </Typography>
+              <Paper variant="outlined" sx={{ p: 2, maxHeight: 300, overflow: 'auto' }}>
+                {groupMaterialsByCompartment(cabinetMaterials).map((group) => (
+                  <Box key={group.compartmentName} sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" color="primary">
+                      📦 {group.compartmentName} ({group.materials.length})
+                    </Typography>
+                    <Box sx={{ pl: 2 }}>
+                      {group.materials.map((m, idx) => (
+                        <Typography key={idx} variant="body2" color="text.secondary">
+                          • {m.name} - Bestand: {m.current_stock}
+                        </Typography>
+                      ))}
+                    </Box>
+                  </Box>
+                ))}
+              </Paper>
+            </>
+          )}
+
+          {aiAnalysisLoading && (
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <CircularProgress size={60} color="secondary" />
+              <Typography variant="h6" sx={{ mt: 3 }}>
+                KI analysiert das Foto...
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Dies kann einige Sekunden dauern.
+              </Typography>
+            </Box>
+          )}
+
+          {aiAnalysisError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {aiAnalysisError}
+            </Alert>
+          )}
+
+          {aiAnalysisResult && (
+            <>
+              {/* Gesamtergebnis */}
+              <Paper 
+                sx={{ 
+                  p: 3, 
+                  mb: 3, 
+                  bgcolor: aiAnalysisResult.overallMatch >= 0.8 ? '#e8f5e9' : 
+                           aiAnalysisResult.overallMatch >= 0.5 ? '#fff3e0' : '#ffebee'
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Typography variant="h5">
+                    Übereinstimmung: {Math.round(aiAnalysisResult.overallMatch * 100)}%
+                  </Typography>
+                  <Chip 
+                    label={aiAnalysisResult.overallMatch >= 0.8 ? 'Gut' : 
+                           aiAnalysisResult.overallMatch >= 0.5 ? 'Prüfen' : 'Abweichung'}
+                    color={aiAnalysisResult.overallMatch >= 0.8 ? 'success' : 
+                           aiAnalysisResult.overallMatch >= 0.5 ? 'warning' : 'error'}
+                  />
+                </Box>
+                <Typography variant="body1">
+                  {aiAnalysisResult.analysis}
+                </Typography>
+              </Paper>
+
+              {/* Ergebnisse nach Fächern */}
+              {aiAnalysisResult.compartmentResults.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Analyse nach Fächern
+                  </Typography>
+                  {aiAnalysisResult.compartmentResults.map((comp, idx) => (
+                    <Paper key={idx} variant="outlined" sx={{ p: 2, mb: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          📦 {comp.compartmentName}
+                        </Typography>
+                        <Chip 
+                          label={`${Math.round(comp.matchProbability * 100)}%`}
+                          size="small"
+                          color={comp.matchProbability >= 0.8 ? 'success' : 
+                                 comp.matchProbability >= 0.5 ? 'warning' : 'error'}
+                        />
+                      </Box>
+                      <Typography variant="body2" color="text.secondary">
+                        {comp.notes}
+                      </Typography>
+                    </Paper>
+                  ))}
+                </Box>
+              )}
+
+              {/* Diskrepanzen */}
+              {aiAnalysisResult.discrepancies.length > 0 && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Mögliche Abweichungen:
+                  </Typography>
+                  <ul style={{ margin: 0, paddingLeft: 20 }}>
+                    {aiAnalysisResult.discrepancies.map((d, idx) => (
+                      <li key={idx}>{d}</li>
+                    ))}
+                  </ul>
+                </Alert>
+              )}
+
+              {/* Empfehlungen */}
+              {aiAnalysisResult.recommendations.length > 0 && (
+                <Alert severity="info">
+                  <Typography variant="subtitle2" gutterBottom>
+                    Empfehlungen:
+                  </Typography>
+                  <ul style={{ margin: 0, paddingLeft: 20 }}>
+                    {aiAnalysisResult.recommendations.map((r, idx) => (
+                      <li key={idx}>{r}</li>
+                    ))}
+                  </ul>
+                </Alert>
+              )}
+
+              <Box sx={{ mt: 3, textAlign: 'center' }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<PhotoCameraIcon />}
+                  onClick={() => { setAiAnalysisResult(null); setAiAnalysisError(null); }}
+                >
+                  Neues Foto aufnehmen
+                </Button>
+              </Box>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setAiAnalysisDialogOpen(false); setAiAnalysisResult(null); setAiAnalysisError(null); }}>
+            Schließen
           </Button>
         </DialogActions>
       </Dialog>

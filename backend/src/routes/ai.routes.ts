@@ -276,4 +276,140 @@ router.post('/lookup-material', async (req: Request, res: Response) => {
   }
 });
 
+// POST Inventur-Foto analysieren (Vision-basierter Inhaltsabgleich)
+router.post('/analyze-inventory-photo', async (req: Request, res: Response) => {
+  try {
+    if (!mistralService.isEnabled()) {
+      return res.status(503).json({ 
+        error: 'KI-Service nicht verfügbar',
+        message: 'MISTRAL_API_KEY ist nicht konfiguriert'
+      });
+    }
+
+    const { cabinetId, imageBase64 } = req.body;
+
+    if (!cabinetId) {
+      return res.status(400).json({ error: 'cabinetId erforderlich' });
+    }
+
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'imageBase64 erforderlich (Foto als Base64-String)' });
+    }
+
+    const currentPool = getPoolForRequest(req);
+
+    // Prüfe Zugriff auf den Schrank
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      const [cabinetCheck] = await currentPool.query<RowDataPacket[]>(
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
+        [cabinetId, req.user.departmentId]
+      );
+      if (cabinetCheck.length === 0) {
+        return res.status(403).json({ error: 'Schrank nicht gefunden oder kein Zugriff' });
+      }
+    }
+
+    // Hole Schrank-Info
+    const [cabinetRows] = await currentPool.query<RowDataPacket[]>(
+      'SELECT id, name, location FROM cabinets WHERE id = ?',
+      [cabinetId]
+    );
+
+    if (cabinetRows.length === 0) {
+      return res.status(404).json({ error: 'Schrank nicht gefunden' });
+    }
+
+    const cabinet = cabinetRows[0];
+
+    // Hole alle Fächer des Schranks
+    const [compartments] = await currentPool.query<RowDataPacket[]>(
+      'SELECT id, name, description, position FROM compartments WHERE cabinet_id = ? AND active = TRUE ORDER BY position, name',
+      [cabinetId]
+    );
+
+    // Für jedes Fach: Hole Materialien
+    const materialList: Array<{
+      compartmentName: string;
+      materials: Array<{
+        name: string;
+        quantity: number;
+        articleNumber?: string;
+      }>;
+    }> = [];
+
+    for (const comp of compartments) {
+      const [materials] = await currentPool.query<RowDataPacket[]>(
+        `SELECT 
+           m.name,
+           m.article_number,
+           SUM(m.current_stock) AS total_stock
+         FROM materials m
+         WHERE m.compartment_id = ? AND m.active = TRUE
+         GROUP BY m.name, m.article_number
+         ORDER BY m.name`,
+        [comp.id]
+      );
+
+      materialList.push({
+        compartmentName: comp.name + (comp.description ? ` (${comp.description})` : ''),
+        materials: materials.map((m: any) => ({
+          name: m.name,
+          quantity: m.total_stock,
+          articleNumber: m.article_number
+        }))
+      });
+    }
+
+    // Auch Materialien ohne Fach-Zuordnung
+    const [unassignedMaterials] = await currentPool.query<RowDataPacket[]>(
+      `SELECT 
+         m.name,
+         m.article_number,
+         SUM(m.current_stock) AS total_stock
+       FROM materials m
+       WHERE m.cabinet_id = ? AND m.compartment_id IS NULL AND m.active = TRUE
+       GROUP BY m.name, m.article_number
+       ORDER BY m.name`,
+      [cabinetId]
+    );
+
+    if (unassignedMaterials.length > 0) {
+      materialList.push({
+        compartmentName: 'Ohne Fachzuordnung',
+        materials: unassignedMaterials.map((m: any) => ({
+          name: m.name,
+          quantity: m.total_stock,
+          articleNumber: m.article_number
+        }))
+      });
+    }
+
+    console.log(`Analysiere Inventur-Foto für Schrank "${cabinet.name}" mit ${materialList.length} Fächern`);
+
+    // Analysiere mit Vision-Modell
+    const analysisResult = await mistralService.analyzeInventoryPhoto(
+      imageBase64,
+      materialList
+    );
+
+    res.json({
+      cabinet: {
+        id: cabinet.id,
+        name: cabinet.name,
+        location: cabinet.location
+      },
+      materialList,
+      analysis: analysisResult,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Fehler bei Inventur-Foto-Analyse:', error);
+    res.status(500).json({ 
+      error: 'Fehler bei der Inventur-Foto-Analyse',
+      message: error instanceof Error ? error.message : 'Unbekannter Fehler'
+    });
+  }
+});
+
 export default router;

@@ -306,4 +306,6 @@ export const aiAPI = {
     api.post('/ai/autocomplete', { input }),
   lookupMaterial: (materialId: number) => 
     api.post('/ai/lookup-material', { materialId }),
+  analyzeInventoryPhoto: (cabinetId: number, imageBase64: string) =>
+    api.post('/ai/analyze-inventory-photo', { cabinetId, imageBase64 }),
 };

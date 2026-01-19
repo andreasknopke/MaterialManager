@@ -332,6 +332,134 @@ Finde alle Produkte mit identischen oder sehr ähnlichen Eigenschaften und gib s
       throw error;
     }
   }
+
+  /**
+   * Analysiert ein Foto eines Materialschranks und vergleicht es mit der Materialliste
+   */
+  async analyzeInventoryPhoto(
+    imageBase64: string,
+    materialList: Array<{
+      compartmentName: string;
+      materials: Array<{
+        name: string;
+        quantity: number;
+        articleNumber?: string;
+      }>;
+    }>
+  ): Promise<{
+    overallMatch: number;
+    analysis: string;
+    compartmentResults: Array<{
+      compartmentName: string;
+      matchProbability: number;
+      notes: string;
+    }>;
+    discrepancies: string[];
+    recommendations: string[];
+  }> {
+    if (!this.client) {
+      throw new Error('Mistral API ist nicht konfiguriert');
+    }
+
+    // Erstelle formatierte Materialliste für den Prompt
+    const formattedList = materialList.map(comp => {
+      const materialStr = comp.materials
+        .map(m => `  - ${m.name}: ${m.quantity} Stück${m.articleNumber ? ` (Art.-Nr.: ${m.articleNumber})` : ''}`)
+        .join('\n');
+      return `Fach "${comp.compartmentName}":\n${materialStr || '  (leer)'}`;
+    }).join('\n\n');
+
+    const systemPrompt = `Du bist ein Experte für die visuelle Inventurprüfung von Materialschränken in medizinischen Einrichtungen.
+
+Deine Aufgabe:
+1. Analysiere das Foto des Materialschranks
+2. Vergleiche den sichtbaren Inhalt mit der bereitgestellten Materialliste
+3. Schätze für jedes Fach die Wahrscheinlichkeit, dass der Inhalt mit der Liste übereinstimmt
+4. Identifiziere mögliche Diskrepanzen
+
+Hinweise:
+- Du kannst oft keine genauen Produktnamen ablesen, aber du kannst Verpackungsgrößen, Farben und Mengen abschätzen
+- Achte auf leere Fächer vs. befüllte Fächer
+- Schätze bei jedem Fach: "stimmt überein", "wahrscheinlich korrekt", "möglicherweise abweichend", "deutlich abweichend"
+- Gib konkrete Beobachtungen an
+
+Antworte AUSSCHLIESSLICH im folgenden JSON-Format (ohne Markdown):
+{
+  "overallMatch": 0.85,
+  "analysis": "Zusammenfassende Analyse des Schrankinhalts",
+  "compartmentResults": [
+    {
+      "compartmentName": "Name des Fachs",
+      "matchProbability": 0.9,
+      "notes": "Beobachtungen zu diesem Fach"
+    }
+  ],
+  "discrepancies": ["Liste erkannter Abweichungen"],
+  "recommendations": ["Empfehlungen für die manuelle Nachprüfung"]
+}`;
+
+    const userPrompt = `Bitte analysiere dieses Foto eines Materialschranks und vergleiche es mit der folgenden Materialliste:
+
+MATERIALLISTE (nach Fächern sortiert):
+${formattedList}
+
+Überprüfe das Foto und gib an:
+1. Wie wahrscheinlich ist es, dass der Inhalt zahlenmäßig der Auflistung entspricht?
+2. Welche Fächer sehen korrekt befüllt aus?
+3. Wo könnten Abweichungen bestehen?
+
+Du kannst vielleicht keine genauen Daten ablesen, aber du kannst eine Wahrscheinlichkeit angeben, ob es sich um das jeweilige Produkt handelt oder nicht.`;
+
+    try {
+      const chatResponse = await this.client.chat.complete({
+        model: 'pixtral-large-latest',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { 
+            role: 'user', 
+            content: [
+              { type: 'text', text: userPrompt },
+              { 
+                type: 'image_url', 
+                imageUrl: imageBase64.startsWith('data:') 
+                  ? imageBase64 
+                  : `data:image/jpeg;base64,${imageBase64}`
+              }
+            ]
+          }
+        ],
+        temperature: 0.2,
+        maxTokens: 4000
+      });
+
+      const rawContent = chatResponse.choices?.[0]?.message?.content;
+      if (!rawContent) {
+        throw new Error('Keine Antwort von Mistral erhalten');
+      }
+
+      const content = (typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent)).trim();
+      
+      // Versuche JSON zu extrahieren, falls es in Markdown-Code-Blöcke eingebettet ist
+      let jsonContent = content;
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        jsonContent = jsonMatch[1];
+      }
+
+      const result = JSON.parse(jsonContent);
+      
+      return {
+        overallMatch: result.overallMatch || 0,
+        analysis: result.analysis || 'Keine Analyse verfügbar',
+        compartmentResults: result.compartmentResults || [],
+        discrepancies: result.discrepancies || [],
+        recommendations: result.recommendations || []
+      };
+    } catch (error) {
+      console.error('Fehler bei Inventur-Foto-Analyse:', error);
+      throw error;
+    }
+  }
 }
 
 // Singleton-Instanz
