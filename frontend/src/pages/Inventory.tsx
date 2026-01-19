@@ -29,6 +29,8 @@ import {
   AccordionSummary,
   AccordionDetails,
   CircularProgress,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Inventory2 as InventoryIcon,
@@ -113,6 +115,8 @@ interface AIAnalysisResult {
 const Inventory: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [cabinets, setCabinets] = useState<Cabinet[]>([]);
   const [selectedCabinet, setSelectedCabinet] = useState<Cabinet | null>(null);
   const [cabinetMaterials, setCabinetMaterials] = useState<Material[]>([]);
@@ -597,35 +601,67 @@ const Inventory: React.FC = () => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            Inventur: {selectedCabinet?.name}
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 1,
+          pr: 2
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+            <Typography component="span" variant="h6" sx={{ fontSize: isMobile ? '1rem' : '1.25rem' }}>
+              Inventur: {selectedCabinet?.name}
+            </Typography>
             {inventoryMode && (
               <Chip 
-                label={`${confirmedMaterials.size}/${cabinetMaterials.length} geprüft`}
+                label={`${confirmedMaterials.size}/${cabinetMaterials.length}`}
                 color={confirmedMaterials.size === cabinetMaterials.length ? 'success' : 'warning'}
                 size="small"
-                sx={{ ml: 2 }}
               />
             )}
           </Box>
           {!inventoryMode ? (
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => setInventoryMode(true)}
-              startIcon={<CheckIcon />}
-            >
-              Inventur starten
-            </Button>
+            isMobile ? (
+              <Tooltip title="Inventur starten">
+                <IconButton
+                  color="primary"
+                  onClick={() => setInventoryMode(true)}
+                  sx={{ bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }}
+                >
+                  <CheckIcon />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => setInventoryMode(true)}
+                startIcon={<CheckIcon />}
+              >
+                Inventur starten
+              </Button>
+            )
           ) : (
-            <Button
-              variant="outlined"
-              color="secondary"
-              onClick={() => { setInventoryMode(false); setConfirmedMaterials(new Map()); }}
-            >
-              Inventur beenden
-            </Button>
+            isMobile ? (
+              <Tooltip title="Inventur beenden">
+                <IconButton
+                  color="secondary"
+                  onClick={() => { setInventoryMode(false); setConfirmedMaterials(new Map()); }}
+                  sx={{ border: '1px solid', borderColor: 'secondary.main' }}
+                >
+                  <CloseIcon />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={() => { setInventoryMode(false); setConfirmedMaterials(new Map()); }}
+              >
+                Inventur beenden
+              </Button>
+            )
           )}
         </DialogTitle>
         <DialogContent>
@@ -659,25 +695,52 @@ const Inventory: React.FC = () => {
                 }}
               />
               
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<CameraIcon />}
-                onClick={openCameraScanner}
-              >
-                Kamera-Scanner öffnen
-              </Button>
-              
-              <Button
-                size="small"
-                variant="outlined"
-                color="secondary"
-                startIcon={<AIIcon />}
-                onClick={handleOpenAIAnalysis}
-                sx={{ ml: 1 }}
-              >
-                KI Inhaltsabgleich
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {isMobile ? (
+                  <Tooltip title="Kamera-Scanner öffnen">
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={openCameraScanner}
+                      sx={{ border: '1px solid', borderColor: 'primary.main' }}
+                    >
+                      <CameraIcon />
+                    </IconButton>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<CameraIcon />}
+                    onClick={openCameraScanner}
+                  >
+                    Kamera-Scanner öffnen
+                  </Button>
+                )}
+                
+                {isMobile ? (
+                  <Tooltip title="KI Inhaltsabgleich">
+                    <IconButton
+                      size="small"
+                      color="secondary"
+                      onClick={handleOpenAIAnalysis}
+                      sx={{ border: '1px solid', borderColor: 'secondary.main' }}
+                    >
+                      <AIIcon />
+                    </IconButton>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<AIIcon />}
+                    onClick={handleOpenAIAnalysis}
+                  >
+                    KI Inhaltsabgleich
+                  </Button>
+                )}
+              </Box>
               
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                 Öffnet den vollständigen Barcode-Scanner mit GS1-Unterstützung und OCR
@@ -692,15 +755,28 @@ const Inventory: React.FC = () => {
               Materialien im Schrank ({cabinetMaterials.length})
             </Typography>
             {!inventoryMode && cabinetMaterials.length > 0 && (
-              <Button
-                size="small"
-                variant="outlined"
-                color="secondary"
-                startIcon={<AIIcon />}
-                onClick={handleOpenAIAnalysis}
-              >
-                KI Inhaltsabgleich
-              </Button>
+              isMobile ? (
+                <Tooltip title="KI Inhaltsabgleich">
+                  <IconButton
+                    size="small"
+                    color="secondary"
+                    onClick={handleOpenAIAnalysis}
+                    sx={{ border: '1px solid', borderColor: 'secondary.main' }}
+                  >
+                    <AIIcon />
+                  </IconButton>
+                </Tooltip>
+              ) : (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<AIIcon />}
+                  onClick={handleOpenAIAnalysis}
+                >
+                  KI Inhaltsabgleich
+                </Button>
+              )
             )}
           </Box>
           
