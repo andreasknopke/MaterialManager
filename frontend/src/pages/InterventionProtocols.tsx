@@ -35,8 +35,11 @@ import {
   Edit as EditIcon,
   Add as AddIcon,
   Assignment as AssignmentIcon,
+  Save as SaveIcon,
+  Cancel as CancelIcon,
 } from '@mui/icons-material';
 import { interventionAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ProtocolItem {
   id: number;
@@ -64,6 +67,7 @@ interface Protocol {
 
 const InterventionProtocols: React.FC = () => {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -85,6 +89,16 @@ const InterventionProtocols: React.FC = () => {
   // Löschen-Bestätigung
   const [deleteProtocol, setDeleteProtocol] = useState<Protocol | null>(null);
   const [deleting, setDeleting] = useState(false);
+  
+  // Bearbeiten-Dialog (nur für Admins)
+  const [editProtocol, setEditProtocol] = useState<Protocol | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editPatientId, setEditPatientId] = useState('');
+  const [editPatientName, setEditPatientName] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [updating, setUpdating] = useState(false);
+  const [updateSuccess, setUpdateSuccess] = useState('');
 
   const loadProtocols = async () => {
     setLoading(true);
@@ -150,6 +164,48 @@ const InterventionProtocols: React.FC = () => {
       setError(err.response?.data?.error || 'Fehler beim Löschen');
     } finally {
       setDeleting(false);
+    }
+  };
+  
+  // Admin-Funktion: Protokoll bearbeiten
+  const handleOpenEdit = (protocol: Protocol) => {
+    setEditProtocol(protocol);
+    setEditPatientId(protocol.patient_id);
+    setEditPatientName(protocol.patient_name || '');
+    setEditDate(protocol.started_at.substring(0, 16)); // YYYY-MM-DDTHH:mm format
+    setEditNotes(protocol.notes || '');
+    setShowEditDialog(true);
+    setUpdateSuccess('');
+    setError('');
+  };
+  
+  const handleUpdateProtocol = async () => {
+    if (!editProtocol || !editPatientId.trim()) {
+      setError('Patienten-ID ist erforderlich');
+      return;
+    }
+    
+    setUpdating(true);
+    setError('');
+    setUpdateSuccess('');
+    
+    try {
+      await interventionAPI.updateProtocol(editProtocol.id, {
+        patient_id: editPatientId.trim(),
+        patient_name: editPatientName.trim() || undefined,
+        notes: editNotes.trim() || undefined,
+        started_at: editDate,
+      });
+      
+      setUpdateSuccess('Protokoll erfolgreich aktualisiert');
+      setTimeout(() => {
+        setShowEditDialog(false);
+        loadProtocols();
+      }, 1500);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fehler beim Aktualisieren');
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -394,6 +450,13 @@ const InterventionProtocols: React.FC = () => {
                           <ViewIcon />
                         </IconButton>
                       </Tooltip>
+                      {isAdmin && (
+                        <Tooltip title="Bearbeiten (Admin)">
+                          <IconButton size="small" color="primary" onClick={() => handleOpenEdit(protocol)}>
+                            <EditIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <Tooltip title="Löschen">
                         <IconButton size="small" color="error" onClick={() => setDeleteProtocol(protocol)}>
                           <DeleteIcon />
@@ -520,6 +583,95 @@ const InterventionProtocols: React.FC = () => {
           <Button onClick={() => setDeleteProtocol(null)}>Abbrechen</Button>
           <Button onClick={handleDelete} color="error" variant="contained" disabled={deleting}>
             {deleting ? <CircularProgress size={20} /> : 'Löschen'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Admin-Edit-Dialog */}
+      <Dialog 
+        open={showEditDialog} 
+        onClose={() => !updating && setShowEditDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" gap={1}>
+            <EditIcon color="primary" />
+            Interventionsprotokoll bearbeiten (Admin)
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <strong>Hinweis:</strong> Diese Änderungen werden im Audit-Log dokumentiert.
+          </Alert>
+          
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+          
+          {updateSuccess && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {updateSuccess}
+            </Alert>
+          )}
+          
+          <TextField
+            label="Patienten-ID *"
+            value={editPatientId}
+            onChange={(e) => setEditPatientId(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            disabled={updating}
+          />
+          
+          <TextField
+            label="Patientenname (optional)"
+            value={editPatientName}
+            onChange={(e) => setEditPatientName(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            disabled={updating}
+          />
+          
+          <TextField
+            label="Datum und Uhrzeit"
+            type="datetime-local"
+            value={editDate}
+            onChange={(e) => setEditDate(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            InputLabelProps={{ shrink: true }}
+            disabled={updating}
+          />
+          
+          <TextField
+            label="Notizen (optional)"
+            value={editNotes}
+            onChange={(e) => setEditNotes(e.target.value)}
+            fullWidth
+            multiline
+            rows={3}
+            disabled={updating}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button 
+            onClick={() => setShowEditDialog(false)} 
+            startIcon={<CancelIcon />}
+            disabled={updating}
+          >
+            Abbrechen
+          </Button>
+          <Button 
+            onClick={handleUpdateProtocol} 
+            variant="contained" 
+            color="primary"
+            startIcon={updating ? <CircularProgress size={16} /> : <SaveIcon />}
+            disabled={updating || !editPatientId.trim()}
+          >
+            {updating ? 'Speichern...' : 'Speichern'}
           </Button>
         </DialogActions>
       </Dialog>

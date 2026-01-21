@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import pool, { getPoolForRequest } from '../config/database';
 import { RowDataPacket, ResultSetHeader, PoolConnection } from 'mysql2/promise';
 import { authenticate } from '../middleware/auth';
-import { auditTransaction } from '../utils/auditLogger';
+import { auditTransaction, auditIntervention } from '../utils/auditLogger';
 
 const router = Router();
 
@@ -778,27 +778,101 @@ router.put('/transactions/:transactionId/lot', async (req: Request, res: Respons
   }
 });
 
-// PUT Protokoll-Details aktualisieren
+// PUT Protokoll-Details aktualisieren (nur für Admins mit Audit-Log)
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const currentPool = getPoolForRequest(req);
     const { id } = req.params;
-    const { patient_id, patient_name, notes } = req.body;
+    const { patient_id, patient_name, notes, started_at } = req.body;
+    const user = (req as any).user;
+    
+    // Nur Admins dürfen Protokolle bearbeiten
+    if (user?.role !== 'admin' && !user?.isRoot) {
+      return res.status(403).json({ error: 'Administratorrechte erforderlich' });
+    }
     
     if (!patient_id) {
       return res.status(400).json({ error: 'Patienten-ID ist erforderlich' });
     }
     
+    // Alte Werte für Audit-Log abrufen
+    const [oldProtocol] = await currentPool.query<RowDataPacket[]>(
+      'SELECT patient_id, patient_name, notes, started_at FROM intervention_protocols WHERE id = ?',
+      [id]
+    );
+    
+    if (oldProtocol.length === 0) {
+      return res.status(404).json({ error: 'Protokoll nicht gefunden' });
+    }
+    
+    const oldValues = oldProtocol[0];
+    
+    // Aktualisierung durchführen
+    const updateFields: string[] = [];
+    const updateValues: any[] = [];
+    const newValues: any = {};
+    
+    if (patient_id !== undefined && patient_id !== oldValues.patient_id) {
+      updateFields.push('patient_id = ?');
+      updateValues.push(patient_id);
+      newValues.patient_id = patient_id;
+    }
+    
+    if (patient_name !== undefined && patient_name !== oldValues.patient_name) {
+      updateFields.push('patient_name = ?');
+      updateValues.push(patient_name || null);
+      newValues.patient_name = patient_name || null;
+    }
+    
+    if (notes !== undefined && notes !== oldValues.notes) {
+      updateFields.push('notes = ?');
+      updateValues.push(notes || null);
+      newValues.notes = notes || null;
+    }
+    
+    if (started_at !== undefined) {
+      const newStartedAt = toMySQLDatetime(started_at);
+      const oldStartedAt = toMySQLDatetime(oldValues.started_at);
+      if (newStartedAt !== oldStartedAt) {
+        updateFields.push('started_at = ?');
+        updateValues.push(newStartedAt);
+        newValues.started_at = newStartedAt;
+      }
+    }
+    
+    // Wenn keine Änderungen, direkt erfolgreich zurückgeben
+    if (updateFields.length === 0) {
+      return res.json({ success: true, message: 'Keine Änderungen' });
+    }
+    
+    updateValues.push(id);
+    
     const [result] = await currentPool.query<ResultSetHeader>(
-      'UPDATE intervention_protocols SET patient_id = ?, patient_name = ?, notes = ? WHERE id = ?',
-      [patient_id, patient_name || null, notes || null, id]
+      `UPDATE intervention_protocols SET ${updateFields.join(', ')} WHERE id = ?`,
+      updateValues
     );
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Protokoll nicht gefunden' });
     }
     
-    res.json({ success: true, message: 'Protokoll aktualisiert' });
+    // Audit-Log erstellen
+    await auditIntervention.update(
+      req,
+      { id: Number(id) },
+      {
+        patient_id: oldValues.patient_id,
+        patient_name: oldValues.patient_name,
+        notes: oldValues.notes,
+        started_at: oldValues.started_at
+      },
+      newValues
+    );
+    
+    console.log(`Interventionsprotokoll ${id} aktualisiert durch Admin ${user.username}`);
+    console.log('Änderungen:', newValues);
+    
+    res.json({ success: true, message: 'Protokoll erfolgreich aktualisiert' });
   } catch (error) {
     console.error('Fehler beim Aktualisieren des Protokolls:', error);
     res.status(500).json({ error: 'Datenbankfehler' });

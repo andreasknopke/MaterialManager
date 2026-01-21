@@ -275,6 +275,10 @@ export const interventionAPI = {
   
   updateTransactionLot: (transactionId: number, lot_number: string) =>
     api.put(`/interventions/transactions/${transactionId}/lot`, { lot_number }),
+  
+  // Admin-Funktion: Protokoll-Details bearbeiten
+  updateProtocol: (id: number, data: { patient_id?: string; patient_name?: string; notes?: string; started_at?: string }) => 
+    api.put(`/interventions/${id}`, data),
 };
 
 // Audit-Logs (nur für Admins)
