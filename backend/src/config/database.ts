@@ -1,5 +1,6 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import { parseDbToken, isLegacyToken } from '../utils/crypto';
 
 dotenv.config();
 
@@ -28,22 +29,28 @@ export interface DbCredentials {
 }
 
 /**
- * Dekodiert einen Base64 DB-Token zu Credentials
+ * Dekodiert einen DB-Token zu Credentials
+ * Unterstützt sowohl AES-verschlüsselte Tokens (neu) als auch Base64 (legacy)
  */
 export const decodeDbToken = (token: string): DbCredentials | null => {
   try {
-    const decoded = Buffer.from(token, 'base64').toString('utf8');
-    const parsed = JSON.parse(decoded);
+    // Verwende die crypto Utility für sichere Dekodierung
+    const parsed = parseDbToken(token);
     
-    if (!parsed.host || !parsed.user || !parsed.password || !parsed.database) {
+    if (!parsed || !parsed.host || !parsed.user || !parsed.database) {
       console.error('DB Token ungültig: Fehlende Felder');
       return null;
+    }
+    
+    // Warnung bei Legacy-Token ausgeben
+    if (isLegacyToken(token)) {
+      console.warn('⚠️ Legacy Base64 Token erkannt - Bitte neu generieren für mehr Sicherheit!');
     }
     
     return {
       host: parsed.host,
       user: parsed.user,
-      password: parsed.password,
+      password: parsed.password || '',
       database: parsed.database,
       port: parsed.port || 3306,
       ssl: parsed.ssl !== false

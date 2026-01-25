@@ -39,7 +39,6 @@ import {
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-  encodeDbToken, 
   getDbToken, 
   saveDbToken, 
   clearDbToken, 
@@ -98,35 +97,38 @@ const Admin: React.FC = () => {
     setTimeout(() => setSuccess(null), 2000);
   };
 
-  // Token aus Server-Secrets generieren
+  // Token aus Server-Secrets generieren (AES-256-GCM verschlüsselt)
   const generateTokenFromSecrets = async () => {
     try {
-      const response = await axios.get('/api/admin/db-credentials');
-      const creds = response.data;
-      const token = encodeDbToken({
-        host: creds.host,
-        user: creds.user,
-        password: creds.password,
-        database: creds.database,
-        port: creds.port || 3306,
-        ssl: creds.ssl !== false
-      });
-      setGeneratedToken(token);
-      setSuccess('Token aus Server-Secrets generiert');
+      const response = await axios.post('/api/admin/generate-db-token');
+      if (response.data.token) {
+        setGeneratedToken(response.data.token);
+        setSuccess(`AES-verschlüsselter Token generiert für ${response.data.host}/${response.data.database}`);
+      } else {
+        setError('Kein Token in der Antwort');
+      }
     } catch (err: any) {
-      setError('Fehler beim Laden der Server-Credentials: ' + (err.response?.data?.error || err.message));
+      setError('Fehler bei Token-Generierung: ' + (err.response?.data?.error || err.message));
     }
   };
 
-  // Token aus manuellen Eingaben generieren
-  const generateTokenFromManual = () => {
-    if (!manualCredentials.host || !manualCredentials.user || !manualCredentials.password || !manualCredentials.database) {
-      setError('Bitte alle Pflichtfelder ausfüllen');
+  // Token aus manuellen Eingaben generieren (AES-256-GCM verschlüsselt)
+  const generateTokenFromManual = async () => {
+    if (!manualCredentials.host || !manualCredentials.user || !manualCredentials.database) {
+      setError('Bitte Host, User und Database ausfüllen');
       return;
     }
-    const token = encodeDbToken(manualCredentials);
-    setGeneratedToken(token);
-    setSuccess('Token manuell generiert');
+    try {
+      const response = await axios.post('/api/admin/generate-db-token-custom', manualCredentials);
+      if (response.data.token) {
+        setGeneratedToken(response.data.token);
+        setSuccess(`AES-verschlüsselter Token generiert für ${response.data.host}/${response.data.database}`);
+      } else {
+        setError('Kein Token in der Antwort');
+      }
+    } catch (err: any) {
+      setError('Fehler bei Token-Generierung: ' + (err.response?.data?.error || err.message));
+    }
   };
 
   // Token in Zwischenablage kopieren

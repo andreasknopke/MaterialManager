@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import pool, { getPoolForRequest } from '../config/database';
+import { generateDbToken } from '../utils/crypto';
 
 const router = Router();
 
@@ -879,6 +880,165 @@ router.post('/run-product-minstock-migration', async (req: Request, res: Respons
     res.status(500).json({ 
       error: 'Migration failed',
       details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ============================================================
+// DB-TOKEN GENERATION ENDPOINT (AES-256-GCM Verschlüsselt)
+// ============================================================
+
+// POST /api/admin/generate-db-token - Generiert einen AES-verschlüsselten DB-Token
+// ACHTUNG: Nur für authentifizierte Admin-User!
+router.post('/generate-db-token', async (req: Request, res: Response) => {
+  try {
+    // Prüfe JWT_SECRET
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET nicht konfiguriert!');
+      return res.status(500).json({ 
+        error: 'Server nicht korrekt konfiguriert (JWT_SECRET fehlt)' 
+      });
+    }
+    
+    console.log('Generiere verschlüsselten DB-Token aus Umgebungsvariablen...');
+    
+    // Credentials aus Umgebungsvariablen
+    const host = process.env.DB_HOST?.trim();
+    const user = process.env.DB_USER?.trim();
+    const database = process.env.DB_NAME?.trim();
+    
+    if (!host || !user || !database) {
+      console.error('Fehlende DB-Konfiguration');
+      return res.status(400).json({ 
+        error: 'Fehlende Datenbankverbindungs-Daten in Umgebungsvariablen' 
+      });
+    }
+    
+    const credentials = {
+      host,
+      user,
+      password: process.env.DB_PASSWORD?.trim() || '',
+      database,
+      port: parseInt(process.env.DB_PORT?.trim() || '3306'),
+      ssl: process.env.DB_SSL === 'true'
+    };
+    
+    // AES-256-GCM verschlüsselten Token generieren
+    const token = generateDbToken(credentials);
+    
+    console.log('✅ AES-verschlüsselter DB-Token erfolgreich generiert');
+    
+    res.json({ 
+      success: true,
+      token,
+      message: 'Token erfolgreich generiert (AES-256-GCM verschlüsselt)',
+      host: credentials.host,
+      database: credentials.database
+    });
+    
+  } catch (error) {
+    console.error('❌ Fehler bei Token-Generierung:', error);
+    res.status(500).json({ 
+      error: 'Fehler bei Token-Generierung',
+      details: error instanceof Error ? error.message : 'Unbekannter Fehler'
+    });
+  }
+});
+
+// POST /api/admin/generate-db-token-custom - Generiert einen AES-verschlüsselten Token aus benutzerdefinierten Daten
+router.post('/generate-db-token-custom', async (req: Request, res: Response) => {
+  try {
+    // Prüfe JWT_SECRET
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET nicht konfiguriert!');
+      return res.status(500).json({ 
+        error: 'Server nicht korrekt konfiguriert (JWT_SECRET fehlt)' 
+      });
+    }
+    
+    const { host, user, password, database, port, ssl } = req.body;
+    
+    if (!host || !user || !database) {
+      return res.status(400).json({ 
+        error: 'Host, User und Database sind erforderlich' 
+      });
+    }
+    
+    const credentials = {
+      host: host.trim(),
+      user: user.trim(),
+      password: (password || '').trim(),
+      database: database.trim(),
+      port: parseInt(port || '3306'),
+      ssl: ssl === true
+    };
+    
+    console.log('Generiere verschlüsselten DB-Token für:', {
+      host: credentials.host,
+      database: credentials.database,
+      user: credentials.user
+    });
+    
+    // AES-256-GCM verschlüsselten Token generieren
+    const token = generateDbToken(credentials);
+    
+    console.log('✅ AES-verschlüsselter DB-Token erfolgreich generiert');
+    
+    res.json({ 
+      success: true,
+      token,
+      message: 'Token erfolgreich generiert (AES-256-GCM verschlüsselt)',
+      host: credentials.host,
+      database: credentials.database
+    });
+    
+  } catch (error) {
+    console.error('❌ Fehler bei Token-Generierung:', error);
+    res.status(500).json({ 
+      error: 'Fehler bei Token-Generierung',
+      details: error instanceof Error ? error.message : 'Unbekannter Fehler'
+    });
+  }
+});
+
+// GET /api/admin/token-info - Überprüft ob ein Token AES-verschlüsselt oder Legacy (Base64) ist
+router.post('/token-info', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+    
+    if (!token) {
+      return res.status(400).json({ error: 'Token erforderlich' });
+    }
+    
+    const { isLegacyToken, parseDbToken } = await import('../utils/crypto');
+    
+    const isLegacy = isLegacyToken(token);
+    const parsed = parseDbToken(token);
+    
+    if (!parsed) {
+      return res.status(400).json({ 
+        error: 'Token konnte nicht dekodiert werden',
+        valid: false
+      });
+    }
+    
+    res.json({
+      valid: true,
+      isLegacy,
+      encrypted: !isLegacy,
+      host: parsed.host,
+      database: parsed.database,
+      user: parsed.user,
+      port: parsed.port || 3306,
+      ssl: parsed.ssl || false,
+      warning: isLegacy ? 'Legacy Token erkannt! Bitte neu generieren für mehr Sicherheit.' : null
+    });
+    
+  } catch (error) {
+    console.error('❌ Fehler bei Token-Info:', error);
+    res.status(500).json({ 
+      error: 'Fehler bei Token-Analyse',
+      details: error instanceof Error ? error.message : 'Unbekannter Fehler'
     });
   }
 });
