@@ -43,6 +43,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
+  const [authChecked, setAuthChecked] = useState(false);
 
   // Axios Interceptor für automatisches Token-Hinzufügen
   useEffect(() => {
@@ -65,7 +66,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           localStorage.removeItem('token');
           setToken(null);
           setUser(null);
-          window.location.href = '/login';
+          // Nur redirect wenn nicht bereits auf Login-Seite
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
         }
         return Promise.reject(error);
       }
@@ -81,19 +85,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const loadUser = async () => {
       const storedToken = localStorage.getItem('token');
-      if (storedToken) {
-        try {
-          const response = await axios.get('/api/auth/me');
-          setUser(response.data);
-          setToken(storedToken);
-        } catch (error) {
-          console.error('Fehler beim Laden des Benutzers:', error);
-          localStorage.removeItem('token');
-          setToken(null);
-          setUser(null);
-        }
+      
+      // Kein Token vorhanden -> sofort zum Login (kein API-Call nötig)
+      if (!storedToken) {
+        console.log('[Auth] Kein Token gefunden - Login erforderlich');
+        setLoading(false);
+        setAuthChecked(true);
+        return;
       }
-      setLoading(false);
+      
+      try {
+        // Timeout für den Auth-Check (max 5 Sekunden)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await axios.get('/api/auth/me', {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        setUser(response.data);
+        setToken(storedToken);
+        console.log('[Auth] User geladen:', response.data.username);
+      } catch (error: any) {
+        console.error('[Auth] Fehler beim Laden des Benutzers:', error.message);
+        // Bei Fehler oder Timeout: Token löschen und zum Login
+        localStorage.removeItem('token');
+        setToken(null);
+        setUser(null);
+      } finally {
+        setLoading(false);
+        setAuthChecked(true);
+      }
     };
 
     loadUser();
