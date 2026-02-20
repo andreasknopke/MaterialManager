@@ -1,6 +1,6 @@
-# 🎯 Railway Production Deployment - Checkliste
+# Railway Production Deployment - Checkliste
 
-## ✅ Pre-Deployment (Lokal)
+## Pre-Deployment (Lokal)
 
 - [x] Alle Migrationen entwickelt (002, 003, 004)
 - [x] Department-Filter in Material/Cabinet-Routen
@@ -10,7 +10,7 @@
 - [x] Dokumentation geschrieben
 - [x] Code committed und gepusht
 
-## 📋 Railway Deployment Steps
+## Railway Deployment Steps
 
 ### Schritt 1: Railway MySQL Console
 
@@ -27,10 +27,10 @@ Railway Dashboard → MySQL Service → Data Tab → Query
 
 **Erwartete Ausgabe:**
 ```
-✅ Migration 002: Units System completed!
-✅ Migration 003: User Management System completed!
-✅ Migration 004: Department-Based Access Control completed!
-🎉 ALL MIGRATIONS COMPLETED SUCCESSFULLY!
+ Migration 002: Units System completed!
+ Migration 003: User Management System completed!
+ Migration 004: Department-Based Access Control completed!
+ ALL MIGRATIONS COMPLETED SUCCESSFULLY!
 ```
 
 **Dauer:** ~30 Sekunden
@@ -47,16 +47,16 @@ Railway Dashboard → Backend Service → Variables Tab
 
 | Variable | Wert | Quelle |
 |----------|------|--------|
-| `DATABASE_URL` | `mysql://...` | ✅ Automatisch |
-| `DB_HOST` | Railway Host | ✅ Automatisch |
-| `DB_PORT` | `3306` | ✅ Automatisch |
-| `DB_USER` | `root` | ✅ Automatisch |
-| `DB_PASSWORD` | Railway Password | ✅ Automatisch |
-| `DB_NAME` | `railway` | ✅ Automatisch |
-| `PORT` | `3001` | ⚙️ Manuell setzen |
-| `NODE_ENV` | `production` | ⚙️ Manuell setzen |
-| `JWT_SECRET` | `<random-64-byte-hex>` | ⚙️ **WICHTIG!** |
-| `CORS_ORIGIN` | `https://frontend-url...` | ⚙️ Manuell setzen |
+| `DATABASE_URL` | `mysql://...` |  Automatisch |
+| `DB_HOST` | Railway Host |  Automatisch |
+| `DB_PORT` | `3306` |  Automatisch |
+| `DB_USER` | `root` |  Automatisch |
+| `DB_PASSWORD` | Railway Password |  Automatisch |
+| `DB_NAME` | `railway` |  Automatisch |
+| `PORT` | `3001` |  Manuell setzen |
+| `NODE_ENV` | `production` |  Manuell setzen |
+| `JWT_SECRET` | `<random-64-byte-hex>` |  **WICHTIG!** |
+| `CORS_ORIGIN` | `https://frontend-url...` |  Manuell setzen |
 
 **JWT_SECRET generieren:**
 ```bash
@@ -91,10 +91,10 @@ Railway Dashboard → Service → Deployments → Redeploy
 ```
 
 **Warte auf:**
-- ✅ Backend Build erfolgreich
-- ✅ Backend Deploy erfolgreich  
-- ✅ Frontend Build erfolgreich
-- ✅ Frontend Deploy erfolgreich
+- Backend Build erfolgreich
+- Backend Deploy erfolgreich  
+- Frontend Build erfolgreich
+- Frontend Deploy erfolgreich
 
 **Dauer:** 3-5 Minuten
 
@@ -135,10 +135,10 @@ https://DEINE-FRONTEND-URL.up.railway.app
 - Password: `root`
 
 **Erwartung:**
-- ✅ Login erfolgreich
-- ⚠️ "Passwort muss geändert werden" Dialog erscheint
-- ✅ Neues Passwort setzen
-- ✅ Re-Login mit neuem Passwort
+- Login erfolgreich
+- "Passwort muss geändert werden" Dialog erscheint
+- Neues Passwort setzen
+- Re-Login mit neuem Passwort
 
 ---
 
@@ -170,7 +170,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ---
 
-## 🔍 Post-Deployment Checks
+## Post-Deployment Checks
 
 ### Backend Health
 ```bash
@@ -220,21 +220,21 @@ SHOW FULL TABLES WHERE Table_type = 'VIEW';
 
 ---
 
-## 🎉 Success Criteria
+## Success Criteria
 
-- ✅ Backend erreichbar (`/health` → 200)
-- ✅ Frontend erreichbar (Login-Seite lädt)
-- ✅ Root-Login funktioniert (`root`/`root`)
-- ✅ Passwort-Änderung erzwungen
-- ✅ 4 Departments vorhanden
-- ✅ User kann angelegt werden
-- ✅ Department Admin sieht nur sein Department
-- ✅ Material/Cabinet CRUD funktioniert
-- ✅ Department-Filter aktiv
+- Backend erreichbar (`/health` → 200)
+- Frontend erreichbar (Login-Seite lädt)
+- Root-Login funktioniert (`root`/`root`)
+- Passwort-Änderung erzwungen
+- 4 Departments vorhanden
+- User kann angelegt werden
+- Department Admin sieht nur sein Department
+- Material/Cabinet CRUD funktioniert
+- Department-Filter aktiv
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Backend startet nicht
 1. Prüfe Logs: Railway → Backend → Deployments → View Logs
@@ -258,7 +258,7 @@ SHOW FULL TABLES WHERE Table_type = 'VIEW';
 
 ---
 
-## 📚 Dokumentation
+## Dokumentation
 
 - **Quick Start:** [RAILWAY_QUICKSTART_PROD.md](./RAILWAY_QUICKSTART_PROD.md)
 - **Vollständige Anleitung:** [RAILWAY_PRODUCTION_SETUP.md](./RAILWAY_PRODUCTION_SETUP.md)
@@ -267,4 +267,4 @@ SHOW FULL TABLES WHERE Table_type = 'VIEW';
 
 ---
 
-**Deployment-Status:** 🚀 Production Ready!
+**Deployment-Status:**  Production Ready!

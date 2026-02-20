@@ -57,13 +57,13 @@ Administratoren können jetzt Datum und Patienteninformationen in Interventionsp
 
 ## Sicherheit
 
-✅ **Berechtigungsprüfung im Backend:** Nur Admins und Root-User können Protokolle bearbeiten
+ **Berechtigungsprüfung im Backend:** Nur Admins und Root-User können Protokolle bearbeiten
 
-✅ **Audit-Logging:** Alle Änderungen werden mit Zeitstempel, Benutzer, alten und neuen Werten protokolliert
+ **Audit-Logging:** Alle Änderungen werden mit Zeitstempel, Benutzer, alten und neuen Werten protokolliert
 
-✅ **Frontend-Sichtbarkeit:** Edit-Button wird nur für Admins angezeigt (`isAdmin` Check)
+ **Frontend-Sichtbarkeit:** Edit-Button wird nur für Admins angezeigt (`isAdmin` Check)
 
-✅ **Validierung:** Patienten-ID ist ein Pflichtfeld
+ **Validierung:** Patienten-ID ist ein Pflichtfeld
 
 ## Verwendung
 
@@ -149,13 +149,13 @@ curl -X PUT https://api.example.com/api/interventions/123 \
 
 ## Hinweise
 
-⚠️ **Wichtig:** Das `ended_at` Datum kann nicht über diese Funktion geändert werden, da es den Zeitpunkt der Intervention-Beendigung repräsentiert.
+ **Wichtig:** Das `ended_at` Datum kann nicht über diese Funktion geändert werden, da es den Zeitpunkt der Intervention-Beendigung repräsentiert.
 
-ℹ️ **Tipp:** Nutze das Audit-Log regelmäßig, um alle Änderungen an Interventionsprotokollen nachzuvollziehen.
+ℹ **Tipp:** Nutze das Audit-Log regelmäßig, um alle Änderungen an Interventionsprotokollen nachzuvollziehen.
 
 ## Status
 
-✅ **Implementiert und getestet**
+ **Implementiert und getestet**
 - Backend-API mit Admin-Prüfung und Audit-Logging
 - Frontend-UI mit Edit-Dialog
 - TypeScript-Fehlerfreiheit bestätigt

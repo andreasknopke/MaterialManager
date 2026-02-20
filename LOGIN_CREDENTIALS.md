@@ -16,7 +16,7 @@
 
 ---
 
-## ⚠️ Wichtig nach Code-Deployment
+## Wichtig nach Code-Deployment
 
 Nach jedem Backend-Deployment, das die Authentication ändert, **muss sich der User neu einloggen**:
 
@@ -43,11 +43,11 @@ Nach jedem Backend-Deployment, das die Authentication ändert, **muss sich der U
 ### Department wird nicht angezeigt
 **Symptom:** User sieht "-" statt Department-Name
 **Ursache:** View `v_users_overview` war nicht aktualisiert
-**Status:** ✅ Behoben am 10.12.2025
+**Status:**  Behoben am 10.12.2025
 
 ### Kann keine Schränke anlegen (500 Error)
 **Ursache:** `getDepartmentFilter` verwendete falschen Table-Alias
-**Status:** ✅ Behoben am 10.12.2025
+**Status:**  Behoben am 10.12.2025
 
 ---
 

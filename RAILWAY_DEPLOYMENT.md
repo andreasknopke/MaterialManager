@@ -1,8 +1,8 @@
-# 🚀 Railway Deployment - Material Manager
+# Railway Deployment - Material Manager
 
 ## Schritt-für-Schritt Anleitung
 
-### 1️⃣ Projekt zu GitHub pushen
+### 1⃣ Projekt zu GitHub pushen
 
 ```bash
 cd /workspaces/MaterialManager
@@ -18,19 +18,19 @@ git branch -M main
 git push -u origin main
 ```
 
-### 2️⃣ Railway Dashboard öffnen
+### 2⃣ Railway Dashboard öffnen
 
 1. Gehen Sie zu [railway.app](https://railway.app)
 2. Melden Sie sich an
 3. Klicken Sie auf **"New Project"**
 
-### 3️⃣ MySQL Datenbank erstellen
+### 3⃣ MySQL Datenbank erstellen
 
 1. Klicken Sie auf **"+ New"** → **"Database"** → **"Add MySQL"**
 2. Die Datenbank wird automatisch erstellt
 3. Notieren Sie sich die Verbindungsvariablen (werden automatisch gesetzt)
 
-### 4️⃣ Backend Service deployen
+### 4⃣ Backend Service deployen
 
 1. Klicken Sie auf **"+ New"** → **"GitHub Repo"**
 2. Wählen Sie Ihr `MaterialManager` Repository
@@ -62,7 +62,7 @@ git push -u origin main
 
 7. Deploy wird automatisch gestartet
 
-### 5️⃣ Frontend Service deployen
+### 5⃣ Frontend Service deployen
 
 1. Klicken Sie wieder auf **"+ New"** → **"GitHub Repo"**
 2. Wählen Sie dasselbe `MaterialManager` Repository
@@ -80,7 +80,7 @@ git push -u origin main
 5. **Wichtig:** Installieren Sie `serve` für das Hosting:
    - Das ist bereits in der `nixpacks.toml` konfiguriert
 
-### 6️⃣ Datenbank initialisieren
+### 6⃣ Datenbank initialisieren
 
 Nach dem ersten Deploy:
 
@@ -107,7 +107,7 @@ railway link
 railway run mysql -h $MYSQLHOST -u $MYSQLUSER -p$MYSQLPASSWORD $MYSQLDATABASE < database/schema.sql
 ```
 
-### 7️⃣ Domains konfigurieren
+### 7⃣ Domains konfigurieren
 
 1. **Backend Domain:**
    - Gehen Sie zum Backend Service
@@ -127,7 +127,7 @@ railway run mysql -h $MYSQLHOST -u $MYSQLUSER -p$MYSQLPASSWORD $MYSQLDATABASE < 
      ```
    - Speichern (triggert automatischen Re-Deploy)
 
-### 8️⃣ CORS im Backend aktualisieren (Optional)
+### 8⃣ CORS im Backend aktualisieren (Optional)
 
 Wenn Sie Probleme mit CORS haben:
 
@@ -138,7 +138,7 @@ Wenn Sie Probleme mit CORS haben:
    ```
    ODER lassen Sie es auf `*` für alle Origins
 
-### 9️⃣ Testen
+### 9⃣ Testen
 
 1. Öffnen Sie die Frontend-URL in Ihrem Browser
 2. Sie sollten das Material Manager Dashboard sehen
@@ -146,7 +146,7 @@ Wenn Sie Probleme mit CORS haben:
 
 ---
 
-## 🔧 Alternative: Alles mit Railway CLI
+## Alternative: Alles mit Railway CLI
 
 ```bash
 # Railway CLI installieren
@@ -172,7 +172,7 @@ railway up
 
 ---
 
-## 📊 Projekt-Struktur auf Railway
+## Projekt-Struktur auf Railway
 
 ```
 MaterialManager (GitHub Repo)
@@ -192,7 +192,7 @@ MaterialManager (GitHub Repo)
 
 ---
 
-## ⚠️ Wichtige Hinweise
+## Wichtige Hinweise
 
 1. **Kosten:** Railway bietet $5 kostenloses Guthaben/Monat. Danach wird abgerechnet.
 
@@ -234,11 +234,11 @@ MaterialManager (GitHub Repo)
 
 ---
 
-## 🎉 Nach erfolgreichem Deploy
+## Nach erfolgreichem Deploy
 
 Ihre Material Manager Anwendung läuft jetzt auf:
 - **Frontend:** https://ihr-frontend.up.railway.app
 - **Backend:** https://ihr-backend.up.railway.app
 - **MySQL:** Internes Railway Netzwerk
 
-Viel Erfolg! 🚀
+Viel Erfolg! 

@@ -1,4 +1,4 @@
-# ⚡ Railway Schnellstart
+# Railway Schnellstart
 
 ## 1. Code zu GitHub pushen
 
@@ -16,7 +16,7 @@ Gehen Sie zu [railway.app](https://railway.app) → **New Project**
 
 ### A) MySQL Datenbank
 - **+ New** → **Database** → **MySQL**
-- Fertig! ✅
+- Fertig! 
 
 ### B) Backend
 - **+ New** → **GitHub Repo** → Wählen Sie `MaterialManager`
@@ -50,7 +50,7 @@ Gehen Sie zu [railway.app](https://railway.app) → **New Project**
 
 ## 4. Datenbank initialisieren
 
-### ⚠️ WICHTIG: Dies ist der wichtigste Schritt!
+### WICHTIG: Dies ist der wichtigste Schritt!
 
 **Methode 1 - MySQL Client (EMPFOHLEN):**
 
@@ -117,7 +117,7 @@ mysql -h [HOST] -P [PORT] -u root -p[PASSWORD] railway < /workspaces/MaterialMan
 3. Falls vorhanden, können Sie dort SQL ausführen
 4. Fügen Sie den Inhalt von `database/schema.sql` ein und führen Sie aus
 
-**📋 So überprüfen Sie ob es funktioniert hat:**
+** So überprüfen Sie ob es funktioniert hat:**
 ```bash
 # Verbinden Sie sich mit MySQL
 mysql -h [HOST] -P [PORT] -u root -p
@@ -134,20 +134,20 @@ SELECT COUNT(*) FROM cabinets;
 # Sollte 4 zurückgeben
 ```
 
-## 5. Fertig! 🎉
+## 5. Fertig! 
 
 Öffnen Sie Ihre Frontend-URL und legen Sie los!
 
 ---
 
-## 📝 Wichtige URLs
+## Wichtige URLs
 
 Notieren Sie sich:
-- ✅ Frontend: `https://_____.up.railway.app`
-- ✅ Backend: `https://_____.up.railway.app`
-- ✅ MySQL: (intern)
+- Frontend: `https://_____.up.railway.app`
+- Backend: `https://_____.up.railway.app`
+- MySQL: (intern)
 
-## 🔄 Bei Änderungen
+## Bei Änderungen
 
 Einfach pushen:
 ```bash
@@ -156,4 +156,4 @@ git commit -m "Update"
 git push
 ```
 
-Railway deployt automatisch neu! ✨
+Railway deployt automatisch neu! 

@@ -1,6 +1,6 @@
-# 🚀 Schnellstart - Material Manager
+# Schnellstart - Material Manager
 
-## ✅ Status: MySQL läuft bereits!
+## Status: MySQL läuft bereits!
 
 Die MySQL-Datenbank ist bereits als Docker-Container gestartet.
 
@@ -9,7 +9,7 @@ docker ps
 # Sie sehen: material_manager_mysql auf Port 3306
 ```
 
-## 📝 Nächste Schritte:
+## Nächste Schritte:
 
 ### 1. Backend starten (Terminal 1)
 
@@ -20,8 +20,8 @@ npm run dev
 
 **Erwartete Ausgabe:**
 ```
-✅ Server läuft auf Port 3001
-📊 Umgebung: development
+ Server läuft auf Port 3001
+ Umgebung: development
 ```
 
 ### 2. Frontend Dependencies installieren (Terminal 2)
@@ -47,7 +47,7 @@ You can now view material-manager-frontend in the browser.
   Local:            http://localhost:3000
 ```
 
-## 🌐 Zugriff
+## Zugriff
 
 Nach dem Start:
 
@@ -55,20 +55,20 @@ Nach dem Start:
 - **Backend API:** http://localhost:3001
 - **MySQL:** localhost:3306
 
-## 🧪 Backend testen
+## Backend testen
 
 ```bash
 curl http://localhost:3001/health
 # Sollte zurückgeben: {"status":"OK","timestamp":"..."}
 ```
 
-## 📊 Datenbank-Status prüfen
+## Datenbank-Status prüfen
 
 ```bash
 docker logs material_manager_mysql
 ```
 
-## 🛑 System stoppen
+## System stoppen
 
 ```bash
 # Backend: Ctrl+C im Backend-Terminal
@@ -81,7 +81,7 @@ docker stop material_manager_mysql
 docker rm material_manager_mysql
 ```
 
-## 🔄 Neustart
+## Neustart
 
 Wenn Sie alles neu starten möchten:
 
@@ -98,7 +98,7 @@ cd /workspaces/MaterialManager/frontend
 npm start
 ```
 
-## ⚠️ Problemlösung
+## Problemlösung
 
 ### Port 3306 bereits belegt
 ```bash
@@ -118,7 +118,7 @@ cat /workspaces/MaterialManager/backend/.env
 Das ist normal! Die erste Installation kann 2-5 Minuten dauern.
 Bei sehr langsamer Installation können Sie alternativ einzelne Pakete installieren.
 
-## 📦 Alternativer Ansatz: Nur Backend testen
+## Alternativer Ansatz: Nur Backend testen
 
 Wenn Sie zunächst nur das Backend testen möchten:
 

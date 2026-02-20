@@ -8,7 +8,7 @@ Nach dem Deploy auf Railway:
 
 1. Öffne die Anwendung
 2. Navigiere zu **ohne Login** direkt zu: `https://your-app.railway.app/admin`
-   - ⚠️ **ACHTUNG**: Admin-Route ist noch NICHT geschützt! Nach User-Installation muss diese geschützt werden.
+   -  **ACHTUNG**: Admin-Route ist noch NICHT geschützt! Nach User-Installation muss diese geschützt werden.
 3. Klicke auf **"User Management installieren"**
 4. Warte auf Erfolgsmeldung: "User Management erfolgreich installiert! Login als 'root' / 'root'"
 
@@ -30,13 +30,13 @@ Nach dem Deploy auf Railway:
 
 Du hast jetzt Zugriff auf:
 
-- ✅ **Alle Material-Management-Funktionen**
-- ✅ **Benutzerverwaltung** (Menü links → "Benutzerverwaltung")
+- **Alle Material-Management-Funktionen**
+- **Benutzerverwaltung** (Menü links → "Benutzerverwaltung")
   - Neue Benutzer erstellen
   - Benutzer bearbeiten/löschen
   - Admin-Rechte vergeben/entziehen
   - Benutzer-Status einsehen
-- ✅ **Administration**
+- **Administration**
   - Datenbank leeren
   - Migrationen ausführen
 
@@ -69,7 +69,7 @@ Benutzer können sich selbst registrieren:
 ```bash
 # In Railway Logs sehen Sie:
 ================================================
-📧 E-MAIL-VERIFIZIERUNG
+ E-MAIL-VERIFIZIERUNG
 ================================================
 Von: noreply@materialmanager.local
 An: user@example.com
@@ -202,13 +202,13 @@ Alle sicherheitsrelevanten Aktionen werden protokolliert in `user_audit_log`:
 
 ## Nächste Schritte
 
-1. ✅ Root-Passwort ändern
-2. ✅ Ersten Admin-Benutzer erstellen
-3. ✅ E-Mail-Service konfigurieren (SMTP/SendGrid)
-4. ⚠️ Admin-Route schützen (Backend auth.routes einbauen)
-5. ⚠️ Passwort-Mindestlänge erhöhen (z.B. 8 Zeichen)
-6. ⚠️ Passwort-Komplexität validieren (Groß-/Kleinbuchstaben, Zahlen)
-7. ⚠️ JWT_SECRET in Railway auf sicheren Wert setzen
+1. Root-Passwort ändern
+2. Ersten Admin-Benutzer erstellen
+3. E-Mail-Service konfigurieren (SMTP/SendGrid)
+4. Admin-Route schützen (Backend auth.routes einbauen)
+5. Passwort-Mindestlänge erhöhen (z.B. 8 Zeichen)
+6. Passwort-Komplexität validieren (Groß-/Kleinbuchstaben, Zahlen)
+7. JWT_SECRET in Railway auf sicheren Wert setzen
 
 ## Support
 

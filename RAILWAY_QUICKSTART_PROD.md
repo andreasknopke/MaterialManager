@@ -1,4 +1,4 @@
-# 🚂 Railway Deployment - Quick Start
+# Railway Deployment - Quick Start
 
 ## Automatisches Setup (empfohlen)
 
@@ -24,10 +24,10 @@ export RAILWAY_BACKEND_URL=https://deine-backend-url.up.railway.app
 ```
 
 Das Script:
-- ✅ Prüft Backend-Erreichbarkeit
-- ✅ Setzt Root-User Passwort
-- ✅ Testet Login
-- ✅ Prüft Departments
+- Prüft Backend-Erreichbarkeit
+- Setzt Root-User Passwort
+- Testet Login
+- Prüft Departments
 
 ### 4. Login durchführen
 
@@ -37,7 +37,7 @@ Das Script:
 - Username: `root`
 - Password: `root`
 
-⚠️ **Du wirst beim ersten Login aufgefordert, das Passwort zu ändern!**
+ **Du wirst beim ersten Login aufgefordert, das Passwort zu ändern!**
 
 ---
 
@@ -121,8 +121,8 @@ Falls Spalten fehlen: Migration erneut ausführen
 
 ## Support
 
-📚 **Vollständige Dokumentation:** [RAILWAY_PRODUCTION_SETUP.md](./RAILWAY_PRODUCTION_SETUP.md)
+ **Vollständige Dokumentation:** [RAILWAY_PRODUCTION_SETUP.md](./RAILWAY_PRODUCTION_SETUP.md)
 
-🔧 **Setup-Script:** `./setup-railway-production.sh`
+ **Setup-Script:** `./setup-railway-production.sh`
 
-🗃️ **Migration:** `railway-complete-migration.sql`
+ **Migration:** `railway-complete-migration.sql`

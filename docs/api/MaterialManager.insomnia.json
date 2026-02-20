@@ -1,0 +1,477 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-02-20T12:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:v9.3.2",
+  "resources": [
+    {
+      "_id": "wrk_materialmanager",
+      "_type": "workspace",
+      "name": "MaterialManager API",
+      "description": "Insomnia Workspace für MaterialManager"
+    },
+    {
+      "_id": "env_materialmanager_base",
+      "_type": "environment",
+      "parentId": "wrk_materialmanager",
+      "name": "Base Environment",
+      "data": {
+        "base_url": "http://localhost:3001/api",
+        "token": "",
+        "db_token": "",
+        "material_id": 1,
+        "protocol_id": 1,
+        "product_id": 1,
+        "cabinet_id": 1,
+        "barcode_value": "4012345678901"
+      }
+    },
+    {
+      "_id": "grp_system",
+      "_type": "request_group",
+      "parentId": "wrk_materialmanager",
+      "name": "System"
+    },
+    {
+      "_id": "req_health",
+      "_type": "request",
+      "parentId": "grp_system",
+      "name": "Health",
+      "method": "GET",
+      "url": "http://localhost:3001/health",
+      "headers": []
+    },
+    {
+      "_id": "req_gs1_debug",
+      "_type": "request",
+      "parentId": "grp_system",
+      "name": "GS1 Debug Log",
+      "method": "POST",
+      "url": "{{ _.base_url }}/debug/gs1-log",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"barcode\": \"(01)4012345678901\",\n  \"hexDump\": \"...\",\n  \"parsedResult\": {\"gtin\": \"4012345678901\"},\n  \"source\": \"insomnia\"\n}"
+      }
+    },
+    {
+      "_id": "grp_auth",
+      "_type": "request_group",
+      "parentId": "wrk_materialmanager",
+      "name": "Auth"
+    },
+    {
+      "_id": "req_login",
+      "_type": "request",
+      "parentId": "grp_auth",
+      "name": "Login",
+      "method": "POST",
+      "url": "{{ _.base_url }}/auth/login",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+      }
+    },
+    {
+      "_id": "req_me",
+      "_type": "request",
+      "parentId": "grp_auth",
+      "name": "Me",
+      "method": "GET",
+      "url": "{{ _.base_url }}/auth/me",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "req_logout",
+      "_type": "request",
+      "parentId": "grp_auth",
+      "name": "Logout",
+      "method": "POST",
+      "url": "{{ _.base_url }}/auth/logout",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "grp_materials",
+      "_type": "request_group",
+      "parentId": "wrk_materialmanager",
+      "name": "Materials"
+    },
+    {
+      "_id": "req_materials_list",
+      "_type": "request",
+      "parentId": "grp_materials",
+      "name": "List Materials",
+      "method": "GET",
+      "url": "{{ _.base_url }}/materials",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        },
+        {
+          "name": "X-DB-Token",
+          "value": "{{ _.db_token }}"
+        }
+      ]
+    },
+    {
+      "_id": "req_material_get",
+      "_type": "request",
+      "parentId": "grp_materials",
+      "name": "Get Material",
+      "method": "GET",
+      "url": "{{ _.base_url }}/materials/{{ _.material_id }}",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "req_material_search",
+      "_type": "request",
+      "parentId": "grp_materials",
+      "name": "Search Materials",
+      "method": "POST",
+      "url": "{{ _.base_url }}/materials/search",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"query\": \"katheter\",\n  \"expiry_months\": 6\n}"
+      }
+    },
+    {
+      "_id": "req_stock_out",
+      "_type": "request",
+      "parentId": "grp_materials",
+      "name": "Stock Out",
+      "method": "POST",
+      "url": "{{ _.base_url }}/materials/{{ _.material_id }}/stock-out",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"quantity\": 1,\n  \"reference_number\": \"OP-2026-001\",\n  \"notes\": \"Verbrauch\",\n  \"user_name\": \"Dr. Test\"\n}"
+      }
+    },
+    {
+      "_id": "req_report_lowstock",
+      "_type": "request",
+      "parentId": "grp_materials",
+      "name": "Low Stock Report",
+      "method": "GET",
+      "url": "{{ _.base_url }}/materials/reports/low-stock",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "grp_barcodes",
+      "_type": "request_group",
+      "parentId": "wrk_materialmanager",
+      "name": "Barcodes"
+    },
+    {
+      "_id": "req_gtin",
+      "_type": "request",
+      "parentId": "grp_barcodes",
+      "name": "GTIN Lookup",
+      "method": "GET",
+      "url": "{{ _.base_url }}/barcodes/gtin/{{ _.barcode_value }}",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "req_barcode_search",
+      "_type": "request",
+      "parentId": "grp_barcodes",
+      "name": "Search Barcode",
+      "method": "GET",
+      "url": "{{ _.base_url }}/barcodes/search/{{ _.barcode_value }}",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "req_scan_out",
+      "_type": "request",
+      "parentId": "grp_barcodes",
+      "name": "Scan Out",
+      "method": "POST",
+      "url": "{{ _.base_url }}/barcodes/scan-out",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"barcode\": \"4012345678901\",\n  \"quantity\": 1\n}"
+      }
+    },
+    {
+      "_id": "grp_interventions",
+      "_type": "request_group",
+      "parentId": "wrk_materialmanager",
+      "name": "Interventions"
+    },
+    {
+      "_id": "req_interventions",
+      "_type": "request",
+      "parentId": "grp_interventions",
+      "name": "List Interventions",
+      "method": "GET",
+      "url": "{{ _.base_url }}/interventions?limit=50&offset=0",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "req_unassigned_transactions",
+      "_type": "request",
+      "parentId": "grp_interventions",
+      "name": "Unassigned Transactions",
+      "method": "GET",
+      "url": "{{ _.base_url }}/interventions/unassigned/transactions",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "req_intervention_create",
+      "_type": "request",
+      "parentId": "grp_interventions",
+      "name": "Create Intervention",
+      "method": "POST",
+      "url": "{{ _.base_url }}/interventions",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"patient_id\": \"P-1234\",\n  \"patient_name\": \"Max Mustermann\",\n  \"items\": []\n}"
+      }
+    },
+    {
+      "_id": "grp_reporting",
+      "_type": "request_group",
+      "parentId": "wrk_materialmanager",
+      "name": "Reporting"
+    },
+    {
+      "_id": "req_stats_summary",
+      "_type": "request",
+      "parentId": "grp_reporting",
+      "name": "Statistics Summary",
+      "method": "GET",
+      "url": "{{ _.base_url }}/statistics/summary",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "req_reorder_stockouts",
+      "_type": "request",
+      "parentId": "grp_reporting",
+      "name": "Reorder Stock Outs",
+      "method": "GET",
+      "url": "{{ _.base_url }}/reorder/stock-outs",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "req_reorder_mark_ordered",
+      "_type": "request",
+      "parentId": "grp_reporting",
+      "name": "Mark Ordered",
+      "method": "POST",
+      "url": "{{ _.base_url }}/reorder/mark-ordered",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"product_id\": {{ _.product_id }},\n  \"ordered_quantity\": 10,\n  \"notes\": \"Bestellung\"\n}"
+      }
+    },
+    {
+      "_id": "req_audit_logs",
+      "_type": "request",
+      "parentId": "grp_reporting",
+      "name": "Audit Logs",
+      "method": "GET",
+      "url": "{{ _.base_url }}/audit-logs",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "grp_ai",
+      "_type": "request_group",
+      "parentId": "wrk_materialmanager",
+      "name": "AI"
+    },
+    {
+      "_id": "req_ai_status",
+      "_type": "request",
+      "parentId": "grp_ai",
+      "name": "AI Status",
+      "method": "GET",
+      "url": "{{ _.base_url }}/ai/status",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "req_ai_suggest",
+      "_type": "request",
+      "parentId": "grp_ai",
+      "name": "AI Suggest Products",
+      "method": "POST",
+      "url": "{{ _.base_url }}/ai/suggest-products",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"query\": \"Katheter\",\n  \"limit\": 5\n}"
+      }
+    },
+    {
+      "_id": "grp_admin",
+      "_type": "request_group",
+      "parentId": "wrk_materialmanager",
+      "name": "Admin"
+    },
+    {
+      "_id": "req_users",
+      "_type": "request",
+      "parentId": "grp_admin",
+      "name": "List Users",
+      "method": "GET",
+      "url": "{{ _.base_url }}/users",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        }
+      ]
+    },
+    {
+      "_id": "req_generate_db_token",
+      "_type": "request",
+      "parentId": "grp_admin",
+      "name": "Generate DB Token",
+      "method": "POST",
+      "url": "{{ _.base_url }}/admin/generate-db-token",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.token }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"host\": \"localhost\",\n  \"port\": 3306,\n  \"user\": \"root\",\n  \"password\": \"secret\",\n  \"database\": \"material_manager\"\n}"
+      }
+    }
+  ]
+}

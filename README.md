@@ -2,20 +2,20 @@
 
 Ein umfassendes Materialmanagementsystem für Angiographie-Abteilungen mit Barcode-Integration, entwickelt mit React, Node.js/Express und MySQL.
 
-## 🎯 Funktionen
+## Funktionen
 
 ### Kernfunktionen
-- ✅ **Materialverwaltung** - Vollständige CRUD-Operationen für Materialien
-- ✅ **Schrankorganisation** - Konfigurierbare Schränke mit Standortverwaltung
-- ✅ **Barcode-Integration** - Scannen und Verwalten von Barcodes (EAN, CODE128, QR, etc.)
-- ✅ **Ein-/Ausgangsbuchungen** - Bestandsverfolgung mit Transaktionshistorie
-- ✅ **Kategorisierung** - Flexible Kategorien und Firmenverwaltung
-- ✅ **Bestandsüberwachung** - Automatische Warnungen bei niedrigem Bestand
-- ✅ **Verfallsdatum-Tracking** - Überwachung ablaufender Materialien
-- ✅ **Konfigurierbare Felder** - Benutzerdefinierte Felder für spezifische Anforderungen
-- ✅ **Berichte** - Übersichten und Auswertungen
-- ✅ **Einheiten-System** - Multi-Departmental Management (Radiologie, Angiologie, etc.)
-- ✅ **User Management** - Rollen-basierte Zugriffskontrolle mit E-Mail-Verifizierung
+- **Materialverwaltung** - Vollständige CRUD-Operationen für Materialien
+- **Schrankorganisation** - Konfigurierbare Schränke mit Standortverwaltung
+- **Barcode-Integration** - Scannen und Verwalten von Barcodes (EAN, CODE128, QR, etc.)
+- **Ein-/Ausgangsbuchungen** - Bestandsverfolgung mit Transaktionshistorie
+- **Kategorisierung** - Flexible Kategorien und Firmenverwaltung
+- **Bestandsüberwachung** - Automatische Warnungen bei niedrigem Bestand
+- **Verfallsdatum-Tracking** - Überwachung ablaufender Materialien
+- **Konfigurierbare Felder** - Benutzerdefinierte Felder für spezifische Anforderungen
+- **Berichte** - Übersichten und Auswertungen
+- **Einheiten-System** - Multi-Departmental Management (Radiologie, Angiologie, etc.)
+- **User Management** - Rollen-basierte Zugriffskontrolle mit E-Mail-Verifizierung
 
 ### Materialinformationen
 Für jedes Material können folgende Daten erfasst werden:
@@ -31,7 +31,7 @@ Für jedes Material können folgende Daten erfasst werden:
 - Benutzerdefinierte Felder
 - Zuordnung zu Einheit/Abteilung
 
-## 🏗️ Technologie-Stack
+## Technologie-Stack
 
 ### Backend
 - **Node.js** mit **Express.js**
@@ -54,7 +54,7 @@ Für jedes Material können folgende Daten erfasst werden:
 - **Nginx** als Reverse Proxy für das Frontend
 - **Railway** Deployment-Support
 
-## 📋 Voraussetzungen
+## Voraussetzungen
 
 - Docker & Docker Compose (empfohlen)
 - **ODER**
@@ -62,7 +62,7 @@ Für jedes Material können folgende Daten erfasst werden:
 - MySQL 8.0+
 - npm oder yarn
 
-## 🚀 Installation & Start
+## Installation & Start
 
 ### Mit Docker (empfohlen)
 
@@ -119,7 +119,7 @@ cp .env.example .env
 npm start
 ```
 
-## 📚 API-Dokumentation
+## API-Dokumentation
 
 ### Basis-URL
 ```
@@ -187,7 +187,7 @@ curl -X POST http://localhost:3001/api/materials/1/stock-out \
   }'
 ```
 
-## 🗄️ Datenbankstruktur
+## Datenbankstruktur
 
 ### Haupttabellen
 - `materials` - Materialinformationen
@@ -205,7 +205,7 @@ curl -X POST http://localhost:3001/api/materials/1/stock-out \
 - `v_expiring_materials` - Ablaufende Materialien
 - `v_low_stock_materials` - Materialien mit niedrigem Bestand
 
-## 📱 Benutzeroberfläche
+## Benutzeroberfläche
 
 ### Dashboard
 - Übersicht mit wichtigen Kennzahlen
@@ -227,7 +227,7 @@ curl -X POST http://localhost:3001/api/materials/1/stock-out \
 - Ablaufende Materialien (90-Tage-Warnung)
 - Exportfähige Übersichten
 
-## 🔧 Konfiguration
+## Konfiguration
 
 ### Backend (.env)
 ```env
@@ -247,7 +247,7 @@ CORS_ORIGIN=http://localhost:3000
 REACT_APP_API_URL=http://localhost:3001/api
 ```
 
-## 🛠️ Entwicklung
+## Entwicklung
 
 ### Backend entwickeln
 ```bash
@@ -272,7 +272,7 @@ cd frontend
 npm run build
 ```
 
-## 📊 Features & Erweiterungen
+## Features & Erweiterungen
 
 ### Geplante Features
 - [ ] Benutzer-Authentifizierung & Autorisierung
@@ -283,7 +283,7 @@ npm run build
 - [ ] Lieferantenverwaltung mit Bestellintegration
 - [ ] Mobile App
 
-## 🐛 Fehlerbehebung
+## Fehlerbehebung
 
 ### Datenbank-Verbindungsfehler
 ```bash
@@ -298,14 +298,14 @@ docker logs material_manager_backend
 - CORS-Einstellungen in `backend/.env` prüfen
 - API-URL in `frontend/.env` überprüfen
 
-## 📄 Lizenz
+## Lizenz
 
 Dieses Projekt steht unter der ISC-Lizenz.
 
-## 👥 Kontakt & Support
+## Kontakt & Support
 
 Für Fragen oder Support öffnen Sie bitte ein Issue im Repository.
 
 ---
 
-**Entwickelt für medizinische Angiographie-Abteilungen** 🏥
+**Entwickelt für medizinische Angiographie-Abteilungen** 

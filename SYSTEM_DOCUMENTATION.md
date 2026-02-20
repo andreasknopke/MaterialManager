@@ -4,7 +4,7 @@
 **Version:** 1.0 (Commit: c4130fe + Updates)  
 **Status:** Produktiv auf Railway
 
-## ⚠️ WICHTIG: MANDATORY FEATURES
+## WICHTIG: MANDATORY FEATURES
 
 Dieses Dokument beschreibt den **stabilen und produktiven Zustand** des Material Manager Systems. Alle hier beschriebenen Features sind **MANDATORY** und dürfen **NICHT rückgängig gemacht** werden ohne explizite Genehmigung.
 
@@ -973,25 +973,25 @@ try {
 
 **Diese Features dürfen NIEMALS entfernt/gebrochen werden:**
 
-✅ **Authentifizierung:**
+ **Authentifizierung:**
 - JWT-basiertes Login/Logout
 - AuthContext mit User State
 - ProtectedRoute für alle Routes außer /login, /register
 - Axios Interceptor für automatisches Token-Handling
 
-✅ **Autorisierung:**
+ **Autorisierung:**
 - 3 Rollen: Root (isRoot=true), Admin, User
 - Root = globaler Super-Admin
 - Admin = Department-Admin
 - User = normaler Benutzer
 
-✅ **Department-System:**
+ **Department-System:**
 - Jeder Non-Root User MUSS departmentId haben
 - Automatische Filterung aller Daten nach Department
 - Root sieht ALLES (kein Filter)
 - getDepartmentFilter() Utilities
 
-✅ **Datenmodell:**
+ **Datenmodell:**
 - users Tabelle mit is_root, department_id
 - cabinets = Departments
 - materials mit cabinet_id
@@ -1000,24 +1000,24 @@ try {
 - barcodes
 - materials_view
 
-✅ **Frontend-Struktur:**
+ **Frontend-Struktur:**
 - App.tsx mit AuthProvider Wrapper
 - Layout.tsx mit Navigation + User-Menu
 - Alle wichtigen Pages (Dashboard, Materials, etc.)
 - ProtectedRoute für Route-Schutz
 
-✅ **Backend-Struktur:**
+ **Backend-Struktur:**
 - authenticateToken Middleware
 - Department-Filter in allen Routes
 - Alle CRUD-Endpoints für Materials, Categories, Companies, Cabinets, Users
 - /api/auth/* Endpoints
 
-✅ **GS1-Barcode-Support:**
+ **GS1-Barcode-Support:**
 - gs1Parser.ts
 - BarcodeScanner.tsx
 - Automatische GTIN-Erkennung
 
-✅ **Admin-Funktionen:**
+ **Admin-Funktionen:**
 - Datenbank zurücksetzen (nur Root)
 - User-Verwaltung (Department-gefiltert)
 

@@ -22,3 +22,6 @@ yarn-error.log*
 
 # Integration documentation (local only)
 DB_TOKEN_INTEGRATION.md
+
+# Local cleanup notebook artifacts
+emoji_cleanup.ipynb

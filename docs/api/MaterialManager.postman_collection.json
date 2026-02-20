@@ -1,0 +1,948 @@
+{
+  "info": {
+    "name": "MaterialManager API",
+    "description": "Collection für MaterialManager Backend API. Basis-URL und Token über Environment steuern.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "1b69614f-99c9-44d8-93ad-b4cf5d1b3296"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001/api"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "dbToken",
+      "value": ""
+    },
+    {
+      "key": "materialId",
+      "value": "1"
+    },
+    {
+      "key": "userId",
+      "value": "1"
+    },
+    {
+      "key": "cabinetId",
+      "value": "1"
+    },
+    {
+      "key": "protocolId",
+      "value": "1"
+    },
+    {
+      "key": "productId",
+      "value": "1"
+    },
+    {
+      "key": "barcodeValue",
+      "value": "4012345678901"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3001/health",
+              "host": [
+                "http://localhost:3001"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GS1 Debug Log",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"barcode\": \"(01)4012345678901\",\n  \"hexDump\": \"...\",\n  \"parsedResult\": {\"gtin\": \"4012345678901\"},\n  \"source\": \"postman\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/debug/gs1-log",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "debug",
+                "gs1-log"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"devuser\",\n  \"email\": \"devuser@example.com\",\n  \"password\": \"secret123\",\n  \"fullName\": \"Dev User\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.token) {",
+                  "  pm.collectionVariables.set('token', data.token);",
+                  "  pm.environment.set('token', data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"admin123\",\n  \"newPassword\": \"admin1234\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Materials",
+      "item": [
+        {
+          "name": "List Materials",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-DB-Token",
+                "value": "{{dbToken}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/materials",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Material by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/materials/{{materialId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials",
+                "{{materialId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search Materials",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"katheter\",\n  \"expiry_months\": 6\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/materials/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials",
+                "search"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Material",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Katheter\",\n  \"category_id\": 1,\n  \"company_id\": 1,\n  \"cabinet_id\": 1,\n  \"current_stock\": 10,\n  \"min_stock\": 2,\n  \"unit\": \"Stück\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/materials",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Material",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Katheter Updated\",\n  \"min_stock\": 3\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/materials/{{materialId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials",
+                "{{materialId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Stock In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 5,\n  \"notes\": \"Wareneingang\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/materials/{{materialId}}/stock-in",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials",
+                "{{materialId}}",
+                "stock-in"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Stock Out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 1,\n  \"reference_number\": \"OP-2026-001\",\n  \"notes\": \"Verbrauch\",\n  \"user_name\": \"Dr. Test\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/materials/{{materialId}}/stock-out",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials",
+                "{{materialId}}",
+                "stock-out"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Material Transactions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/materials/{{materialId}}/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials",
+                "{{materialId}}",
+                "transactions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Report Low Stock",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/materials/reports/low-stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials",
+                "reports",
+                "low-stock"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Report Expiring",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/materials/reports/expiring",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials",
+                "reports",
+                "expiring"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Barcodes",
+      "item": [
+        {
+          "name": "Get GTIN Master Data",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/barcodes/gtin/{{barcodeValue}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "barcodes",
+                "gtin",
+                "{{barcodeValue}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Find Barcode",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/barcodes/search/{{barcodeValue}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "barcodes",
+                "search",
+                "{{barcodeValue}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Material Barcodes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/barcodes/material/{{materialId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "barcodes",
+                "material",
+                "{{materialId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Barcode",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"material_id\": {{materialId}},\n  \"barcode\": \"4012345678901\",\n  \"barcode_type\": \"GS1-128\",\n  \"is_primary\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/barcodes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "barcodes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Scan Out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"barcode\": \"4012345678901\",\n  \"quantity\": 1,\n  \"reference_number\": \"OP-2026-010\",\n  \"user_name\": \"Dr. Test\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/barcodes/scan-out",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "barcodes",
+                "scan-out"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Master Data",
+      "item": [
+        {
+          "name": "List Cabinets",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/cabinets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cabinets"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cabinet Compartments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/cabinets/{{cabinetId}}/compartments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cabinets",
+                "{{cabinetId}}",
+                "compartments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Companies",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Units",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/units",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "units"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Interventions",
+      "item": [
+        {
+          "name": "List Protocols",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/interventions?limit=50&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "interventions"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Unassigned Transactions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/interventions/unassigned/transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "interventions",
+                "unassigned",
+                "transactions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Protocol",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient_id\": \"P-1234\",\n  \"patient_name\": \"Max Mustermann\",\n  \"notes\": \"Test-Protokoll\",\n  \"items\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/interventions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "interventions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create from Transactions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient_id\": \"P-1234\",\n  \"patient_name\": \"Max Mustermann\",\n  \"transaction_ids\": [1,2]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/interventions/create-from-transactions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "interventions",
+                "create-from-transactions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Protocol by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/interventions/{{protocolId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "interventions",
+                "{{protocolId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reporting",
+      "item": [
+        {
+          "name": "Statistics Summary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/statistics/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "statistics",
+                "summary"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reorder Stock Outs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reorder/stock-outs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reorder",
+                "stock-outs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reorder Mark Ordered",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": {{productId}},\n  \"ordered_quantity\": 10,\n  \"notes\": \"Bestellung ausgelöst\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reorder/mark-ordered",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reorder",
+                "mark-ordered"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Audit Logs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/audit-logs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit-logs"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI",
+      "item": [
+        {
+          "name": "AI Status",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/ai/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "AI Suggest Products",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Führungsdraht 0.035\",\n  \"limit\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ai/suggest-products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai",
+                "suggest-products"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Generate DB Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"host\": \"localhost\",\n  \"port\": 3306,\n  \"user\": \"root\",\n  \"password\": \"secret\",\n  \"database\": \"material_manager\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/generate-db-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "generate-db-token"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Users (Admin)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

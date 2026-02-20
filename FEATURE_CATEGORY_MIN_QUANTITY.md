@@ -14,12 +14,12 @@ Ab sofort werden Mindestmengen **auf Kategorieebene** statt auf Materialebene de
 - Pushable Coil 2mm von Firma A, LOT 456, 10cm → Mindestmenge: 1
 - Pushable Coil 2mm von Firma B, LOT 789, 15cm → Mindestmenge: 1
 
-❌ Problem: Zu granular, schwer zu verwalten
+ Problem: Zu granular, schwer zu verwalten
 
 **Jetzt (Kategorie-basiert):**
 - Kategorie "Pushable Coils 2mm" → Mindestmenge: 3
 - Gesamtbestand aller Materialien in dieser Kategorie: 5
-- ✅ Status: OK (5 ≥ 3)
+- Status: OK (5 ≥ 3)
 
 ## Funktionsweise
 
@@ -135,7 +135,7 @@ POST /api/admin/run-category-migration
 ## Migration auf Production
 
 ### Schritt 1: Code Deploy
-✅ Code wurde bereits deployed (Commit: 60ba43c)
+ Code wurde bereits deployed (Commit: 60ba43c)
 
 ### Schritt 2: Datenbank-Migration ausführen
 
@@ -143,7 +143,7 @@ POST /api/admin/run-category-migration
 1. Als Root-User einloggen
 2. Navigiere zu `/admin`
 3. Klicke "Kategorie-Migration ausführen"
-4. ✅ Migration komplett
+4. Migration komplett
 
 **Option B: Via Railway Dashboard**
 1. Railway Dashboard öffnen
@@ -183,10 +183,10 @@ Mindestmenge = (3 × 5) × 1.5 = 22.5 ≈ 23 Stück
 
 ## Vorteile
 
-✅ **Realitätsnäher:** Entspricht tatsächlichem Lagerbedarf  
-✅ **Einfacher:** Weniger Mindestmengen zu verwalten  
-✅ **Flexibler:** Verschiedene LOTs/Hersteller/Längen einer Kategorie werden zusammengezählt  
-✅ **Übersichtlicher:** Dashboard zeigt wirklich kritische Kategorien  
+ **Realitätsnäher:** Entspricht tatsächlichem Lagerbedarf  
+ **Einfacher:** Weniger Mindestmengen zu verwalten  
+ **Flexibler:** Verschiedene LOTs/Hersteller/Längen einer Kategorie werden zusammengezählt  
+ **Übersichtlicher:** Dashboard zeigt wirklich kritische Kategorien  
 
 ## Migration von alten Material-Mindestmengen
 
@@ -209,10 +209,10 @@ WHERE c.min_quantity = 0;
 
 ## Rückwärtskompatibilität
 
-- ✅ Alte Materialien behalten `min_stock` Feld (wird ignoriert)
-- ✅ Migration ist nicht-destruktiv
-- ✅ Kann mehrfach ausgeführt werden
-- ✅ Defaultwert 0 = keine Warnung
+- Alte Materialien behalten `min_stock` Feld (wird ignoriert)
+- Migration ist nicht-destruktiv
+- Kann mehrfach ausgeführt werden
+- Defaultwert 0 = keine Warnung
 
 ## Support & Troubleshooting
 
@@ -231,14 +231,14 @@ WHERE c.min_quantity = 0;
 ## Zukünftige Erweiterungen
 
 Mögliche Features:
-- 📊 Trend-Analyse: Bestandsentwicklung pro Kategorie
-- 📧 Email-Benachrichtigungen bei niedrigem Bestand
-- 📈 Verbrauchsprognose basierend auf Historie
-- 🔔 Push-Notifications in App
-- 📝 Automatische Bestellvorschläge
+- Trend-Analyse: Bestandsentwicklung pro Kategorie
+- Email-Benachrichtigungen bei niedrigem Bestand
+- Verbrauchsprognose basierend auf Historie
+- Push-Notifications in App
+- Automatische Bestellvorschläge
 
 ---
 
-**Status:** ✅ Produktiv  
+**Status:**  Produktiv  
 **Version:** 1.1  
 **Commit:** 60ba43c

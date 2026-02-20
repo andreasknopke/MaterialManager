@@ -1,6 +1,6 @@
 # Railway Production Setup - Komplette Anleitung
 
-## 🚀 Schritt-für-Schritt Setup
+## Schritt-für-Schritt Setup
 
 ### 1. Datenbank auf Railway vorbereiten
 
@@ -104,8 +104,8 @@ curl -X POST https://DEINE-BACKEND-URL.up.railway.app/api/admin/update-root-pass
 
 # Antwort sollte sein:
 # {
-#   "success": true,
-#   "message": "Root user password updated. You can now login with username: root, password: root"
+# "success": true,
+# "message": "Root user password updated. You can now login with username: root, password: root"
 # }
 ```
 
@@ -136,15 +136,15 @@ Du kannst weitere Departments über die Admin-Oberfläche hinzufügen.
    - **Department zuweisen** (nur für Root sichtbar!)
    - Department Admin kann nur sein Department verwalten
 
-## 🔐 Sicherheitshinweise
+## Sicherheitshinweise
 
 ### Produktions-Checkliste
 
-- ✅ `JWT_SECRET` durch starken, zufälligen String ersetzen
-- ✅ Root-Passwort nach erstem Login ändern
-- ✅ `CORS_ORIGIN` auf exakte Frontend-URL setzen (nicht `*`)
-- ✅ Datenbank-Backups in Railway aktivieren
-- ✅ Email-Service konfigurieren für Passwort-Reset
+- `JWT_SECRET` durch starken, zufälligen String ersetzen
+- Root-Passwort nach erstem Login ändern
+- `CORS_ORIGIN` auf exakte Frontend-URL setzen (nicht `*`)
+- Datenbank-Backups in Railway aktivieren
+- Email-Service konfigurieren für Passwort-Reset
 
 ### Sichere JWT_SECRET generieren
 
@@ -156,7 +156,7 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 # a4f8d9e2c1b3f5a6d8e9c1b3f5a6d8e9c1b3f5a6d8e9c1b3f5a6d8e9c1b3
 ```
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### Problem: Login funktioniert nicht
 
@@ -217,25 +217,25 @@ SHOW FULL TABLES WHERE Table_type = 'VIEW';
 - Datenbank-Verbindung fehlgeschlagen
 - TypeScript Compile-Fehler
 
-## 📊 Migrations-Übersicht
+## Migrations-Übersicht
 
 | Migration | Beschreibung | Tabellen | Status |
 |-----------|--------------|----------|--------|
-| 002 | Units System | units, material_transfers, unit_id in materials/cabinets | ✅ |
-| 003 | User Management | users, user_sessions, login_attempts, user_audit_log | ✅ |
-| 004 | Department Access | department_id in users | ✅ |
+| 002 | Units System | units, material_transfers, unit_id in materials/cabinets |  |
+| 003 | User Management | users, user_sessions, login_attempts, user_audit_log |  |
+| 004 | Department Access | department_id in users |  |
 
-## 🎯 Nächste Schritte nach Setup
+## Nächste Schritte nach Setup
 
-1. ✅ Root-Login erfolgreich
-2. ✅ Passwort geändert
-3. 📋 Departments konfigurieren
-4. 👥 Department Admins anlegen
-5. 🏢 Schränke zu Departments zuweisen
-6. 📦 Materialien importieren
-7. 🔐 Email-Service aktivieren (optional)
+1. Root-Login erfolgreich
+2. Passwort geändert
+3. Departments konfigurieren
+4. Department Admins anlegen
+5. Schränke zu Departments zuweisen
+6. Materialien importieren
+7. Email-Service aktivieren (optional)
 
-## 📞 Support
+## Support
 
 Bei Problemen:
 1. Prüfe Railway Logs (Backend + Frontend + Database)
@@ -245,4 +245,4 @@ Bei Problemen:
 
 ---
 
-**Erstellt für Railway Production Deployment** 🚂
+**Erstellt für Railway Production Deployment** 

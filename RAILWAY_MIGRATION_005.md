@@ -17,7 +17,7 @@
    - Klicke auf "Run Query"
 
 4. **Ergebnis prüfen**
-   - Du solltest sehen: `✅ Migration 005: E-Mail-Verifizierung entfernt`
+   - Du solltest sehen: ` Migration 005: E-Mail-Verifizierung entfernt`
    - Die Tabelle sollte 1 User mit email_verified = TRUE zeigen
 
 ## Was wird geändert?
