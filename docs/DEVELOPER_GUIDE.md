@@ -180,3 +180,10 @@ Für schnelles Testen:
 
 - Postman: `docs/api/MaterialManager.postman_collection.json`
 - Insomnia: `docs/api/MaterialManager.insomnia.json`
+
+## 11. Secret-Hygiene (Pflicht)
+
+- Keine echten Zugangsdaten, Tokens oder Passwörter in Doku, Collections oder Beispiel-Payloads committen.
+- Für Beispiele ausschließlich Platzhalter oder Variablen verwenden, z. B. `<username>`, `<password>`, `{{username}}`, `{{password}}`.
+- Produktive Credentials ausschließlich im Secret-Store/Environment halten (nie im Repository).
+- Vor jedem Push kurz prüfen, dass keine bekannten Secret-Muster enthalten sind (z. B. in `docs/api/*`, `*.md`).

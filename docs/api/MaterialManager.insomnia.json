@@ -18,6 +18,8 @@
       "data": {
         "base_url": "http://localhost:3001/api",
         "token": "",
+        "username": "<set-username>",
+        "password": "<set-password>",
         "db_token": "",
         "material_id": 1,
         "protocol_id": 1,
@@ -80,7 +82,7 @@
       ],
       "body": {
         "mimeType": "application/json",
-        "text": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+        "text": "{\n  \"username\": \"{{ _.username }}\",\n  \"password\": \"{{ _.password }}\"\n}"
       }
     },
     {

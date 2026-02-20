@@ -15,6 +15,18 @@
       "value": ""
     },
     {
+      "key": "username",
+      "value": "<set-username>"
+    },
+    {
+      "key": "password",
+      "value": "<set-password>"
+    },
+    {
+      "key": "newPassword",
+      "value": "<set-new-password>"
+    },
+    {
       "key": "dbToken",
       "value": ""
     },
@@ -169,7 +181,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",
@@ -212,7 +224,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"currentPassword\": \"admin123\",\n  \"newPassword\": \"admin1234\"\n}"
+              "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/change-password",

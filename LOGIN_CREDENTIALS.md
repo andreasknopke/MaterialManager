@@ -4,13 +4,13 @@
 **URL:** https://robust-vision-production.up.railway.app
 
 ### Root Admin
-- **Username:** `root`
-- **Passwort:** `Goethestrasse28!`
+- **Username:** `<root-username>`
+- **Passwort:** `<root-password-im-secret-store>`
 - **Berechtigung:** Vollzugriff auf alle Departments
 
 ### Department Admin (Radiologie)
-- **Username:** `Andreas Knopke`
-- **Passwort:** `Admin123!`
+- **Username:** `<department-admin-username>`
+- **Passwort:** `<department-admin-password-im-secret-store>`
 - **Department:** Radiologie (ID: 1)
 - **Berechtigung:** Zugriff nur auf Radiologie-Department
 
@@ -56,8 +56,8 @@ Nach jedem Backend-Deployment, das die Authentication ändert, **muss sich der U
 1. **Abmelden** im Frontend (https://robust-vision-production.up.railway.app)
 2. **Browser neu laden** (Ctrl+Shift+R)
 3. **Neu einloggen** mit:
-   - Username: `Andreas Knopke`
-   - Passwort: `Admin123!`
+   - Username: `<department-admin-username>`
+   - Passwort: `<department-admin-password-im-secret-store>`
 4. **Schrank anlegen** testen
 5. **Material erstellen** testen
 
