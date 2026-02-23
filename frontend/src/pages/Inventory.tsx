@@ -48,6 +48,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   Psychology as AIIcon,
   PhotoCamera as PhotoCameraIcon,
+  Upload as UploadIcon,
 } from '@mui/icons-material';
 import { cabinetAPI, materialAPI, aiAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
@@ -73,6 +74,7 @@ interface Material {
   category_name: string;
   company_name: string;
   compartment_name: string;
+  compartment_id?: number | null;
   size: string;
   unit: string;
   shape_name: string;
@@ -140,13 +142,15 @@ const Inventory: React.FC = () => {
   const scannerInputRef = useRef<HTMLInputElement>(null);
   
   // Ref für Foto-Input
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  const cameraPhotoInputRef = useRef<HTMLInputElement>(null);
+  const uploadPhotoInputRef = useRef<HTMLInputElement>(null);
   
   // KI-Inhaltsabgleich States
   const [aiAnalysisDialogOpen, setAiAnalysisDialogOpen] = useState(false);
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
   const [aiAnalysisResult, setAiAnalysisResult] = useState<AIAnalysisResult | null>(null);
   const [aiAnalysisError, setAiAnalysisError] = useState<string | null>(null);
+  const [aiAnalysisCompartment, setAiAnalysisCompartment] = useState<{ id: number; name: string } | null>(null);
 
   useEffect(() => {
     fetchCabinets();
@@ -397,10 +401,10 @@ const Inventory: React.FC = () => {
     const groups: Map<string, CompartmentGroup> = new Map();
     
     materials.forEach(material => {
-      const key = material.compartment_name || '__OHNE_FACH__';
+      const key = material.compartment_id ? `compartment_${material.compartment_id}` : '__OHNE_FACH__';
       if (!groups.has(key)) {
         groups.set(key, {
-          compartmentId: material.compartment_name ? null : null, // ID nicht verfügbar in Material
+          compartmentId: material.compartment_id ?? null,
           compartmentName: material.compartment_name || 'Ohne Fachzuordnung',
           materials: []
         });
@@ -422,12 +426,31 @@ const Inventory: React.FC = () => {
   const handleOpenAIAnalysis = () => {
     setAiAnalysisResult(null);
     setAiAnalysisError(null);
+    setAiAnalysisCompartment(null);
+    setAiAnalysisDialogOpen(true);
+  };
+
+  const handleOpenCompartmentAIAnalysis = (compartment: CompartmentGroup) => {
+    if (!compartment.compartmentId) {
+      setError('Für "Ohne Fachzuordnung" ist aktuell nur der Schrank-Gesamtabgleich verfügbar.');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    setAiAnalysisResult(null);
+    setAiAnalysisError(null);
+    setAiAnalysisCompartment({ id: compartment.compartmentId, name: compartment.compartmentName });
     setAiAnalysisDialogOpen(true);
   };
 
   // Foto aufnehmen für KI-Analyse
   const handleCapturePhoto = () => {
-    photoInputRef.current?.click();
+    cameraPhotoInputRef.current?.click();
+  };
+
+  // Foto-Datei hochladen für KI-Analyse
+  const handleUploadPhoto = () => {
+    uploadPhotoInputRef.current?.click();
   };
 
   // Foto verarbeiten und an KI senden
@@ -451,7 +474,11 @@ const Inventory: React.FC = () => {
       });
 
       // An Backend senden
-      const response = await aiAPI.analyzeInventoryPhoto(selectedCabinet.id, base64);
+      const response = await aiAPI.analyzeInventoryPhoto(
+        selectedCabinet.id,
+        base64,
+        aiAnalysisCompartment?.id
+      );
       
       setAiAnalysisResult(response.data.analysis);
       setSuccess('KI-Analyse erfolgreich durchgeführt!');
@@ -466,9 +493,8 @@ const Inventory: React.FC = () => {
     } finally {
       setAiAnalysisLoading(false);
       // Input zurücksetzen für erneute Auswahl
-      if (photoInputRef.current) {
-        photoInputRef.current.value = '';
-      }
+      if (cameraPhotoInputRef.current) cameraPhotoInputRef.current.value = '';
+      if (uploadPhotoInputRef.current) uploadPhotoInputRef.current.value = '';
     }
   };
 
@@ -533,6 +559,11 @@ const Inventory: React.FC = () => {
     // For now, we'll add it when opening the dialog
     return '...';
   };
+
+  const groupedCabinetMaterials = groupMaterialsByCompartment(cabinetMaterials);
+  const aiDialogGroups = aiAnalysisCompartment
+    ? groupedCabinetMaterials.filter((group) => group.compartmentId === aiAnalysisCompartment.id)
+    : groupedCabinetMaterials;
 
   return (
     <Box>
@@ -786,7 +817,7 @@ const Inventory: React.FC = () => {
             </Alert>
           ) : (
             /* Materialien nach Fächern gruppiert anzeigen */
-            groupMaterialsByCompartment(cabinetMaterials).map((compartmentGroup, groupIndex) => (
+            groupedCabinetMaterials.map((compartmentGroup, groupIndex) => (
               <Accordion 
                 key={compartmentGroup.compartmentName} 
                 defaultExpanded={groupIndex < 3}
@@ -810,6 +841,21 @@ const Inventory: React.FC = () => {
                         color={compartmentGroup.materials.every(m => confirmedMaterials.has(m.id)) ? 'success' : 'warning'}
                       />
                     )}
+                    <Box sx={{ ml: 'auto', mr: 1 }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                        startIcon={<AIIcon />}
+                        disabled={!compartmentGroup.compartmentId}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenCompartmentAIAnalysis(compartmentGroup);
+                        }}
+                      >
+                        KI pro Fach
+                      </Button>
+                    </Box>
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails sx={{ p: 0 }}>
@@ -1109,21 +1155,29 @@ const Inventory: React.FC = () => {
       {/* KI Inhaltsabgleich Dialog */}
       <Dialog
         open={aiAnalysisDialogOpen}
-        onClose={() => { setAiAnalysisDialogOpen(false); setAiAnalysisResult(null); setAiAnalysisError(null); }}
+        onClose={() => { setAiAnalysisDialogOpen(false); setAiAnalysisResult(null); setAiAnalysisError(null); setAiAnalysisCompartment(null); }}
         maxWidth="md"
         fullWidth
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <AIIcon color="secondary" />
           KI Inhaltsabgleich: {selectedCabinet?.name}
+          {aiAnalysisCompartment ? ` – Fach: ${aiAnalysisCompartment.name}` : ''}
         </DialogTitle>
         <DialogContent>
-          {/* Verstecktes Input für Foto */}
+          {/* Versteckte Inputs für Kamera und Datei-Upload */}
           <input
             type="file"
             accept="image/*"
             capture="environment"
-            ref={photoInputRef}
+            ref={cameraPhotoInputRef}
+            style={{ display: 'none' }}
+            onChange={handlePhotoSelected}
+          />
+          <input
+            type="file"
+            accept="image/*"
+            ref={uploadPhotoInputRef}
             style={{ display: 'none' }}
             onChange={handlePhotoSelected}
           />
@@ -1135,13 +1189,13 @@ const Inventory: React.FC = () => {
                   <strong>So funktioniert der KI-Inhaltsabgleich:</strong>
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 1 }}>
-                  1. Öffnen Sie den Schrank vollständig<br />
-                  2. Machen Sie ein Foto, auf dem der <strong>gesamte Schrankinhalt</strong> (nicht nur einzelne Fächer!) sichtbar ist<br />
+                  1. {aiAnalysisCompartment ? 'Öffnen Sie das gewählte Fach vollständig' : 'Öffnen Sie den Schrank vollständig'}<br />
+                  2. Machen Sie ein Foto oder laden Sie ein Bild hoch, auf dem der <strong>{aiAnalysisCompartment ? 'gesamte Fachinhalt' : 'gesamte Schrankinhalt'}</strong> sichtbar ist<br />
                   3. Die KI vergleicht das Foto mit der Materialliste und gibt Wahrscheinlichkeiten an
                 </Typography>
               </Alert>
 
-              <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Box sx={{ textAlign: 'center', py: 4, display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
                 <Button
                   variant="contained"
                   color="secondary"
@@ -1152,15 +1206,25 @@ const Inventory: React.FC = () => {
                 >
                   Foto des Schrankinhalts aufnehmen
                 </Button>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  size="large"
+                  startIcon={<UploadIcon />}
+                  onClick={handleUploadPhoto}
+                  sx={{ px: 4, py: 2 }}
+                >
+                  Foto hochladen
+                </Button>
               </Box>
 
               <Divider sx={{ my: 3 }} />
 
               <Typography variant="subtitle2" gutterBottom>
-                Aktuelle Materialliste (nach Fächern sortiert):
+                Aktuelle Materialliste {aiAnalysisCompartment ? '(gewähltes Fach)' : '(nach Fächern sortiert)'}:
               </Typography>
               <Paper variant="outlined" sx={{ p: 2, maxHeight: 300, overflow: 'auto' }}>
-                {groupMaterialsByCompartment(cabinetMaterials).map((group) => (
+                {aiDialogGroups.map((group) => (
                   <Box key={group.compartmentName} sx={{ mb: 2 }}>
                     <Typography variant="subtitle2" color="primary">
                       📦 {group.compartmentName} ({group.materials.length})
@@ -1279,19 +1343,28 @@ const Inventory: React.FC = () => {
               )}
 
               <Box sx={{ mt: 3, textAlign: 'center' }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<PhotoCameraIcon />}
-                  onClick={() => { setAiAnalysisResult(null); setAiAnalysisError(null); }}
-                >
-                  Neues Foto aufnehmen
-                </Button>
+                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<PhotoCameraIcon />}
+                    onClick={() => { setAiAnalysisResult(null); setAiAnalysisError(null); }}
+                  >
+                    Neues Foto aufnehmen
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<UploadIcon />}
+                    onClick={() => { setAiAnalysisResult(null); setAiAnalysisError(null); }}
+                  >
+                    Neues Foto hochladen
+                  </Button>
+                </Box>
               </Box>
             </>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setAiAnalysisDialogOpen(false); setAiAnalysisResult(null); setAiAnalysisError(null); }}>
+          <Button onClick={() => { setAiAnalysisDialogOpen(false); setAiAnalysisResult(null); setAiAnalysisError(null); setAiAnalysisCompartment(null); }}>
             Schließen
           </Button>
         </DialogActions>

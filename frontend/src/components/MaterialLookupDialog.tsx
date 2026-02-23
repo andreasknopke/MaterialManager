@@ -23,6 +23,7 @@ import { CheckCircle as CheckCircleIcon } from '@mui/icons-material';
 
 interface SimilarProduct {
   name: string;
+  productUrl?: string;
   properties: {
     deviceLength?: string;
     shaftLength?: string;
@@ -32,6 +33,7 @@ interface SimilarProduct {
   };
   matchScore: number;
   additionalInfo?: string;
+  differences?: string[];
 }
 
 interface MaterialLookupDialogProps {
@@ -68,6 +70,26 @@ const MaterialLookupDialog: React.FC<MaterialLookupDialogProps> = ({
     if (score >= 0.95) return 'success';
     if (score >= 0.85) return 'info';
     return 'warning';
+  };
+
+  const normalizeForCompare = (value?: string) => {
+    if (!value) return '';
+    return value
+      .toLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/fr|french|ch/g, 'f')
+      .replace(/,/g, '.');
+  };
+
+  const getPropertyTextColor = (
+    productValue: string | undefined,
+    targetValue: string | undefined
+  ) => {
+    if (!productValue) return 'text.secondary';
+    if (!targetValue) return 'text.primary';
+
+    const isDifferent = normalizeForCompare(productValue) !== normalizeForCompare(targetValue);
+    return isDifferent ? 'error.main' : 'success.main';
   };
 
   const getMatchLabel = (score: number) => {
@@ -135,6 +157,13 @@ const MaterialLookupDialog: React.FC<MaterialLookupDialogProps> = ({
 
             {results && results.length > 0 ? (
               <TableContainer component={Paper} variant="outlined">
+                <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Legende:
+                  </Typography>
+                  <Chip label="Grün = Eigenschaft passt" color="success" size="small" variant="outlined" />
+                  <Chip label="Rot = Eigenschaft weicht ab" color="error" size="small" variant="outlined" />
+                </Box>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
@@ -145,6 +174,8 @@ const MaterialLookupDialog: React.FC<MaterialLookupDialogProps> = ({
                       <TableCell>French-Size</TableCell>
                       <TableCell>Durchmesser</TableCell>
                       <TableCell>Shape</TableCell>
+                      <TableCell>Unterschiede</TableCell>
+                      <TableCell>Link</TableCell>
                       <TableCell>Zusatzinfo</TableCell>
                     </TableRow>
                   </TableHead>
@@ -164,11 +195,70 @@ const MaterialLookupDialog: React.FC<MaterialLookupDialogProps> = ({
                             {product.name}
                           </Typography>
                         </TableCell>
-                        <TableCell>{product.properties.deviceLength || '-'}</TableCell>
-                        <TableCell>{product.properties.shaftLength || '-'}</TableCell>
-                        <TableCell>{product.properties.frenchSize || '-'}</TableCell>
-                        <TableCell>{product.properties.diameter || '-'}</TableCell>
-                        <TableCell>{product.properties.shapeName || '-'}</TableCell>
+                        <TableCell>
+                          <Typography
+                            variant="body2"
+                            color={getPropertyTextColor(product.properties.deviceLength, material.properties.deviceLength)}
+                          >
+                            {product.properties.deviceLength || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography
+                            variant="body2"
+                            color={getPropertyTextColor(product.properties.shaftLength, material.properties.shaftLength)}
+                          >
+                            {product.properties.shaftLength || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography
+                            variant="body2"
+                            color={getPropertyTextColor(product.properties.frenchSize, material.properties.frenchSize)}
+                          >
+                            {product.properties.frenchSize || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography
+                            variant="body2"
+                            color={getPropertyTextColor(product.properties.diameter, material.properties.diameter)}
+                          >
+                            {product.properties.diameter || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography
+                            variant="body2"
+                            color={getPropertyTextColor(product.properties.shapeName, material.properties.shapeName)}
+                          >
+                            {product.properties.shapeName || '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {product.differences && product.differences.length > 0 ? (
+                            <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                              {product.differences.map((difference, diffIndex) => (
+                                <Typography key={diffIndex} component="li" variant="caption" color="text.secondary">
+                                  {difference}
+                                </Typography>
+                              ))}
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" color="success.main">
+                              Keine relevanten Unterschiede
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {product.productUrl ? (
+                            <Link href={product.productUrl} target="_blank" rel="noopener">
+                              Öffnen
+                            </Link>
+                          ) : (
+                            '-'
+                          )}
+                        </TableCell>
                         <TableCell>
                           {product.additionalInfo && (
                             <Typography variant="caption" color="text.secondary">

@@ -247,6 +247,7 @@ Schlage passende vollständige Produktnamen vor.`;
     };
     matchScore: number;
     additionalInfo?: string;
+    productUrl?: string;
   }>> {
     if (!this.client) {
       throw new Error('Mistral API ist nicht konfiguriert');
@@ -271,6 +272,7 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format (ohne Markdown):
 [
   {
     "name": "Produktname",
+    "productUrl": "https://...",
     "properties": {
       "deviceLength": "Wert mit Einheit",
       "shaftLength": "Wert mit Einheit",
@@ -292,7 +294,8 @@ ${propertiesStr}
 Webseiten-Inhalt (Auszug):
 ${websiteContent.substring(0, 15000)}
 
-Finde alle Produkte mit identischen oder sehr ähnlichen Eigenschaften und gib sie als JSON zurück.`;
+Finde alle Produkte mit identischen oder sehr ähnlichen Eigenschaften und gib sie als JSON zurück.
+Wichtig: Wenn in der Tabelle oder Produktliste ein Link vorhanden ist, gib ihn als absolute URL oder als originalen relativen Link in "productUrl" zurück.`;
 
     try {
       const chatResponse = await this.client.chat.complete({

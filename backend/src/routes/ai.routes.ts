@@ -254,6 +254,57 @@ router.post('/lookup-material', async (req: Request, res: Response) => {
       targetProperties
     );
 
+    const normalizeForCompare = (value?: string) => {
+      if (!value) return '';
+      return value
+        .toLowerCase()
+        .replace(/\s+/g, '')
+        .replace(/fr|french|ch/g, 'f')
+        .replace(/,/g, '.');
+    };
+
+    const propertyLabelMap: Record<string, string> = {
+      deviceLength: 'Device-Länge',
+      shaftLength: 'Schaftlänge',
+      frenchSize: 'French-Size',
+      diameter: 'Durchmesser',
+      shapeName: 'Shape'
+    };
+
+    const enrichProduct = (product: any) => {
+      const productProperties = product?.properties || {};
+      const differences: string[] = [];
+
+      for (const [propertyKey, label] of Object.entries(propertyLabelMap)) {
+        const targetValue = targetProperties[propertyKey as keyof typeof targetProperties];
+        const productValue = productProperties[propertyKey];
+
+        if (!targetValue || !productValue) continue;
+
+        if (normalizeForCompare(targetValue) !== normalizeForCompare(String(productValue))) {
+          differences.push(`${label}: gesucht ${targetValue}, gefunden ${productValue}`);
+        }
+      }
+
+      let resolvedProductUrl: string | undefined;
+      const productUrl = product?.productUrl;
+      if (productUrl && typeof productUrl === 'string' && productUrl.trim().length > 0) {
+        try {
+          resolvedProductUrl = new URL(productUrl, material.endo_today_link).toString();
+        } catch {
+          resolvedProductUrl = productUrl;
+        }
+      }
+
+      return {
+        ...product,
+        productUrl: resolvedProductUrl,
+        differences
+      };
+    };
+
+    const enrichedProducts = similarProducts.map(enrichProduct);
+
     res.json({
       material: {
         id: material.id,
@@ -262,8 +313,8 @@ router.post('/lookup-material', async (req: Request, res: Response) => {
         properties: targetProperties
       },
       sourceUrl: material.endo_today_link,
-      results: similarProducts,
-      totalMatches: similarProducts.length,
+      results: enrichedProducts,
+      totalMatches: enrichedProducts.length,
       timestamp: new Date().toISOString()
     });
 
@@ -286,7 +337,7 @@ router.post('/analyze-inventory-photo', async (req: Request, res: Response) => {
       });
     }
 
-    const { cabinetId, imageBase64 } = req.body;
+    const { cabinetId, imageBase64, compartmentId } = req.body;
 
     if (!cabinetId) {
       return res.status(400).json({ error: 'cabinetId erforderlich' });
@@ -321,11 +372,26 @@ router.post('/analyze-inventory-photo', async (req: Request, res: Response) => {
 
     const cabinet = cabinetRows[0];
 
-    // Hole alle Fächer des Schranks
-    const [compartments] = await currentPool.query<RowDataPacket[]>(
-      'SELECT id, name, description, position FROM compartments WHERE cabinet_id = ? AND active = TRUE ORDER BY position, name',
-      [cabinetId]
-    );
+    // Hole Fächer des Schranks (optional auf ein Fach eingeschränkt)
+    let compartments: RowDataPacket[] = [];
+    if (compartmentId) {
+      const [singleCompartment] = await currentPool.query<RowDataPacket[]>(
+        'SELECT id, name, description, position FROM compartments WHERE id = ? AND cabinet_id = ? AND active = TRUE',
+        [compartmentId, cabinetId]
+      );
+
+      if (singleCompartment.length === 0) {
+        return res.status(404).json({ error: 'Fach nicht gefunden' });
+      }
+
+      compartments = singleCompartment;
+    } else {
+      const [allCompartments] = await currentPool.query<RowDataPacket[]>(
+        'SELECT id, name, description, position FROM compartments WHERE cabinet_id = ? AND active = TRUE ORDER BY position, name',
+        [cabinetId]
+      );
+      compartments = allCompartments;
+    }
 
     // Für jedes Fach: Hole Materialien
     const materialList: Array<{
@@ -360,28 +426,30 @@ router.post('/analyze-inventory-photo', async (req: Request, res: Response) => {
       });
     }
 
-    // Auch Materialien ohne Fach-Zuordnung
-    const [unassignedMaterials] = await currentPool.query<RowDataPacket[]>(
-      `SELECT 
-         m.name,
-         m.article_number,
-         SUM(m.current_stock) AS total_stock
-       FROM materials m
-       WHERE m.cabinet_id = ? AND m.compartment_id IS NULL AND m.active = TRUE
-       GROUP BY m.name, m.article_number
-       ORDER BY m.name`,
-      [cabinetId]
-    );
+    // Auch Materialien ohne Fach-Zuordnung (nur beim kompletten Schrank-Abgleich)
+    if (!compartmentId) {
+      const [unassignedMaterials] = await currentPool.query<RowDataPacket[]>(
+        `SELECT 
+           m.name,
+           m.article_number,
+           SUM(m.current_stock) AS total_stock
+         FROM materials m
+         WHERE m.cabinet_id = ? AND m.compartment_id IS NULL AND m.active = TRUE
+         GROUP BY m.name, m.article_number
+         ORDER BY m.name`,
+        [cabinetId]
+      );
 
-    if (unassignedMaterials.length > 0) {
-      materialList.push({
-        compartmentName: 'Ohne Fachzuordnung',
-        materials: unassignedMaterials.map((m: any) => ({
-          name: m.name,
-          quantity: m.total_stock,
-          articleNumber: m.article_number
-        }))
-      });
+      if (unassignedMaterials.length > 0) {
+        materialList.push({
+          compartmentName: 'Ohne Fachzuordnung',
+          materials: unassignedMaterials.map((m: any) => ({
+            name: m.name,
+            quantity: m.total_stock,
+            articleNumber: m.article_number
+          }))
+        });
+      }
     }
 
     console.log(`Analysiere Inventur-Foto für Schrank "${cabinet.name}" mit ${materialList.length} Fächern`);
@@ -398,6 +466,7 @@ router.post('/analyze-inventory-photo', async (req: Request, res: Response) => {
         name: cabinet.name,
         location: cabinet.location
       },
+      targetCompartment: compartmentId || null,
       materialList,
       analysis: analysisResult,
       timestamp: new Date().toISOString()
