@@ -187,3 +187,36 @@ Für schnelles Testen:
 - Für Beispiele ausschließlich Platzhalter oder Variablen verwenden, z. B. `<username>`, `<password>`, `{{username}}`, `{{password}}`.
 - Produktive Credentials ausschließlich im Secret-Store/Environment halten (nie im Repository).
 - Vor jedem Push kurz prüfen, dass keine bekannten Secret-Muster enthalten sind (z. B. in `docs/api/*`, `*.md`).
+
+## 12. Coolify (1-Service Deployment)
+
+Für Coolify kann das Projekt als einzelner Service (Frontend + Backend in einem Container) deployt werden.
+
+## Build-/Run-Setup in Coolify
+
+- Build Context: Repository-Root (`.`)
+- Dockerfile: `Dockerfile.coolify`
+- Exposed Port: `3001`
+
+## Pflicht-Variablen (Backend)
+
+- `NODE_ENV=production`
+- `PORT=3001`
+- `DB_HOST=<mysql-host>`
+- `DB_PORT=3306`
+- `DB_USER=<mysql-user>`
+- `DB_PASSWORD=<mysql-password>`
+- `DB_NAME=<mysql-database>`
+- `JWT_SECRET=<langes-zufallsgeheimnis>`
+
+## Empfehlenswerte Variablen
+
+- `CORS_ORIGIN=https://<deine-coolify-domain>`
+	- Für Tests optional `*`, für Produktion feste Domain empfohlen.
+
+## Warum Railway nicht gestört wird
+
+- Railway nutzt weiterhin seine bestehenden Service-Setups (`backend/`, `frontend/`) und deren eigene Build-Konfiguration.
+- `Dockerfile.coolify` wird nur von Coolify verwendet.
+- Das Backend liefert Frontend-Dateien nur dann statisch aus, wenn ein Frontend-Build im Container vorhanden ist (Coolify-Fall).
+	Ohne diesen Build bleibt das Backend API-only (Railway-Fall).

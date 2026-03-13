@@ -1,0 +1,44 @@
+FROM node:20-alpine AS base
+
+# Frontend dependencies
+FROM base AS frontend-deps
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install --legacy-peer-deps
+
+# Frontend builder
+FROM base AS frontend-builder
+WORKDIR /app/frontend
+COPY --from=frontend-deps /app/frontend/node_modules ./node_modules
+COPY frontend/ ./
+RUN npm run build
+
+# Backend dependencies
+FROM base AS backend-deps
+WORKDIR /app/backend
+COPY backend/package.json backend/package-lock.json* ./
+RUN npm ci
+
+# Backend builder
+FROM base AS backend-builder
+WORKDIR /app/backend
+COPY --from=backend-deps /app/backend/node_modules ./node_modules
+COPY backend/ ./
+RUN npm run build
+RUN npm prune --omit=dev
+
+# Runner
+FROM base AS runner
+WORKDIR /app/backend
+
+ENV NODE_ENV=production
+ENV PORT=3001
+
+COPY --from=backend-builder /app/backend/package*.json ./
+COPY --from=backend-builder /app/backend/node_modules ./node_modules
+COPY --from=backend-builder /app/backend/dist ./dist
+COPY --from=frontend-builder /app/frontend/build ./frontend-build
+
+EXPOSE 3001
+
+CMD ["node", "dist/server.js"]

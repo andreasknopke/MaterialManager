@@ -1,6 +1,8 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 import cabinetRoutes from './routes/cabinet.routes';
 import materialRoutes from './routes/material.routes';
 import productRoutes from './routes/product.routes';
@@ -24,6 +26,21 @@ dotenv.config();
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
+
+// Optional: Frontend ausliefern (für Coolify 1-Service Deployment)
+// Wird nur aktiviert, wenn ein Frontend-Build vorhanden ist.
+const frontendBuildPath = path.resolve(__dirname, '..', 'frontend-build');
+if (fs.existsSync(frontendBuildPath)) {
+  console.log(`📁 Frontend wird statisch ausgeliefert aus: ${frontendBuildPath}`);
+  app.use(express.static(frontendBuildPath, {
+    index: false,
+    setHeaders: (res, filePath) => {
+      if (filePath.includes(`${path.sep}static${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
+}
 
 // Middleware
 const allowedOrigins = [
@@ -114,6 +131,14 @@ app.post('/api/debug/gs1-log', (req: Request, res: Response) => {
   
   res.json({ received: true });
 });
+
+// SPA Fallback nur aktivieren, wenn Frontend-Build vorhanden ist
+if (fs.existsSync(frontendBuildPath)) {
+  app.get(/^(?!\/api\/|\/health$).*/, (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(frontendBuildPath, 'index.html'));
+  });
+}
 
 // Error Handling Middleware
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
