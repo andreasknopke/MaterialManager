@@ -107,6 +107,16 @@ app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Config Endpoint - gibt Umgebungsinformationen zurück
+app.get('/api/config', (req: Request, res: Response) => {
+  const backendUrl = process.env.BACKEND_URL || `http://localhost:${PORT}`;
+  res.json({
+    backendUrl,
+    environment: process.env.NODE_ENV || 'development',
+    version: process.env.APP_VERSION || '1.0.0'
+  });
+});
+
 // GS1 Debug Logging Endpoint
 app.post('/api/debug/gs1-log', (req: Request, res: Response) => {
   const { barcode, hexDump, parsedResult, source } = req.body;

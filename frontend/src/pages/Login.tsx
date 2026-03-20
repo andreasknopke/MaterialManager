@@ -10,11 +10,13 @@ import {
   InputAdornment,
   IconButton,
   CircularProgress,
+  AlertTitle,
 } from '@mui/material';
 import {
   Visibility,
   VisibilityOff,
   Login as LoginIcon,
+  WarningAmber,
 } from '@mui/icons-material';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -28,6 +30,7 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isTestEnvironment, setIsTestEnvironment] = useState(false);
 
   // Redirect wenn bereits eingeloggt
   useEffect(() => {
@@ -35,6 +38,25 @@ const Login: React.FC = () => {
       navigate('/', { replace: true });
     }
   }, [authLoading, isAuthenticated, navigate]);
+
+  // Überprüfe, ob wir in der Test-Umgebung sind
+  useEffect(() => {
+    const checkEnvironment = async () => {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          if (config.backendUrl === 'https://materialmanager-production.up.railway.app') {
+            setIsTestEnvironment(true);
+          }
+        }
+      } catch (err) {
+        // Fehler stillschweigend behandeln
+        console.warn('Could not fetch config:', err);
+      }
+    };
+    checkEnvironment();
+  }, []);
 
   // Zeige Loading-Spinner während Auth-Status geprüft wird
   if (authLoading) {
@@ -102,6 +124,18 @@ const Login: React.FC = () => {
             Melden Sie sich an, um fortzufahren
           </Typography>
         </Box>
+
+        {isTestEnvironment && (
+          <Alert 
+            severity="warning" 
+            sx={{ mb: 2 }}
+            icon={<WarningAmber />}
+          >
+            <AlertTitle>Achtung: Testumgebung</AlertTitle>
+            Sie sind bei der <strong>Testumgebung</strong> angemeldet, nicht bei der Produktivumgebung. 
+            Daten können hier ohne Warnung gelöscht werden. Behandeln Sie diese Umgebung nur für Test- und Entwicklungszwecke.
+          </Alert>
+        )}
 
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
