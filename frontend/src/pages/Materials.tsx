@@ -21,6 +21,7 @@ import {
   Add as AddIcon, 
   Edit as EditIcon, 
   Delete as DeleteIcon,
+  Visibility as ViewIcon,
   FilterList as FilterListIcon,
   Clear as ClearIcon,
   ShoppingCart as ShoppingCartIcon,
@@ -453,23 +454,35 @@ const Materials: React.FC = () => {
     {
       field: 'actions',
       headerName: 'Aktionen',
-      width: 100,
+      width: 140,
       sortable: false,
       disableColumnMenu: true,
       renderCell: (params) => (
         <>
-          <IconButton
-            size="small"
-            onClick={() => navigate(`/materials/${params.row.id}`)}
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            size="small"
-            onClick={() => handleDelete(params.row.id)}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title="Übersicht anzeigen">
+            <IconButton
+              size="small"
+              onClick={() => navigate(`/materials/${params.row.id}`)}
+            >
+              <ViewIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Bearbeiten">
+            <IconButton
+              size="small"
+              onClick={() => navigate(`/materials/${params.row.id}/edit`)}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Deaktivieren">
+            <IconButton
+              size="small"
+              onClick={() => handleDelete(params.row.id)}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </>
       ),
     },

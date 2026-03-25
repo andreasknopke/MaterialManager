@@ -3,6 +3,7 @@ import pool, { getPoolForRequest } from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { auditMaterial } from '../utils/auditLogger';
 import { authenticate } from '../middleware/auth';
+import { getDepartmentFilter } from '../utils/departmentFilter';
 
 const router = Router();
 
@@ -14,6 +15,7 @@ router.use(authenticate);
 router.get('/gtin/:gtin', async (req: Request, res: Response) => {
   try {
     const currentPool = getPoolForRequest(req);
+    const departmentFilter = getDepartmentFilter(req, 'm');
     // Zuerst in der products-Tabelle suchen (normalisierte Stammdaten)
     const [products] = await currentPool.query<RowDataPacket[]>(
       `SELECT p.id as product_id, p.gtin, p.name, p.description, p.size,
@@ -31,16 +33,29 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
     
     if (products.length > 0) {
       // Produkt gefunden - hole zusätzlich letzte Instanz-Daten (Kategorie, Schrank, etc.)
-      const [lastMaterial] = await currentPool.query<RowDataPacket[]>(
-        `SELECT m.category_id, c.name as category_name, 
-                m.cabinet_id, cab.name as cabinet_name, m.unit, m.unit_id
+      let lastMaterialQuery = `SELECT m.category_id, c.name as category_name,
+                m.cabinet_id, cab.name as cabinet_name,
+                m.compartment_id, comp.name as compartment_name,
+                m.unit, m.unit_id, m.location_in_cabinet, m.is_consignment
          FROM materials m
          LEFT JOIN categories c ON m.category_id = c.id
          LEFT JOIN cabinets cab ON m.cabinet_id = cab.id
-         WHERE m.product_id = ? AND m.active = TRUE
+         LEFT JOIN compartments comp ON m.compartment_id = comp.id
+         WHERE m.product_id = ? AND m.active = TRUE`;
+      const lastMaterialParams: any[] = [products[0].product_id];
+
+      if (departmentFilter.whereClause) {
+        lastMaterialQuery += ` AND ${departmentFilter.whereClause}`;
+        lastMaterialParams.push(...departmentFilter.params);
+      }
+
+      lastMaterialQuery += `
          ORDER BY m.created_at DESC
-         LIMIT 1`,
-        [products[0].product_id]
+         LIMIT 1`;
+
+      const [lastMaterial] = await currentPool.query<RowDataPacket[]>(
+        lastMaterialQuery,
+        lastMaterialParams
       );
       
       res.json({
@@ -67,26 +82,43 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
           category_name: lastMaterial[0]?.category_name,
           cabinet_id: lastMaterial[0]?.cabinet_id,
           cabinet_name: lastMaterial[0]?.cabinet_name,
+          compartment_id: lastMaterial[0]?.compartment_id,
+          compartment_name: lastMaterial[0]?.compartment_name,
           unit: lastMaterial[0]?.unit,
-          unit_id: lastMaterial[0]?.unit_id
+          unit_id: lastMaterial[0]?.unit_id,
+          location_in_cabinet: lastMaterial[0]?.location_in_cabinet,
+          is_consignment: Boolean(lastMaterial[0]?.is_consignment)
         }
       });
       return;
     }
     
     // Fallback: Suche in alten materials (für noch nicht migrierte Daten)
-    const [materials] = await currentPool.query<RowDataPacket[]>(
-      `SELECT m.name, m.description, m.category_id, m.company_id, m.unit, m.size,
+    let materialsQuery = `SELECT m.name, m.description, m.category_id, m.company_id, m.unit, m.unit_id, m.size,
               m.cabinet_id, cab.name as cabinet_name,
+              m.compartment_id, comp.name as compartment_name,
+              m.location_in_cabinet, m.is_consignment,
               c.name as category_name, co.name as company_name
        FROM materials m
        LEFT JOIN categories c ON m.category_id = c.id
        LEFT JOIN companies co ON m.company_id = co.id
        LEFT JOIN cabinets cab ON m.cabinet_id = cab.id
-       WHERE m.article_number = ? AND m.active = TRUE
+       LEFT JOIN compartments comp ON m.compartment_id = comp.id
+       WHERE m.article_number = ? AND m.active = TRUE`;
+    const materialParams: any[] = [req.params.gtin];
+
+    if (departmentFilter.whereClause) {
+      materialsQuery += ` AND ${departmentFilter.whereClause}`;
+      materialParams.push(...departmentFilter.params);
+    }
+
+    materialsQuery += `
        ORDER BY m.created_at DESC
-       LIMIT 1`,
-      [req.params.gtin]
+       LIMIT 1`;
+
+    const [materials] = await currentPool.query<RowDataPacket[]>(
+      materialsQuery,
+      materialParams
     );
     
     if (materials.length === 0) {
@@ -103,9 +135,14 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
         category_id: materials[0].category_id,
         company_id: materials[0].company_id,
         unit: materials[0].unit,
+        unit_id: materials[0].unit_id,
         size: materials[0].size,
         cabinet_id: materials[0].cabinet_id,
         cabinet_name: materials[0].cabinet_name,
+        compartment_id: materials[0].compartment_id,
+        compartment_name: materials[0].compartment_name,
+        location_in_cabinet: materials[0].location_in_cabinet,
+        is_consignment: Boolean(materials[0].is_consignment),
         category_name: materials[0].category_name,
         company_name: materials[0].company_name,
       }

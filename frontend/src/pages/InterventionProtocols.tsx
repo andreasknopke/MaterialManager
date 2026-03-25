@@ -43,6 +43,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface ProtocolItem {
   id: number;
+  material_id?: number | null;
   material_name: string;
   article_number: string;
   lot_number: string;
@@ -543,7 +544,30 @@ const InterventionProtocols: React.FC = () => {
                         <TableRow key={item.id}>
                           <TableCell>{formatTime(item.taken_at)}</TableCell>
                           <TableCell>{item.material_name}</TableCell>
-                          <TableCell>{item.article_number || '-'}</TableCell>
+                          <TableCell>
+                            {item.article_number && item.material_id ? (
+                              <Tooltip title="Materialübersicht öffnen">
+                                <Button
+                                  variant="text"
+                                  size="small"
+                                  sx={{
+                                    minWidth: 0,
+                                    p: 0,
+                                    textTransform: 'none',
+                                    justifyContent: 'flex-start',
+                                    fontWeight: 500,
+                                    textDecoration: 'underline',
+                                    textUnderlineOffset: '2px',
+                                  }}
+                                  onClick={() => navigate(`/materials/${item.material_id}`)}
+                                >
+                                  {item.article_number}
+                                </Button>
+                              </Tooltip>
+                            ) : (
+                              item.article_number || '-'
+                            )}
+                          </TableCell>
                           <TableCell>{item.lot_number || '-'}</TableCell>
                           <TableCell align="center">
                             {item.is_consignment ? (

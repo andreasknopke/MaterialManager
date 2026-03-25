@@ -434,6 +434,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   try {
     const currentPool = getPoolForRequest(req);
     const { id } = req.params;
+    const departmentFilter = getDepartmentFilter(req, 'm2');
     
     // Protokoll laden
     const [protocols] = await currentPool.query<RowDataPacket[]>(
@@ -451,11 +452,36 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
     
     // Items laden
+    let fallbackMaterialSubquery = `
+        SELECT m2.id
+        FROM materials m2
+        WHERE m2.article_number = COALESCE(ipi.article_number, ipi.gtin)
+    `;
+    const itemParams: any[] = [];
+
+    if (departmentFilter.whereClause) {
+      fallbackMaterialSubquery += ` AND ${departmentFilter.whereClause}`;
+      itemParams.push(...departmentFilter.params);
+    }
+
+    fallbackMaterialSubquery += `
+        ORDER BY m2.active DESC, m2.created_at DESC
+        LIMIT 1
+    `;
+
+    itemParams.push(id);
+
     const [items] = await currentPool.query<RowDataPacket[]>(
-      `SELECT * FROM intervention_protocol_items 
-       WHERE protocol_id = ? 
+      `SELECT 
+         ipi.*,
+         COALESCE(mt.material_id, (
+${fallbackMaterialSubquery}
+         )) AS material_id
+       FROM intervention_protocol_items ipi
+       LEFT JOIN material_transactions mt ON ipi.transaction_id = mt.id
+       WHERE ipi.protocol_id = ? 
        ORDER BY taken_at ASC`,
-      [id]
+      itemParams
     );
     
     res.json({

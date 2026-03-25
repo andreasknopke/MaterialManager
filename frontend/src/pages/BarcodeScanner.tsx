@@ -1350,6 +1350,7 @@ const BarcodeScanner: React.FC = () => {
         gs1_barcode: barcode,
         gs1Data: scannedGS1Data,
         masterData: gtinMasterData,
+        prefillTemplate: gtinMasterData,
         fromScanner: true,
       }
     });
