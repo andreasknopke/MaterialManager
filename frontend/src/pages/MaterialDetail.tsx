@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -33,9 +33,18 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
+interface MaterialDetailLocationState {
+  returnTo?: {
+    pathname: string;
+    state?: Record<string, unknown>;
+  };
+}
+
 const MaterialDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as MaterialDetailLocationState | null;
   const [material, setMaterial] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
@@ -89,6 +98,15 @@ const MaterialDetail: React.FC = () => {
     }
   };
 
+  const handleBack = () => {
+    if (locationState?.returnTo?.pathname) {
+      navigate(locationState.returnTo.pathname, { state: locationState.returnTo.state });
+      return;
+    }
+
+    navigate('/materials');
+  };
+
   const hasEndoTodayLink = material?.endo_today_link && material.endo_today_link.trim().length > 0;
 
   if (loading) {
@@ -104,7 +122,7 @@ const MaterialDetail: React.FC = () => {
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
         <Button
           startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/materials')}
+          onClick={handleBack}
         >
           Zurück
         </Button>

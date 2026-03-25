@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -66,8 +66,13 @@ interface Protocol {
   item_count: number;
 }
 
+interface InterventionProtocolsLocationState {
+  reopenProtocol?: Protocol;
+}
+
 const InterventionProtocols: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAdmin } = useAuth();
   const [protocols, setProtocols] = useState<Protocol[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,6 +131,17 @@ const InterventionProtocols: React.FC = () => {
   useEffect(() => {
     loadProtocols();
   }, [page]);
+
+  useEffect(() => {
+    const state = location.state as InterventionProtocolsLocationState | null;
+
+    if (!state?.reopenProtocol) {
+      return;
+    }
+
+    void handleViewDetail(state.reopenProtocol);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate]);
 
   const handleSearch = () => {
     setPage(1);
@@ -559,7 +575,16 @@ const InterventionProtocols: React.FC = () => {
                                     textDecoration: 'underline',
                                     textUnderlineOffset: '2px',
                                   }}
-                                  onClick={() => navigate(`/materials/${item.material_id}`)}
+                                  onClick={() => navigate(`/materials/${item.material_id}`, {
+                                    state: {
+                                      returnTo: {
+                                        pathname: '/interventions',
+                                        state: {
+                                          reopenProtocol: selectedProtocol,
+                                        },
+                                      },
+                                    },
+                                  })}
                                 >
                                   {item.article_number}
                                 </Button>
