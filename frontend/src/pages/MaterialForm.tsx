@@ -1096,9 +1096,7 @@ const MaterialForm: React.FC = () => {
 
     try {
       const { packSize, barcodes, ...baseData } = pendingFormData;
-      
-      // Für jedes Stück in der Packung einen Eintrag erstellen
-      const promises = [];
+
       for (let i = 0; i < packSize; i++) {
         const itemData = {
           ...baseData,
@@ -1107,11 +1105,10 @@ const MaterialForm: React.FC = () => {
           // Barcode nur beim ersten Eintrag hinzufügen (um Duplikate zu vermeiden)
           barcodes: i === 0 ? barcodes : [],
         };
-        promises.push(materialAPI.create(itemData));
+
+        await materialAPI.create(itemData);
       }
-      
-      await Promise.all(promises);
-      
+
       setSuccess(`${packSize} einzelne Materialien erfolgreich erstellt!`);
       setTimeout(() => navigate('/materials'), 1500);
     } catch (err: any) {

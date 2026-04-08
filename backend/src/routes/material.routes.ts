@@ -491,29 +491,23 @@ router.post('/', async (req: Request, res: Response) => {
     let productId: number | null = null;
     
     if (article_number) {
-      // Prüfen ob Produkt mit dieser GTIN bereits existiert
-      const [existingProducts] = await connection.query<RowDataPacket[]>(
-        'SELECT id FROM products WHERE gtin = ?',
-        [article_number]
+      const [productResult] = await connection.query<ResultSetHeader>(
+        `INSERT INTO products 
+         (gtin, name, description, size, company_id, shape_id, 
+          shaft_length, device_length, device_diameter, french_size, guidewire_acceptance, cost, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+        [article_number, name, description, size, company_id, shape_id || null,
+         shaft_length || null, device_length || null, device_diameter || null,
+         french_size || null, guidewire_acceptance || null, cost || null, notes]
       );
-      
-      if (existingProducts.length > 0) {
-        // Produkt existiert - ID verwenden
-        productId = existingProducts[0].id;
-        console.log(`Bestehendes Produkt gefunden (ID: ${productId}) für GTIN: ${article_number}`);
-      } else {
-        // Neues Produkt erstellen
-        const [productResult] = await connection.query<ResultSetHeader>(
-          `INSERT INTO products 
-           (gtin, name, description, size, company_id, shape_id, 
-            shaft_length, device_length, device_diameter, french_size, guidewire_acceptance, cost, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [article_number, name, description, size, company_id, shape_id || null,
-           shaft_length || null, device_length || null, device_diameter || null, 
-           french_size || null, guidewire_acceptance || null, cost || null, notes]
-        );
-        productId = productResult.insertId;
+
+      productId = productResult.insertId;
+
+      if (productResult.affectedRows === 1) {
         console.log(`Neues Produkt erstellt (ID: ${productId}) für GTIN: ${article_number}`);
+      } else {
+        console.log(`Bestehendes Produkt gefunden (ID: ${productId}) für GTIN: ${article_number}`);
       }
     }
     
