@@ -239,6 +239,30 @@ class OfflineStorageService {
     });
   }
 
+  public async invalidateCachedData(prefixes: string[]): Promise<void> {
+    if (!this.db) await this.init();
+    if (prefixes.length === 0) return;
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([STORES.CACHED_DATA], 'readwrite');
+      const store = transaction.objectStore(STORES.CACHED_DATA);
+      const request = store.getAllKeys();
+
+      request.onsuccess = () => {
+        const keys = request.result as IDBValidKey[];
+        keys.forEach((key) => {
+          if (typeof key === 'string' && prefixes.some(prefix => key.startsWith(prefix))) {
+            store.delete(key);
+          }
+        });
+      };
+
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
   // Ausstehende Änderungen synchronisieren
   public async syncPendingChanges(): Promise<{ success: number; failed: number }> {
     if (!this.isOnline || this.syncInProgress) {

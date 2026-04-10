@@ -12,6 +12,13 @@ const api = axios.create({
   },
 });
 
+function getCachePrefixesToInvalidate(url?: string): string[] {
+  if (!url) return [];
+
+  const cacheablePrefixes = ['/materials', '/cabinets', '/categories', '/companies', '/units'];
+  return cacheablePrefixes.filter(prefix => url.includes(prefix));
+}
+
 // Request Interceptor - Token automatisch hinzufügen
 api.interceptors.request.use(
   (config) => {
@@ -36,14 +43,22 @@ api.interceptors.request.use(
 
 // Response Interceptor mit Offline-Unterstützung
 api.interceptors.response.use(
-  (response) => {
+  async (response) => {
     // Erfolgreiche GET-Requests cachen
     if (response.config.method === 'get' && response.status === 200) {
       const cacheKey = response.config.url || '';
       if (cacheKey && shouldCache(cacheKey)) {
-        offlineStorage.cacheData(cacheKey, response.data);
+        await offlineStorage.cacheData(cacheKey, response.data);
       }
     }
+
+    if (['post', 'put', 'delete'].includes(response.config.method || '')) {
+      const prefixes = getCachePrefixesToInvalidate(response.config.url);
+      if (prefixes.length > 0) {
+        await offlineStorage.invalidateCachedData(prefixes);
+      }
+    }
+
     return response;
   },
   async (error) => {

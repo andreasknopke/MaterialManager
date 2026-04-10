@@ -200,6 +200,56 @@ router.get('/:id/infosheet', async (req: Request, res: Response) => {
       })
     );
 
+    const [unassignedMaterials] = await currentPool.query<RowDataPacket[]>(
+      `SELECT 
+         m.article_number,
+         m.name,
+         m.size,
+         cat.name AS category_name,
+         SUM(m.current_stock) AS total_stock,
+         COUNT(*) AS item_count,
+         MAX(m.is_consignment) AS is_consignment,
+         s.name AS shape_name,
+         m.shaft_length,
+         m.device_length,
+         m.device_diameter,
+         m.french_size,
+         m.guidewire_acceptance
+       FROM materials m
+       LEFT JOIN categories cat ON m.category_id = cat.id
+       LEFT JOIN shapes s ON m.shape_id = s.id
+       WHERE m.cabinet_id = ? AND m.compartment_id IS NULL AND m.active = TRUE
+       GROUP BY m.article_number, m.name, m.size, cat.name, s.name, m.shaft_length, m.device_length, m.device_diameter, m.french_size, m.guidewire_acceptance
+       ORDER BY cat.name, m.name`,
+      [req.params.id]
+    );
+
+    if (unassignedMaterials.length > 0) {
+      compartmentsWithMaterials.push({
+        id: 0,
+        cabinet_id: Number(req.params.id),
+        name: 'Ohne Fach',
+        description: 'Materialien ohne Fachzuordnung',
+        position: 999999,
+        material_count: unassignedMaterials.reduce((sum: number, mat: any) => sum + Number(mat.item_count || 0), 0),
+        materials: unassignedMaterials.map((mat: any) => ({
+          article_number: mat.article_number,
+          name: mat.name,
+          size: mat.size,
+          category_name: mat.category_name,
+          total_stock: mat.total_stock,
+          item_count: mat.item_count,
+          is_consignment: mat.is_consignment === 1,
+          shape_name: mat.shape_name,
+          shaft_length: mat.shaft_length,
+          device_length: mat.device_length,
+          device_diameter: mat.device_diameter,
+          french_size: mat.french_size,
+          guidewire_acceptance: mat.guidewire_acceptance
+        }))
+      });
+    }
+
     res.json({
       cabinet,
       compartments: compartmentsWithMaterials

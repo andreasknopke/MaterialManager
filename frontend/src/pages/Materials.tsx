@@ -237,16 +237,9 @@ const Materials: React.FC = () => {
     sessionStorage.setItem(MATERIALS_FILTER_KEY, JSON.stringify(filterState));
   }, [searchTerm, filters, hideZeroStock, groupIdentical, showFilters, activeFilter]);
 
-  useEffect(() => {
-    const filter = location.state?.filter;
-    if (filter) {
-      setActiveFilter(filter);
-    }
-    fetchMaterials();
-    fetchFilterData();
-  }, [location.state]);
+  const currentFilter = location.state?.filter;
 
-  const fetchFilterData = async () => {
+  const fetchFilterData = useCallback(async () => {
     try {
       const [catRes, compRes, cabRes, shapeRes] = await Promise.all([
         categoryAPI.getAll(),
@@ -261,12 +254,12 @@ const Materials: React.FC = () => {
     } catch (error) {
       console.error('Fehler beim Laden der Filterdaten:', error);
     }
-  };
+  }, []);
 
-  const fetchMaterials = async () => {
+  const fetchMaterials = useCallback(async () => {
     try {
       let response;
-      const filter = location.state?.filter;
+      const filter = currentFilter;
       
       if (filter === 'lowStock') {
         response = await materialAPI.getLowStock();
@@ -286,7 +279,42 @@ const Materials: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentFilter]);
+
+  useEffect(() => {
+    if (currentFilter) {
+      setActiveFilter(currentFilter);
+    }
+    fetchMaterials();
+    fetchFilterData();
+  }, [currentFilter, fetchMaterials, fetchFilterData]);
+
+  useEffect(() => {
+    const refreshMaterials = () => {
+      fetchMaterials();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshMaterials();
+      }
+    };
+
+    window.addEventListener('focus', refreshMaterials);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshMaterials();
+      }
+    }, 30000);
+
+    return () => {
+      window.removeEventListener('focus', refreshMaterials);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(intervalId);
+    };
+  }, [fetchMaterials]);
 
   const handleDelete = async (id: number) => {
     if (window.confirm('Material wirklich deaktivieren?')) {
