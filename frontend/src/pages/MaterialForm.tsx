@@ -220,6 +220,7 @@ const MaterialForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
+  const [originalPackaging, setOriginalPackaging] = useState<{ unit: string; size: string }>({ unit: 'Stück', size: '1' });
 
   // Dropdown-Daten
   const [categories, setCategories] = useState<any[]>([]);
@@ -577,6 +578,10 @@ const MaterialForm: React.FC = () => {
         device_diameter: material.device_diameter || '',
         french_size: material.french_size || '',
         guidewire_acceptance: material.guidewire_acceptance || '',
+      });
+      setOriginalPackaging({
+        unit: material.unit || 'Stück',
+        size: material.size || '1',
       });
       
       // Fächer für den Schrank laden wenn vorhanden
@@ -983,9 +988,12 @@ const MaterialForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Bei neuen Materialien mit Packung > 1: Dialog anzeigen
     const packSize = parseInt(formData.size) || 1;
-    if (isNew && formData.unit === 'Packung' && packSize > 1) {
+    const shouldOpenPackDialog = formData.unit === 'Packung' && packSize > 1 && (
+      isNew || originalPackaging.unit !== formData.unit || originalPackaging.size !== formData.size
+    );
+
+    if (shouldOpenPackDialog) {
       // Daten für späteren Speichervorgang vorbereiten
       const dataToSend = {
         ...formData,
@@ -1108,6 +1116,23 @@ const MaterialForm: React.FC = () => {
     try {
       const { packSize, barcodes, ...baseData } = pendingFormData;
       let queuedCount = 0;
+
+      if (!isNew && id) {
+        const response = await materialAPI.convertPackageToItems(parseInt(id), {
+          ...baseData,
+          packSize,
+          barcodes,
+        });
+
+        if (response.status === 202 || response.data?.queued) {
+          setSaveWarning(`Die Umwandlung in ${packSize} Einzelstücke wurde lokal vorgemerkt und wird bei stabiler Verbindung automatisch nachgesendet.`);
+        } else {
+          setSuccess(`${packSize} einzelne Materialien erfolgreich erzeugt!`);
+          setTimeout(() => navigate('/materials'), 1500);
+        }
+
+        return;
+      }
 
       for (let i = 0; i < packSize; i++) {
         const itemData = {
@@ -1940,6 +1965,11 @@ const MaterialForm: React.FC = () => {
           <Typography variant="body1" sx={{ mb: 2 }}>
             Sie haben eine <strong>Packung mit {pendingFormData?.packSize || 0} Einheiten</strong> eingegeben.
           </Typography>
+          {!isNew && (
+            <Typography variant="body2" color="warning.main" sx={{ mb: 2 }}>
+              Beim Umwandeln wird dieses Material in ein Einzelstück geändert und die restlichen Stücke werden zusätzlich erzeugt.
+            </Typography>
+          )}
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             Bei Materialien wie Drähten oder Kathetern ist es oft sinnvoll, jeden Artikel einzeln zu erfassen. 
             So können Sie später einzelne Stücke aus dem Schrank entnehmen, ohne die ganze Packung zu entfernen.

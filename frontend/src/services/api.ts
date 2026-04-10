@@ -174,6 +174,7 @@ export const materialAPI = {
   search: (params: { lot_number?: string; expiry_months?: number; query?: string; category_id?: number; is_consignment?: boolean }) => api.post('/materials/search', params),
   create: (data: any) => api.post('/materials', data),
   update: (id: number, data: any) => api.put(`/materials/${id}`, data),
+  convertPackageToItems: (id: number, data: any) => api.post(`/materials/${id}/convert-package-to-items`, data),
   delete: (id: number) => api.delete(`/materials/${id}`),
   reactivate: (id: number) => api.put(`/materials/${id}/reactivate`),
   stockIn: (id: number, data: any) => api.post(`/materials/${id}/stock-in`, data),

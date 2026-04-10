@@ -874,6 +874,158 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// POST Material-Packung in Einzelstücke umwandeln
+router.post('/:id/convert-package-to-items', async (req: Request, res: Response) => {
+  const {
+    category_id, company_id, cabinet_id, compartment_id, unit_id, name, description,
+    min_stock, expiry_date, lot_number, article_number, cost, location_in_cabinet,
+    shipping_container_code, notes, is_consignment, shape_id, shaft_length,
+    device_length, device_diameter, french_size, guidewire_acceptance, packSize
+  } = req.body;
+
+  const parsedPackSize = Number(packSize);
+  if (!Number.isInteger(parsedPackSize) || parsedPackSize <= 1) {
+    return res.status(400).json({ error: 'packSize muss eine ganze Zahl größer als 1 sein' });
+  }
+
+  try {
+    const currentPool = getPoolForRequest(req);
+
+    const departmentFilter = getDepartmentFilter(req, '');
+    if (departmentFilter.whereClause) {
+      const [materials] = await currentPool.query<RowDataPacket[]>(
+        `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
+        [req.params.id, ...departmentFilter.params]
+      );
+
+      if (materials.length === 0) {
+        return res.status(403).json({ error: 'Material nicht gefunden oder kein Zugriff' });
+      }
+    }
+
+    if (cabinet_id && req.user?.departmentId && !req.user?.isRoot) {
+      const [cabinets] = await currentPool.query<RowDataPacket[]>(
+        'SELECT id FROM cabinets WHERE id = ? AND unit_id = ?',
+        [cabinet_id, req.user.departmentId]
+      );
+
+      if (cabinets.length === 0) {
+        return res.status(403).json({ error: 'Schrank gehört nicht zu Ihrem Department' });
+      }
+    }
+
+    let materialUnitId = unit_id;
+    if (!materialUnitId && req.user?.departmentId && !req.user?.isRoot) {
+      materialUnitId = req.user.departmentId;
+    }
+
+    const connection = await currentPool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const [sourceRows] = await connection.query<RowDataPacket[]>(
+        'SELECT * FROM materials WHERE id = ?',
+        [req.params.id]
+      );
+
+      if (sourceRows.length === 0) {
+        await connection.rollback();
+        connection.release();
+        return res.status(404).json({ error: 'Material nicht gefunden' });
+      }
+
+      const [customFieldRows] = await connection.query<RowDataPacket[]>(
+        'SELECT field_config_id, field_value FROM material_custom_fields WHERE material_id = ?',
+        [req.params.id]
+      );
+
+      let productId = sourceRows[0].product_id || null;
+      if (article_number) {
+        const [productResult] = await connection.query<ResultSetHeader>(
+          `INSERT INTO products 
+           (gtin, name, description, size, company_id, shape_id,
+            shaft_length, device_length, device_diameter, french_size, guidewire_acceptance, cost, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+          [article_number, name, description, '1', company_id, shape_id || null,
+           shaft_length || null, device_length || null, device_diameter || null,
+           french_size || null, guidewire_acceptance || null, cost || null, notes]
+        );
+        productId = productResult.insertId;
+      }
+
+      await connection.query(
+        `UPDATE materials
+         SET product_id = ?, category_id = ?, company_id = ?, cabinet_id = ?, compartment_id = ?, unit_id = ?,
+             name = ?, description = ?, size = '1', unit = 'Stück', min_stock = ?, current_stock = 1,
+             expiry_date = ?, lot_number = ?, article_number = ?, cost = ?, location_in_cabinet = ?,
+             shipping_container_code = ?, notes = ?, active = TRUE, is_consignment = ?, shape_id = ?,
+             shaft_length = ?, device_length = ?, device_diameter = ?, french_size = ?, guidewire_acceptance = ?
+         WHERE id = ?`,
+        [
+          productId, category_id, company_id, cabinet_id, compartment_id || null, materialUnitId,
+          name, description, min_stock, expiry_date, lot_number, article_number, cost || null,
+          location_in_cabinet, shipping_container_code, notes, is_consignment || false, shape_id || null,
+          shaft_length || null, device_length || null, device_diameter || null, french_size || null, guidewire_acceptance || null,
+          req.params.id
+        ]
+      );
+
+      const createdIds: number[] = [Number(req.params.id)];
+
+      for (let i = 1; i < parsedPackSize; i++) {
+        const [insertResult] = await connection.query<ResultSetHeader>(
+          `INSERT INTO materials
+           (product_id, category_id, company_id, cabinet_id, compartment_id, unit_id, name, description, size, unit,
+            min_stock, current_stock, expiry_date, lot_number, article_number, cost,
+            location_in_cabinet, shipping_container_code, notes, is_consignment,
+            shape_id, shaft_length, device_length, device_diameter, french_size, guidewire_acceptance)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1', 'Stück', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            productId, category_id, company_id, cabinet_id, compartment_id || null, materialUnitId, name, description,
+            min_stock, expiry_date, lot_number, article_number, cost || null, location_in_cabinet,
+            shipping_container_code, notes, is_consignment || false, shape_id || null,
+            shaft_length || null, device_length || null, device_diameter || null, french_size || null, guidewire_acceptance || null
+          ]
+        );
+
+        const newMaterialId = insertResult.insertId;
+        createdIds.push(newMaterialId);
+
+        for (const field of customFieldRows) {
+          await connection.query(
+            'INSERT INTO material_custom_fields (material_id, field_config_id, field_value) VALUES (?, ?, ?)',
+            [newMaterialId, field.field_config_id, field.field_value]
+          );
+        }
+
+        await connection.query(
+          `INSERT INTO material_transactions
+           (material_id, transaction_type, quantity, previous_stock, new_stock, notes)
+           VALUES (?, 'in', 1, 0, 1, 'Erzeugt aus Packungsumwandlung')`,
+          [newMaterialId]
+        );
+      }
+
+      await connection.commit();
+      connection.release();
+
+      res.json({
+        message: `${parsedPackSize} Einzelstücke erfolgreich erzeugt`,
+        createdIds,
+      });
+    } catch (error) {
+      await connection.rollback();
+      connection.release();
+      throw error;
+    }
+  } catch (error) {
+    console.error('Fehler bei der Packungsumwandlung:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 // POST Material-Eingang
 router.post('/:id/stock-in', async (req: Request, res: Response) => {
   const { quantity, reference_number, notes, usage_type } = req.body;
