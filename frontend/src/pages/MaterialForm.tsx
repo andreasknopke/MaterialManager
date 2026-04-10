@@ -220,7 +220,6 @@ const MaterialForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
-  const [originalPackaging, setOriginalPackaging] = useState<{ unit: string; size: string }>({ unit: 'Stück', size: '1' });
 
   // Dropdown-Daten
   const [categories, setCategories] = useState<any[]>([]);
@@ -579,11 +578,6 @@ const MaterialForm: React.FC = () => {
         french_size: material.french_size || '',
         guidewire_acceptance: material.guidewire_acceptance || '',
       });
-      setOriginalPackaging({
-        unit: material.unit || 'Stück',
-        size: material.size || '1',
-      });
-      
       // Fächer für den Schrank laden wenn vorhanden
       if (material.cabinet_id) {
         await fetchCompartments(material.cabinet_id);
@@ -989,9 +983,7 @@ const MaterialForm: React.FC = () => {
     e.preventDefault();
     
     const packSize = parseInt(formData.size) || 1;
-    const shouldOpenPackDialog = formData.unit === 'Packung' && packSize > 1 && (
-      isNew || originalPackaging.unit !== formData.unit || originalPackaging.size !== formData.size
-    );
+    const shouldOpenPackDialog = formData.unit === 'Packung' && packSize > 1;
 
     if (shouldOpenPackDialog) {
       // Daten für späteren Speichervorgang vorbereiten
