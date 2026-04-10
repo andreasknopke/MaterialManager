@@ -310,7 +310,7 @@ router.get('/', async (req: Request, res: Response) => {
     // Verwende dynamischen Pool basierend auf DB-Token
     const currentPool = getPoolForRequest(req);
     
-    const { category, cabinet, company, search, lowStock, expiring } = req.query;
+    const { category, cabinet, company, search, lowStock, expiring, includeZeroStock } = req.query;
     
     // Basis-Query mit offenen Bestellungen als Subquery
     let query = `SELECT v.*, 
@@ -359,7 +359,111 @@ router.get('/', async (req: Request, res: Response) => {
     query += ' ORDER BY v.name';
     
     const [rows] = await currentPool.query<RowDataPacket[]>(query, params);
-    res.json(rows);
+
+    if (includeZeroStock !== 'true' || cabinet) {
+      res.json(rows);
+      return;
+    }
+
+    const templateParams: any[] = [];
+    const activeUnitFilter = !req.user?.isRoot && req.user?.departmentId ? ' AND active_materials.unit_id = ?' : '';
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      templateParams.push(req.user.departmentId);
+    }
+
+    const lastMaterialUnitFilter = !req.user?.isRoot && req.user?.departmentId ? ' AND m2.unit_id = ?' : '';
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      templateParams.push(req.user.departmentId);
+    }
+
+    let templateQuery = `
+      SELECT
+        CONCAT('product-', p.id) AS id,
+        p.id AS product_id,
+        last_material.category_id,
+        p.company_id,
+        NULL AS cabinet_id,
+        NULL AS compartment_id,
+        NULL AS unit_id,
+        p.name,
+        p.description,
+        p.size,
+        COALESCE(last_material.unit, 'Stück') AS unit,
+        COALESCE(p.min_stock, last_material.min_stock, 0) AS min_stock,
+        0 AS current_stock,
+        NULL AS expiry_date,
+        NULL AS lot_number,
+        p.gtin AS article_number,
+        NULL AS location_in_cabinet,
+        COALESCE(p.cost, last_material.cost) AS cost,
+        COALESCE(p.notes, last_material.notes) AS notes,
+        FALSE AS active,
+        cat.name AS category_name,
+        co.name AS company_name,
+        NULL AS cabinet_name,
+        NULL AS cabinet_location,
+        NULL AS compartment_name,
+        CASE
+          WHEN COALESCE(p.min_stock, last_material.min_stock, 0) > 0 THEN 'LOW'
+          ELSE 'OK'
+        END AS stock_status,
+        p.shape_id,
+        s.name AS shape_name,
+        p.shaft_length,
+        p.device_length,
+        p.device_diameter,
+        p.french_size,
+        p.guidewire_acceptance,
+        p.created_at,
+        p.updated_at,
+        (SELECT COUNT(*) FROM reorder_history rh WHERE rh.product_id = p.id AND rh.status = 'ordered') AS pending_orders,
+        'product_template' AS source_type,
+        TRUE AS can_restock
+      FROM products p
+      LEFT JOIN companies co ON p.company_id = co.id
+      LEFT JOIN shapes s ON p.shape_id = s.id
+      LEFT JOIN materials active_materials
+        ON active_materials.product_id = p.id
+       AND active_materials.active = TRUE
+       AND active_materials.current_stock > 0${activeUnitFilter}
+      LEFT JOIN materials last_material
+        ON last_material.id = (
+          SELECT m2.id
+          FROM materials m2
+          WHERE m2.product_id = p.id${lastMaterialUnitFilter}
+          ORDER BY COALESCE(m2.updated_at, m2.created_at) DESC, m2.id DESC
+          LIMIT 1
+        )
+      LEFT JOIN categories cat ON cat.id = last_material.category_id
+      WHERE active_materials.id IS NULL
+        AND last_material.id IS NOT NULL
+    `;
+
+    if (!req.user?.isRoot && req.user?.departmentId) {
+      templateQuery += ' AND EXISTS (SELECT 1 FROM materials m_hist WHERE m_hist.product_id = p.id AND m_hist.unit_id = ?)';
+      templateParams.push(req.user.departmentId);
+    }
+
+    if (category) {
+      templateQuery += ' AND cat.name = ?';
+      templateParams.push(category);
+    }
+
+    if (company) {
+      templateQuery += ' AND co.name = ?';
+      templateParams.push(company);
+    }
+
+    if (search) {
+      templateQuery += ' AND (p.name LIKE ? OR p.description LIKE ? OR p.gtin LIKE ?)';
+      const searchParam = `%${search}%`;
+      templateParams.push(searchParam, searchParam, searchParam);
+    }
+
+    templateQuery += ' ORDER BY p.name';
+
+    const [templateRows] = await currentPool.query<RowDataPacket[]>(templateQuery, templateParams);
+    res.json([...rows, ...templateRows]);
   } catch (error) {
     console.error('Fehler beim Abrufen der Materialien:', error);
     res.status(500).json({ error: 'Datenbankfehler' });

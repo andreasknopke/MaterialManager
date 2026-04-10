@@ -217,6 +217,31 @@ const Materials: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const handleRestock = useCallback((material: any) => {
+    navigate('/materials/new', {
+      state: {
+        prefillTemplate: {
+          product_id: material.product_id,
+          name: material.name,
+          description: material.description,
+          category_id: material.category_id,
+          company_id: material.company_id,
+          size: material.size,
+          unit: material.unit,
+          cost: material.cost,
+          shape_id: material.shape_id,
+          shaft_length: material.shaft_length,
+          device_length: material.device_length,
+          device_diameter: material.device_diameter,
+          french_size: material.french_size,
+          guidewire_acceptance: material.guidewire_acceptance,
+          article_number: material.article_number,
+          is_consignment: material.is_consignment,
+        }
+      }
+    });
+  }, [navigate]);
+
   // Spalteneinstellungen in localStorage speichern bei Änderungen
   useEffect(() => {
     if (user?.id) {
@@ -266,7 +291,7 @@ const Materials: React.FC = () => {
       } else if (filter === 'expiring') {
         response = await materialAPI.getExpiring();
       } else {
-        response = await materialAPI.getAll();
+        response = await materialAPI.getAll({ includeZeroStock: !hideZeroStock });
       }
       
       console.log('API Response:', response.data);
@@ -279,15 +304,18 @@ const Materials: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentFilter]);
+  }, [currentFilter, hideZeroStock]);
 
   useEffect(() => {
     if (currentFilter) {
       setActiveFilter(currentFilter);
     }
     fetchMaterials();
+  }, [currentFilter, fetchMaterials]);
+
+  useEffect(() => {
     fetchFilterData();
-  }, [currentFilter, fetchMaterials, fetchFilterData]);
+  }, [fetchFilterData]);
 
   useEffect(() => {
     const refreshMaterials = () => {
@@ -485,36 +513,52 @@ const Materials: React.FC = () => {
       width: 140,
       sortable: false,
       disableColumnMenu: true,
-      renderCell: (params) => (
-        <>
-          <Tooltip title="Übersicht anzeigen">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/materials/${params.row.id}`)}
-            >
-              <ViewIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Bearbeiten">
-            <IconButton
-              size="small"
-              onClick={() => navigate(`/materials/${params.row.id}/edit`)}
-            >
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Deaktivieren">
-            <IconButton
-              size="small"
-              onClick={() => handleDelete(params.row.id)}
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </>
-      ),
+      renderCell: (params) => {
+        if (params.row.source_type === 'product_template') {
+          return (
+            <Tooltip title="Aufstocken">
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => handleRestock(params.row)}
+              >
+                <AddIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          );
+        }
+
+        return (
+          <>
+            <Tooltip title="Übersicht anzeigen">
+              <IconButton
+                size="small"
+                onClick={() => navigate(`/materials/${params.row.id}`)}
+              >
+                <ViewIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Bearbeiten">
+              <IconButton
+                size="small"
+                onClick={() => navigate(`/materials/${params.row.id}/edit`)}
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Deaktivieren">
+              <IconButton
+                size="small"
+                onClick={() => handleDelete(params.row.id)}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </>
+        );
+      },
     },
-  ], [groupIdentical, navigate]);
+  ], [groupIdentical, handleRestock, navigate]);
 
   // Spalten nach gespeicherter Reihenfolge sortieren
   const columns = useMemo(() => {
@@ -886,12 +930,12 @@ const Materials: React.FC = () => {
           <FormControlLabel
             control={
               <Checkbox
-                checked={hideZeroStock}
-                onChange={(e) => setHideZeroStock(e.target.checked)}
+                checked={!hideZeroStock}
+                onChange={(e) => setHideZeroStock(!e.target.checked)}
                 color="primary"
               />
             }
-            label="Materialien mit Bestand 0 ausblenden"
+            label="Bekannte Produkte ohne Bestand anzeigen"
           />
           <FormControlLabel
             control={
