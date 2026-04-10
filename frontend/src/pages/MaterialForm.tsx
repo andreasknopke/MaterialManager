@@ -219,6 +219,7 @@ const MaterialForm: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
 
   // Dropdown-Daten
   const [categories, setCategories] = useState<any[]>([]);
@@ -1026,6 +1027,7 @@ const MaterialForm: React.FC = () => {
   const saveAsSingleItem = async (overrideData?: any) => {
     setSaving(true);
     setError(null);
+    setSaveWarning(null);
 
     try {
       const dataToSend = overrideData || {
@@ -1057,17 +1059,25 @@ const MaterialForm: React.FC = () => {
 
       if (isNew) {
         const response = await materialAPI.create({ ...dataToSend, barcodes });
-        setSuccess('Material erfolgreich erstellt!');
-        setTimeout(() => navigate(`/materials/${response.data.id}`), 1500);
+        if (response.status === 202 || response.data?.queued) {
+          setSaveWarning('Material lokal vorgemerkt. Die Speicherung wird bei stabiler Verbindung automatisch nachgesendet.');
+        } else {
+          setSuccess('Material erfolgreich erstellt!');
+          setTimeout(() => navigate(`/materials/${response.data.id}`), 1500);
+        }
       } else {
         const response = await materialAPI.update(parseInt(id!), dataToSend);
-        const productUpdated = response.data?.productUpdated || false;
-        if (productUpdated) {
-          setSuccess('Material und Produkt-Stammdaten erfolgreich aktualisiert!');
+        if (response.status === 202 || response.data?.queued) {
+          setSaveWarning('Änderung lokal vorgemerkt. Die Aktualisierung wird bei stabiler Verbindung automatisch nachgesendet.');
         } else {
-          setSuccess('Material erfolgreich aktualisiert!');
+          const productUpdated = response.data?.productUpdated || false;
+          if (productUpdated) {
+            setSuccess('Material und Produkt-Stammdaten erfolgreich aktualisiert!');
+          } else {
+            setSuccess('Material erfolgreich aktualisiert!');
+          }
+          setTimeout(() => navigate('/materials'), 1500);
         }
-        setTimeout(() => navigate('/materials'), 1500);
       }
     } catch (err: any) {
       console.error('Fehler beim Speichern:', err);
@@ -1093,9 +1103,11 @@ const MaterialForm: React.FC = () => {
 
     setSaving(true);
     setError(null);
+    setSaveWarning(null);
 
     try {
       const { packSize, barcodes, ...baseData } = pendingFormData;
+      let queuedCount = 0;
 
       for (let i = 0; i < packSize; i++) {
         const itemData = {
@@ -1106,11 +1118,20 @@ const MaterialForm: React.FC = () => {
           barcodes: i === 0 ? barcodes : [],
         };
 
-        await materialAPI.create(itemData);
+        const response = await materialAPI.create(itemData);
+        if (response.status === 202 || response.data?.queued) {
+          queuedCount++;
+        }
       }
 
-      setSuccess(`${packSize} einzelne Materialien erfolgreich erstellt!`);
-      setTimeout(() => navigate('/materials'), 1500);
+      if (queuedCount === 0) {
+        setSuccess(`${packSize} einzelne Materialien erfolgreich erstellt!`);
+        setTimeout(() => navigate('/materials'), 1500);
+      } else if (queuedCount === packSize) {
+        setSaveWarning(`${packSize} Materialien lokal vorgemerkt. Die Speicherung wird bei stabiler Verbindung automatisch nachgesendet.`);
+      } else {
+        setSaveWarning(`${queuedCount} von ${packSize} Materialien wurden nur lokal vorgemerkt. Bitte Synchronisierungsstatus prüfen.`);
+      }
     } catch (err: any) {
       console.error('Fehler beim Speichern:', err);
       setError(err.response?.data?.error || 'Fehler beim Speichern der Materialien');
@@ -1147,6 +1168,12 @@ const MaterialForm: React.FC = () => {
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+
+      {saveWarning && (
+        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setSaveWarning(null)}>
+          {saveWarning}
         </Alert>
       )}
 

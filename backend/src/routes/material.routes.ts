@@ -6,6 +6,42 @@ import { getDepartmentFilter } from '../utils/departmentFilter';
 import { auditMaterial } from '../utils/auditLogger';
 
 const router = Router();
+const MATERIAL_CREATE_IDEMPOTENCY_ENDPOINT = 'POST:/api/materials';
+let ensureMaterialIdempotencyTablePromise: Promise<void> | null = null;
+
+async function ensureMaterialIdempotencyTable(currentPool: any): Promise<void> {
+  if (!ensureMaterialIdempotencyTablePromise) {
+    ensureMaterialIdempotencyTablePromise = currentPool.query(
+      `CREATE TABLE IF NOT EXISTS api_idempotency_keys (
+         id INT AUTO_INCREMENT PRIMARY KEY,
+         user_id INT NOT NULL DEFAULT 0,
+         endpoint VARCHAR(100) NOT NULL,
+         idempotency_key VARCHAR(255) NOT NULL,
+         response_status INT NOT NULL,
+         response_body LONGTEXT NOT NULL,
+         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+         UNIQUE KEY uniq_api_idempotency (user_id, endpoint, idempotency_key)
+       )`
+    ).then(() => undefined).catch((error: any) => {
+      ensureMaterialIdempotencyTablePromise = null;
+      throw error;
+    });
+  }
+
+  await ensureMaterialIdempotencyTablePromise;
+}
+
+function parseStoredIdempotencyBody(value: any) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
 
 // Alle Routes benötigen Authentifizierung
 router.use(authenticate);
@@ -567,6 +603,24 @@ router.post('/', async (req: Request, res: Response) => {
   
   // Verwende dynamischen Pool basierend auf DB-Token
   const currentPool = getPoolForRequest(req);
+  const idempotencyKey = req.header('X-Idempotency-Key');
+  const userId = req.user?.id || 0;
+
+  if (idempotencyKey) {
+    await ensureMaterialIdempotencyTable(currentPool);
+
+    const [existingResponses] = await currentPool.query<RowDataPacket[]>(
+      `SELECT response_status, response_body
+       FROM api_idempotency_keys
+       WHERE user_id = ? AND endpoint = ? AND idempotency_key = ?
+       LIMIT 1`,
+      [userId, MATERIAL_CREATE_IDEMPOTENCY_ENDPOINT, idempotencyKey]
+    );
+
+    if (existingResponses.length > 0) {
+      return res.status(existingResponses[0].response_status).json(parseStoredIdempotencyBody(existingResponses[0].response_body));
+    }
+  }
   
   // Department (unit_id) bestimmen: Entweder vom Request oder vom User
   let materialUnitId = unit_id;
@@ -667,6 +721,20 @@ router.post('/', async (req: Request, res: Response) => {
       );
     }
     
+    const responsePayload = {
+      id: materialId,
+      message: 'Material erfolgreich erstellt'
+    };
+
+    if (idempotencyKey) {
+      await connection.query(
+        `INSERT INTO api_idempotency_keys (user_id, endpoint, idempotency_key, response_status, response_body)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE response_status = VALUES(response_status), response_body = VALUES(response_body)`,
+        [userId, MATERIAL_CREATE_IDEMPOTENCY_ENDPOINT, idempotencyKey, 201, JSON.stringify(responsePayload)]
+      );
+    }
+
     await connection.commit();
     connection.release();
     
@@ -676,10 +744,7 @@ router.post('/', async (req: Request, res: Response) => {
       current_stock: current_stock || 1, lot_number, article_number, unit_id: materialUnitId
     });
     
-    res.status(201).json({
-      id: materialId,
-      message: 'Material erfolgreich erstellt'
-    });
+    res.status(201).json(responsePayload);
   } catch (error) {
     await connection.rollback();
     connection.release();

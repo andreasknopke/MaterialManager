@@ -12,6 +12,14 @@ const api = axios.create({
   },
 });
 
+function createIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function getCachePrefixesToInvalidate(url?: string): string[] {
   if (!url) return [];
 
@@ -32,6 +40,10 @@ api.interceptors.request.use(
     const dbToken = getDbToken();
     if (dbToken) {
       config.headers['X-DB-Token'] = dbToken;
+    }
+
+    if (['post', 'put', 'delete'].includes(config.method || '') && !config.headers['X-Idempotency-Key']) {
+      config.headers['X-Idempotency-Key'] = createIdempotencyKey();
     }
     
     return config;
@@ -63,8 +75,11 @@ api.interceptors.response.use(
   },
   async (error) => {
     // Bei Netzwerk-Fehler: Versuche aus Cache zu laden (GET) oder Queue (POST/PUT/DELETE)
-    if (!error.response && !navigator.onLine) {
+    if (!error.response) {
       const config = error.config;
+      if (!config) {
+        return Promise.reject(error);
+      }
       
       if (config.method === 'get') {
         // Versuche gecachte Daten zurückzugeben
@@ -89,7 +104,8 @@ api.interceptors.response.use(
           headers: {
             'Content-Type': 'application/json',
             'Authorization': config.headers.Authorization || '',
-            'X-DB-Token': config.headers['X-DB-Token'] || ''
+            'X-DB-Token': config.headers['X-DB-Token'] || '',
+            'X-Idempotency-Key': config.headers['X-Idempotency-Key'] || createIdempotencyKey()
           },
           body: config.data || ''
         });

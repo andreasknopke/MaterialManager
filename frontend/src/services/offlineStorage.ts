@@ -137,7 +137,10 @@ class OfflineStorageService {
         ...change,
         timestamp: change.timestamp || Date.now(),
         type: change.type || this.getChangeType(change.url, change.method),
-        retryCount: 0
+        retryCount: 0,
+        status: 'pending',
+        lastError: null,
+        lastAttemptAt: null
       };
 
       const request = store.add(record);
@@ -199,6 +202,33 @@ class OfflineStorageService {
         resolve();
       };
       request.onerror = () => reject(request.error);
+    });
+  }
+
+  public async updatePendingChange(id: number, updates: Record<string, any>): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([STORES.PENDING_CHANGES], 'readwrite');
+      const store = transaction.objectStore(STORES.PENDING_CHANGES);
+      const request = store.get(id);
+
+      request.onsuccess = () => {
+        const existing = request.result;
+        if (!existing) {
+          resolve();
+          return;
+        }
+
+        store.put({ ...existing, ...updates });
+      };
+
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = () => {
+        this.updatePendingCountInLocalStorage();
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
     });
   }
 
@@ -289,19 +319,29 @@ class OfflineStorageService {
             await this.removePendingChange(change.id);
             await this.logSync(change, 'success');
             success++;
-          } else if (response.status >= 400 && response.status < 500) {
-            // Client-Error: Nicht erneut versuchen
-            await this.removePendingChange(change.id);
-            await this.logSync(change, 'client_error', await response.text());
-            failed++;
           } else {
-            // Server-Error: Für später aufheben
-            await this.logSync(change, 'server_error');
+            const errorText = await response.text();
+            const status = response.status >= 400 && response.status < 500 ? 'client_error' : 'server_error';
+
+            await this.updatePendingChange(change.id, {
+              retryCount: (change.retryCount || 0) + 1,
+              status,
+              lastError: errorText || `HTTP ${response.status}`,
+              lastAttemptAt: Date.now()
+            });
+
+            await this.logSync(change, status, errorText || `HTTP ${response.status}`);
             failed++;
           }
         } catch (error) {
           console.error('[OfflineStorage] Sync failed for:', change.type, error);
-          await this.logSync(change, 'network_error');
+          await this.updatePendingChange(change.id, {
+            retryCount: (change.retryCount || 0) + 1,
+            status: 'network_error',
+            lastError: error instanceof Error ? error.message : 'Netzwerkfehler',
+            lastAttemptAt: Date.now()
+          });
+          await this.logSync(change, 'network_error', error instanceof Error ? error.message : 'Netzwerkfehler');
           failed++;
         }
       }

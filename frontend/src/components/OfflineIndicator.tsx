@@ -90,6 +90,19 @@ const OfflineIndicator: React.FC = () => {
     });
   };
 
+  const getStatusChip = (status?: string) => {
+    switch (status) {
+      case 'client_error':
+        return <Chip label="Fehlerhaft" color="error" size="small" />;
+      case 'server_error':
+        return <Chip label="Serverfehler" color="warning" size="small" />;
+      case 'network_error':
+        return <Chip label="Netzfehler" color="warning" size="small" />;
+      default:
+        return <Chip label="Ausstehend" color="info" size="small" />;
+    }
+  };
+
   return (
     <>
       {/* Status-Icon in der Toolbar */}
@@ -229,12 +242,17 @@ const OfflineIndicator: React.FC = () => {
                 {pendingChanges.map((change, index) => (
                   <ListItem key={index}>
                     <ListItemIcon>
-                      <ScheduleIcon color="warning" fontSize="small" />
+                      {change.status && change.status !== 'pending' ? (
+                        <ErrorIcon color="warning" fontSize="small" />
+                      ) : (
+                        <ScheduleIcon color="warning" fontSize="small" />
+                      )}
                     </ListItemIcon>
                     <ListItemText
                       primary={getChangeTypeLabel(change.type)}
-                      secondary={formatTime(change.timestamp)}
+                      secondary={change.lastError ? `${formatTime(change.timestamp)} - ${change.lastError}` : formatTime(change.timestamp)}
                     />
+                    {getStatusChip(change.status)}
                   </ListItem>
                 ))}
               </List>
