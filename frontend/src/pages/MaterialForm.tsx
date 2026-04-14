@@ -981,50 +981,48 @@ const MaterialForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const packSize = parseInt(formData.size) || 1;
-    const shouldOpenPackDialog = formData.unit === 'Packung' && packSize > 1;
 
-    if (shouldOpenPackDialog) {
-      // Daten für späteren Speichervorgang vorbereiten
-      const dataToSend = {
-        ...formData,
-        category_id: formData.category_id || null,
-        company_id: formData.company_id || null,
-        cabinet_id: formData.cabinet_id || null,
-        compartment_id: formData.compartment_id || null,
-        expiry_date: formData.expiry_date || null,
-        cost: formData.cost ? parseFloat(formData.cost) : null,
-        // Device-Eigenschaften
-        shape_id: formData.shape_id || null,
-        shaft_length: formData.shaft_length || null,
-        device_length: formData.device_length || null,
-        device_diameter: formData.device_diameter || null,
-        french_size: formData.french_size || null,
-        guidewire_acceptance: formData.guidewire_acceptance || null,
-      };
-      
-      // GS1 Barcode als zusätzlichen Barcode hinzufügen, falls vorhanden
-      const barcodes = [];
-      if (formData.gs1_barcode && gs1Data) {
-        barcodes.push({
-          barcode: formData.gs1_barcode,
-          barcode_type: 'GS1-128',
-          is_primary: true,
-        });
-      }
-      
-      setPendingFormData({ ...dataToSend, barcodes, packSize });
-      setPackDialogOpen(true);
-      return;
-    }
-    
-    // Normales Speichern (einzelnes Material oder Bearbeitung)
     await saveAsSingleItem();
   };
 
   // Speichert ein einzelnes Material (Packung oder Stück)
   const saveAsSingleItem = async (overrideData?: any) => {
+    if (!overrideData) {
+      const packSize = parseInt(formData.size) || 1;
+      const shouldOpenPackDialog = formData.unit === 'Packung' && packSize > 1;
+
+      if (shouldOpenPackDialog) {
+        const dataToSend = {
+          ...formData,
+          category_id: formData.category_id || null,
+          company_id: formData.company_id || null,
+          cabinet_id: formData.cabinet_id || null,
+          compartment_id: formData.compartment_id || null,
+          expiry_date: formData.expiry_date || null,
+          cost: formData.cost ? parseFloat(formData.cost) : null,
+          shape_id: formData.shape_id || null,
+          shaft_length: formData.shaft_length || null,
+          device_length: formData.device_length || null,
+          device_diameter: formData.device_diameter || null,
+          french_size: formData.french_size || null,
+          guidewire_acceptance: formData.guidewire_acceptance || null,
+        };
+
+        const barcodes = [];
+        if (formData.gs1_barcode && gs1Data) {
+          barcodes.push({
+            barcode: formData.gs1_barcode,
+            barcode_type: 'GS1-128',
+            is_primary: true,
+          });
+        }
+
+        setPendingFormData({ ...dataToSend, barcodes, packSize });
+        setPackDialogOpen(true);
+        return;
+      }
+    }
+
     setSaving(true);
     setError(null);
     setSaveWarning(null);
