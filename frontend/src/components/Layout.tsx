@@ -314,6 +314,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: drawerWidth,
+              overflowY: 'auto',
             },
           }}
         >
@@ -326,6 +327,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: drawerWidth,
+              overflowY: 'auto',
             },
           }}
           open
