@@ -20,6 +20,7 @@ import interventionRoutes from './routes/intervention.routes';
 import reorderRoutes from './routes/reorder.routes';
 import auditLogRoutes from './routes/auditLog.routes';
 import aiRoutes from './routes/ai.routes';
+import feedbackRoutes from './routes/feedback.routes';
 import { extractDbToken } from './middleware/dbToken';
 
 dotenv.config();
@@ -101,6 +102,7 @@ app.use('/api/interventions', interventionRoutes);
 app.use('/api/reorder', reorderRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // Health Check
 app.get('/health', (req: Request, res: Response) => {
