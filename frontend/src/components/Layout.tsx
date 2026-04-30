@@ -39,10 +39,12 @@ import {
   LocalHospital as HospitalIcon,
   ShoppingCart as ShoppingCartIcon,
   History as HistoryIcon,
+  Feedback as FeedbackIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import ChangePasswordDialog from './ChangePasswordDialog';
 import OfflineIndicator from './OfflineIndicator';
+import TicketDialog from './TicketDialog';
 import api from '../services/api';
 
 const drawerWidth = 240;
@@ -55,6 +57,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [ticketDialogOpen, setTicketDialogOpen] = useState(false);
   const [reportAlertCount, setReportAlertCount] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
@@ -120,6 +123,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { text: 'Firmen', icon: <BusinessIcon />, path: '/companies' },
     { text: 'Berichte', icon: <AssessmentIcon />, path: '/reports' },
     { text: 'Statistiken', icon: <AnalyticsIcon />, path: '/statistics' },
+    { text: 'Feedback & Verbesserungen', icon: <FeedbackIcon />, path: '/feedback' },
   ];
 
   const adminItems = [
@@ -142,8 +146,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <ListItemButton
               selected={location.pathname === item.path}
               onClick={() => {
-                navigate(item.path);
-                setMobileOpen(false);
+                if (item.text === 'Feedback & Verbesserungen') {
+                  setTicketDialogOpen(true);
+                } else {
+                  navigate(item.path);
+                  setMobileOpen(false);
+                }
               }}
             >
               <ListItemIcon>
@@ -345,6 +353,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         onSuccess={() => {
           // Optional: Update user info or show success message
         }}
+      />
+      {/* Ticket Dialog (Feedback & Verbesserungen) */}
+      <TicketDialog
+        open={ticketDialogOpen}
+        onClose={() => setTicketDialogOpen(false)}
       />
     </Box>
   );
