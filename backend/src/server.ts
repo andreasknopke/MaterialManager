@@ -27,6 +27,7 @@ dotenv.config();
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
+const REQUEST_BODY_LIMIT = process.env.REQUEST_BODY_LIMIT || '25mb';
 
 // Optional: Frontend ausliefern (für Coolify 1-Service Deployment)
 // Wird nur aktiviert, wenn ein Frontend-Build vorhanden ist.
@@ -72,8 +73,17 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: REQUEST_BODY_LIMIT }));
+app.use((error: any, req: Request, res: Response, next: NextFunction) => {
+  if (error?.type === 'entity.too.large') {
+    return res.status(413).json({
+      error: 'Anfrage zu gross. Bitte Screenshot komprimieren oder ohne Anhang erneut senden.',
+    });
+  }
+
+  next(error);
+});
 
 // DB Token Middleware - Extrahiert X-DB-Token Header
 app.use(extractDbToken);

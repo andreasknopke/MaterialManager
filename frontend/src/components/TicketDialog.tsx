@@ -17,7 +17,6 @@ import {
   BugReportRounded as BugIcon,
   LightbulbOutlined as FeatureIcon,
   CloseRounded as CloseIcon,
-  CloudUploadRounded as CloudUploadIcon,
   CheckCircleRounded as SuccessIcon,
   ErrorOutlineRounded as ErrorIcon,
   SendRounded as SendIcon,
@@ -40,7 +39,6 @@ export default function TicketDialog({ open, onClose }: TicketDialogProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-  const [screenshot, setScreenshot] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<TicketStatus>('form');
   const [resultMessage, setResultMessage] = useState('');
@@ -63,7 +61,6 @@ export default function TicketDialog({ open, onClose }: TicketDialogProps) {
     setType('bug');
     setTitle('');
     setDescription('');
-    setScreenshot(null);
     setLoading(false);
     setStatus('form');
     setResultMessage('');
@@ -82,12 +79,10 @@ export default function TicketDialog({ open, onClose }: TicketDialogProps) {
     setResultMessage('');
 
     try {
-      const screenshotBase64 = screenshot ? await fileToBase64(screenshot) : undefined;
       await createTicket({
         type,
         title: title.trim(),
         description: description.trim(),
-        screenshot: screenshotBase64,
         contactEmail: contactEmail.trim() || user?.email || undefined,
         reporterEmail: user?.email || contactEmail.trim() || undefined,
         reporterName: user?.fullName || user?.username || undefined,
@@ -112,15 +107,6 @@ export default function TicketDialog({ open, onClose }: TicketDialogProps) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
-    });
   };
 
   const handleClose = () => {
@@ -215,35 +201,6 @@ export default function TicketDialog({ open, onClose }: TicketDialogProps) {
                   placeholder="ihre@email.de"
                   helperText="Nur falls wir Rückfragen haben. Ansonsten wird die hinterlegte E-Mail verwendet."
                 />
-
-                <Stack spacing={1}>
-                  <Button
-                    variant="outlined"
-                    component="label"
-                    startIcon={<CloudUploadIcon />}
-                    sx={{ justifyContent: 'flex-start', py: 1.2, borderRadius: 2 }}
-                  >
-                    Screenshot hochladen (optional)
-                    <input
-                      type="file"
-                      accept="image/*"
-                      hidden
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          setScreenshot(e.target.files[0]);
-                        }
-                      }}
-                    />
-                  </Button>
-                  {screenshot && (
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Chip label={screenshot.name} color="primary" variant="outlined" />
-                      <Button size="small" color="inherit" onClick={() => setScreenshot(null)}>
-                        Entfernen
-                      </Button>
-                    </Stack>
-                  )}
-                </Stack>
 
                 <Box
                   sx={{

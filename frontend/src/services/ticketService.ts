@@ -6,7 +6,6 @@ export interface TicketData {
   type: TicketType;
   title: string;
   description: string;
-  screenshot?: string;
   contactEmail?: string;
   reporterEmail?: string;
   reporterName?: string;

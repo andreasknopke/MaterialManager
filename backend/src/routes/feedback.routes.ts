@@ -12,7 +12,6 @@ interface TicketRequestBody {
   title?: string;
   subject?: string;
   description?: string;
-  screenshot?: string;
   contactEmail?: string;
   reporterEmail?: string;
   reporterName?: string;
@@ -137,7 +136,6 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       title,
       subject,
       description,
-      screenshot,
       contactEmail,
       reporterEmail,
       reporterName,
@@ -199,8 +197,6 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       location: typeof resolvedSoftwareInfo.url === 'string' ? resolvedSoftwareInfo.url : '',
       contact_email: contactEmail || resolvedReporterEmail || null,
       urgency: 'normal',
-      screenshot,
-      screenshot_base64: screenshot,
     };
 
     const response = await postJson(endpoint, ticketApiKey, payload);
