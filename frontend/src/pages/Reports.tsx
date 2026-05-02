@@ -15,12 +15,17 @@ import {
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { materialAPI } from '../services/api';
-import { Link } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
   value: number;
+}
+
+interface ReportsLocationState {
+  tabValue?: number;
+  inactiveMonths?: number;
 }
 
 function TabPanel(props: TabPanelProps) {
@@ -33,14 +38,26 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const Reports: React.FC = () => {
-  const [tabValue, setTabValue] = useState(0);
+  const location = useLocation();
+  const locationState = location.state as ReportsLocationState | null;
+  const [tabValue, setTabValue] = useState(locationState?.tabValue ?? 0);
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
   const [lowStockCategories, setLowStockCategories] = useState<any[]>([]);
   const [expiringMaterials, setExpiringMaterials] = useState<any[]>([]);
   const [inactiveMaterials, setInactiveMaterials] = useState<any[]>([]);
-  const [inactiveMonths, setInactiveMonths] = useState<number>(6);
+  const [inactiveMonths, setInactiveMonths] = useState<number>(locationState?.inactiveMonths ?? 6);
   const [loading, setLoading] = useState(true);
   const [inactiveLoading, setInactiveLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof locationState?.tabValue === 'number') {
+      setTabValue(locationState.tabValue);
+    }
+
+    if (typeof locationState?.inactiveMonths === 'number') {
+      setInactiveMonths(locationState.inactiveMonths);
+    }
+  }, [locationState?.inactiveMonths, locationState?.tabValue]);
 
   useEffect(() => {
     fetchReports();
@@ -93,19 +110,72 @@ const Reports: React.FC = () => {
     }
   };
 
+  const reportLinkSx = {
+    color: 'primary.main',
+    cursor: 'pointer',
+    fontWeight: 500,
+    textDecoration: 'underline',
+    textUnderlineOffset: '0.15em',
+    '&:hover': {
+      color: 'primary.dark',
+    },
+  };
+
+  const getReportReturnTo = (targetTabValue: number) => ({
+    pathname: '/reports',
+    state: {
+      tabValue: targetTabValue,
+      inactiveMonths,
+    },
+  });
+
+  const renderMaterialDetailLink = (label: React.ReactNode, materialId?: number) => {
+    if (!materialId) {
+      return <span>{label}</span>;
+    }
+
+    return (
+      <Box
+        component={RouterLink}
+        to={`/materials/${materialId}`}
+        state={{ returnTo: getReportReturnTo(tabValue) }}
+        sx={reportLinkSx}
+      >
+        {label}
+      </Box>
+    );
+  };
+
+  const renderMaterialSearchLink = (label: React.ReactNode, gtin?: string, reportTabValue: number = 0) => {
+    if (!gtin) {
+      return <span>{label}</span>;
+    }
+
+    return (
+      <Box
+        component={RouterLink}
+        to="/materials"
+        state={{
+          searchTerm: gtin,
+          hideZeroStock: false,
+          groupIdentical: false,
+          resetFilters: true,
+          returnTo: getReportReturnTo(reportTabValue),
+        }}
+        sx={reportLinkSx}
+      >
+        {label}
+      </Box>
+    );
+  };
+
   const lowStockProductColumns: GridColDef[] = [
     { field: 'gtin', headerName: 'GTIN', width: 140 },
     {
       field: 'name',
       headerName: 'Produkt',
       width: 250,
-      renderCell: (params) => {
-        const productId = params.row.product_id;
-        if (productId) {
-          return <Link to={`/materials/${productId}`} style={{ textDecoration: 'none', color: 'inherit' }}>{params.value}</Link>;
-        }
-        return <span>{params.value}</span>;
-      },
+      renderCell: (params) => renderMaterialSearchLink(params.value, params.row.gtin, 0),
     },
     { field: 'category_name', headerName: 'Kategorie', width: 150 },
     { field: 'company_name', headerName: 'Firma', width: 130 },
@@ -158,13 +228,7 @@ const Reports: React.FC = () => {
       field: 'name',
       headerName: 'Bezeichnung',
       width: 250,
-      renderCell: (params) => {
-        const gtin = params.row.gtin;
-        if (gtin) {
-          return <Link to={`/materials/${gtin}`} style={{ textDecoration: 'none', color: 'inherit' }}>{params.value}</Link>;
-        }
-        return <span>{params.value}</span>;
-      },
+      renderCell: (params) => renderMaterialDetailLink(params.value, params.row.id),
     },
     { field: 'category_name', headerName: 'Kategorie', width: 150 },
     { field: 'company_name', headerName: 'Firma', width: 150 },
@@ -191,13 +255,7 @@ const Reports: React.FC = () => {
       field: 'name',
       headerName: 'Bezeichnung',
       width: 250,
-      renderCell: (params) => {
-        const gtin = params.row.gtin;
-        if (gtin) {
-          return <Link to={`/materials/${gtin}`} style={{ textDecoration: 'none', color: 'inherit' }}>{params.value}</Link>;
-        }
-        return <span>{params.value}</span>;
-      },
+      renderCell: (params) => renderMaterialDetailLink(params.value, params.row.id),
     },
     { field: 'article_number', headerName: 'Artikelnummer', width: 140 },
     { field: 'lot_number', headerName: 'LOT', width: 120 },

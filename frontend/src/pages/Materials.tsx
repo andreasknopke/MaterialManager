@@ -97,6 +97,18 @@ interface FilterState {
   is_consignment: string;
 }
 
+interface MaterialsLocationState {
+  filter?: string;
+  searchTerm?: string;
+  hideZeroStock?: boolean;
+  groupIdentical?: boolean;
+  resetFilters?: boolean;
+  returnTo?: {
+    pathname: string;
+    state?: Record<string, unknown>;
+  };
+}
+
 const emptyFilters: FilterState = {
   category_id: '',
   company_id: '',
@@ -216,6 +228,7 @@ const Materials: React.FC = () => {
   
   const navigate = useNavigate();
   const location = useLocation();
+  const locationState = location.state as MaterialsLocationState | null;
 
   const handleRestock = useCallback((material: any) => {
     navigate('/materials/new', {
@@ -262,7 +275,37 @@ const Materials: React.FC = () => {
     sessionStorage.setItem(MATERIALS_FILTER_KEY, JSON.stringify(filterState));
   }, [searchTerm, filters, hideZeroStock, groupIdentical, showFilters, activeFilter]);
 
-  const currentFilter = location.state?.filter;
+  const currentFilter = locationState?.filter;
+  const prefilledSearchTerm = locationState?.searchTerm;
+  const prefilledHideZeroStock = locationState?.hideZeroStock;
+  const prefilledGroupIdentical = locationState?.groupIdentical;
+  const resetFiltersFromState = locationState?.resetFilters;
+  const returnTo = locationState?.returnTo;
+
+  useEffect(() => {
+    if (typeof prefilledSearchTerm === 'string') {
+      setSearchTerm(prefilledSearchTerm);
+      setActiveFilter(null);
+    }
+  }, [prefilledSearchTerm]);
+
+  useEffect(() => {
+    if (typeof prefilledHideZeroStock === 'boolean') {
+      setHideZeroStock(prefilledHideZeroStock);
+    }
+  }, [prefilledHideZeroStock]);
+
+  useEffect(() => {
+    if (typeof prefilledGroupIdentical === 'boolean') {
+      setGroupIdentical(prefilledGroupIdentical);
+    }
+  }, [prefilledGroupIdentical]);
+
+  useEffect(() => {
+    if (resetFiltersFromState) {
+      setFilters(emptyFilters);
+    }
+  }, [resetFiltersFromState]);
 
   const fetchFilterData = useCallback(async () => {
     try {
@@ -344,7 +387,7 @@ const Materials: React.FC = () => {
     };
   }, [fetchMaterials]);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     if (window.confirm('Material wirklich deaktivieren?')) {
       try {
         await materialAPI.delete(id);
@@ -353,7 +396,7 @@ const Materials: React.FC = () => {
         console.error('Fehler beim Löschen:', error);
       }
     }
-  };
+  }, [fetchMaterials]);
 
   const getStatusChip = (status: string) => {
     switch (status) {
@@ -533,7 +576,7 @@ const Materials: React.FC = () => {
             <Tooltip title="Übersicht anzeigen">
               <IconButton
                 size="small"
-                onClick={() => navigate(`/materials/${params.row.id}`)}
+                onClick={() => navigate(`/materials/${params.row.id}`, returnTo ? { state: { returnTo } } : undefined)}
               >
                 <ViewIcon fontSize="small" />
               </IconButton>
@@ -558,7 +601,7 @@ const Materials: React.FC = () => {
         );
       },
     },
-  ], [groupIdentical, handleRestock, navigate]);
+  ], [groupIdentical, handleDelete, handleRestock, navigate, returnTo]);
 
   // Spalten nach gespeicherter Reihenfolge sortieren
   const columns = useMemo(() => {
