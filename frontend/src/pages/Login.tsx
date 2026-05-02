@@ -20,6 +20,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { consumeForcedLogoutReason, type ForcedLogoutReason } from '../utils/sessionEvents';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forcedLogoutReason, setForcedLogoutReason] = useState<ForcedLogoutReason | null>(null);
   const [loading, setLoading] = useState(false);
   const [isTestEnvironment, setIsTestEnvironment] = useState(false);
 
@@ -40,6 +42,10 @@ const Login: React.FC = () => {
   }, [authLoading, isAuthenticated, navigate]);
 
   // Überprüfe, ob wir in der Test-Umgebung sind
+  useEffect(() => {
+    setForcedLogoutReason(consumeForcedLogoutReason());
+  }, []);
+
   useEffect(() => {
     const checkEnvironment = async () => {
       try {
@@ -78,6 +84,7 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setForcedLogoutReason(null);
 
     if (!username || !password) {
       setError('Bitte füllen Sie alle Felder aus');
@@ -140,6 +147,13 @@ const Login: React.FC = () => {
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
+          </Alert>
+        )}
+
+        {forcedLogoutReason && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {forcedLogoutReason.title && <AlertTitle>{forcedLogoutReason.title}</AlertTitle>}
+            {forcedLogoutReason.message}
           </Alert>
         )}
 

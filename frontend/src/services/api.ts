@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { getDbToken } from '../utils/dbToken';
 import offlineStorage from './offlineStorage';
+import { dispatchForcedLogout } from '../utils/sessionEvents';
 
 // Use relative URL for API calls - nginx will proxy to backend
 const API_BASE_URL = '/api';
@@ -25,6 +26,24 @@ function getCachePrefixesToInvalidate(url?: string): string[] {
 
   const cacheablePrefixes = ['/materials', '/cabinets', '/categories', '/companies', '/units'];
   return cacheablePrefixes.filter(prefix => url.includes(prefix));
+}
+
+function getErrorMessage(error: any): string {
+  return error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Unbekannter Fehler';
+}
+
+function isAuthenticationError(error: any): boolean {
+  return error?.response?.status === 401;
+}
+
+function handleFatalOfflineFailure(message: string): never {
+  dispatchForcedLogout({
+    title: 'Sitzung beendet',
+    message,
+    code: 'offline-cache-failure',
+  });
+
+  throw new Error(message);
 }
 
 // Request Interceptor - Token automatisch hinzufügen
@@ -74,6 +93,15 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
+    if (isAuthenticationError(error)) {
+      dispatchForcedLogout({
+        title: 'Anmeldung abgelaufen',
+        message: 'Ihre Anmeldung oder Datenbank-Sitzung ist nicht mehr gültig. Bitte melden Sie sich erneut an.',
+        code: 'auth',
+      });
+      return Promise.reject(error);
+    }
+
     // Bei Netzwerk-Fehler: Versuche aus Cache zu laden (GET) oder Queue (POST/PUT/DELETE)
     if (!error.response) {
       const config = error.config;
@@ -84,7 +112,14 @@ api.interceptors.response.use(
       if (config.method === 'get') {
         // Versuche gecachte Daten zurückzugeben
         const cacheKey = config.url;
-        const cachedData = await offlineStorage.getCachedData(cacheKey);
+        let cachedData = null;
+
+        try {
+          cachedData = await offlineStorage.getCachedData(cacheKey);
+        } catch (cacheError) {
+          console.error('[API] Cache read failed:', cacheError);
+          handleFatalOfflineFailure('Die Verbindung ist unterbrochen und der Offline-Zwischenspeicher ist nicht verfügbar. Sie wurden zur Sicherheit abgemeldet.');
+        }
         
         if (cachedData) {
           console.log('[API] Returning cached data for:', cacheKey);
@@ -98,17 +133,22 @@ api.interceptors.response.use(
         }
       } else if (['post', 'put', 'delete'].includes(config.method || '')) {
         // Änderungen in Queue speichern
-        await offlineStorage.addPendingChange({
-          url: `${API_BASE_URL}${config.url}`,
-          method: config.method?.toUpperCase() || 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': config.headers.Authorization || '',
-            'X-DB-Token': config.headers['X-DB-Token'] || '',
-            'X-Idempotency-Key': config.headers['X-Idempotency-Key'] || createIdempotencyKey()
-          },
-          body: config.data || ''
-        });
+        try {
+          await offlineStorage.addPendingChange({
+            url: `${API_BASE_URL}${config.url}`,
+            method: config.method?.toUpperCase() || 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': config.headers.Authorization || '',
+              'X-DB-Token': config.headers['X-DB-Token'] || '',
+              'X-Idempotency-Key': config.headers['X-Idempotency-Key'] || createIdempotencyKey()
+            },
+            body: config.data || ''
+          });
+        } catch (queueError) {
+          console.error('[API] Offline queue failed:', queueError);
+          handleFatalOfflineFailure('Die Serververbindung ist unterbrochen und die Offline-Speicherung ist fehlgeschlagen. Sie wurden zur Sicherheit abgemeldet, damit keine Scans verloren gehen.');
+        }
         
         // Erfolg simulieren für Offline-Betrieb
         return {
@@ -125,7 +165,17 @@ api.interceptors.response.use(
       }
     }
     
+    const errorMessage = getErrorMessage(error);
     console.error('API Error:', error.response?.data || error.message);
+
+    if (error?.response?.status === 500 && /datenbank|database|db/i.test(errorMessage)) {
+      dispatchForcedLogout({
+        title: 'Datenbankverbindung verloren',
+        message: 'Die Datenbankverbindung ist fehlgeschlagen. Bitte melden Sie sich erneut an, bevor Sie weitere Scans durchführen.',
+        code: 'db-connection',
+      });
+    }
+
     return Promise.reject(error);
   }
 );

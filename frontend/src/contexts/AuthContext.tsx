@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import axios from 'axios';
+import { clearDbToken } from '../utils/dbToken';
+import { FORCE_LOGOUT_EVENT, type ForcedLogoutReason, persistForcedLogoutReason } from '../utils/sessionEvents';
 
 interface User {
   id: number;
@@ -45,6 +47,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
 
+  const clearSession = (reason?: ForcedLogoutReason) => {
+    if (reason) {
+      persistForcedLogoutReason(reason);
+    }
+
+    localStorage.removeItem('token');
+    localStorage.removeItem('pendingChanges');
+    clearDbToken();
+    setToken(null);
+    setUser(null);
+  };
+
   // Axios Interceptor für automatisches Token-Hinzufügen
   useEffect(() => {
     const requestInterceptor = axios.interceptors.request.use(
@@ -63,9 +77,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       (error) => {
         if (error.response?.status === 401) {
           // Token ungültig - automatisch ausloggen
-          localStorage.removeItem('token');
-          setToken(null);
-          setUser(null);
+          clearSession({
+            title: 'Anmeldung abgelaufen',
+            message: 'Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.',
+            code: 'auth',
+          });
           // Nur redirect wenn nicht bereits auf Login-Seite
           if (!window.location.pathname.includes('/login')) {
             window.location.href = '/login';
@@ -79,6 +95,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       axios.interceptors.request.eject(requestInterceptor);
       axios.interceptors.response.eject(responseInterceptor);
     };
+  }, []);
+
+  useEffect(() => {
+    const handleForcedLogout = (event: Event) => {
+      const customEvent = event as CustomEvent<ForcedLogoutReason>;
+      clearSession(customEvent.detail);
+
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    };
+
+    window.addEventListener(FORCE_LOGOUT_EVENT, handleForcedLogout as EventListener);
+    return () => window.removeEventListener(FORCE_LOGOUT_EVENT, handleForcedLogout as EventListener);
   }, []);
 
   // User-Daten laden beim Start
@@ -110,9 +140,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } catch (error: any) {
         console.error('[Auth] Fehler beim Laden des Benutzers:', error.message);
         // Bei Fehler oder Timeout: Token löschen und zum Login
-        localStorage.removeItem('token');
-        setToken(null);
-        setUser(null);
+        clearSession();
       } finally {
         setLoading(false);
         setAuthChecked(true);
@@ -141,9 +169,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Logout-Fehler:', error);
     } finally {
-      localStorage.removeItem('token');
-      setToken(null);
-      setUser(null);
+      clearSession();
     }
   };
 
