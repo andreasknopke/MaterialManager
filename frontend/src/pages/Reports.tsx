@@ -159,9 +159,9 @@ const Reports: React.FC = () => {
       headerName: 'Bezeichnung',
       width: 250,
       renderCell: (params) => {
-        const id = params.row.id;
-        if (id) {
-          return <Link to={`/materials/${id}`} style={{ textDecoration: 'none', color: 'inherit' }}>{params.value}</Link>;
+        const gtin = params.row.gtin;
+        if (gtin) {
+          return <Link to={`/materials/${gtin}`} style={{ textDecoration: 'none', color: 'inherit' }}>{params.value}</Link>;
         }
         return <span>{params.value}</span>;
       },
@@ -192,9 +192,9 @@ const Reports: React.FC = () => {
       headerName: 'Bezeichnung',
       width: 250,
       renderCell: (params) => {
-        const id = params.row.id;
-        if (id) {
-          return <Link to={`/materials/${id}`} style={{ textDecoration: 'none', color: 'inherit' }}>{params.value}</Link>;
+        const gtin = params.row.gtin;
+        if (gtin) {
+          return <Link to={`/materials/${gtin}`} style={{ textDecoration: 'none', color: 'inherit' }}>{params.value}</Link>;
         }
         return <span>{params.value}</span>;
       },
