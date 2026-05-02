@@ -41,10 +41,126 @@ import {
 } from '@mui/icons-material';
 import { barcodeAPI, materialAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode, GS1Data } from '../utils/gs1Parser';
-import { BrowserMultiFormatReader, DecodeHintType } from '@zxing/library';
+import { BrowserMultiFormatReader, BarcodeFormat as ZXingBarcodeFormat, DecodeHintType } from '@zxing/library';
+import { prepareZXingModule, readBarcodes, type ReaderOptions, type ReadInputBarcodeFormat } from 'zxing-wasm/reader';
 import Tesseract from 'tesseract.js';
 import { getScannerSettings } from './Admin';
 import { getInterventionSession, addInterventionItem } from './Dashboard';
+
+type ScanContextState = {
+  scanPatientBarcode?: boolean;
+  scanCabinet?: boolean;
+  assumeGS1?: boolean;
+};
+
+const getZXingJsFormats = (scanContext: ScanContextState | null) => {
+  if (scanContext?.scanCabinet) {
+    return [ZXingBarcodeFormat.QR_CODE];
+  }
+
+  if (scanContext?.scanPatientBarcode) {
+    return [ZXingBarcodeFormat.QR_CODE, ZXingBarcodeFormat.CODE_128];
+  }
+
+  return [
+    ZXingBarcodeFormat.CODE_128,
+    ZXingBarcodeFormat.DATA_MATRIX,
+    ZXingBarcodeFormat.QR_CODE,
+    ZXingBarcodeFormat.EAN_13,
+    ZXingBarcodeFormat.EAN_8,
+  ];
+};
+
+const getWasmReaderOptions = (scanContext: ScanContextState | null): ReaderOptions => {
+  let formats: ReadInputBarcodeFormat[];
+
+  if (scanContext?.scanCabinet) {
+    formats = ['QRCode'];
+  } else if (scanContext?.scanPatientBarcode) {
+    formats = ['QRCode', 'Code128'];
+  } else {
+    formats = ['Code128', 'DataMatrix', 'QRCode', 'EAN-13', 'EAN-8', 'DataBar', 'DataBarExpanded', 'DataBarLimited'];
+  }
+
+  return {
+    formats,
+    maxNumberOfSymbols: 1,
+    tryHarder: true,
+    tryRotate: true,
+    tryInvert: true,
+    tryDownscale: true,
+    textMode: 'HRI',
+  };
+};
+
+const OCR_TIMEOUT_MS = 22000;
+const MAX_OCR_PIXELS = 1400000;
+
+const normalizeOcrDigitSegment = (value: string) => value
+  .replace(/[OoQD]/g, '0')
+  .replace(/[Il|]/g, '1')
+  .replace(/S/g, '5')
+  .replace(/B/g, '8')
+  .replace(/[^0-9]/g, '');
+
+const normalizeOcrAiMarkers = (text: string) => text
+  .replace(/[\uFF08[{]/g, '(')
+  .replace(/[\uFF09\]}]/g, ')')
+  .replace(/\s+/g, '')
+  .replace(/\(O1\)/gi, '(01)')
+  .replace(/\(0I\)/gi, '(01)')
+  .replace(/\(l1\)/gi, '(11)')
+  .replace(/\(I1\)/gi, '(11)')
+  .replace(/\(I7\)/gi, '(17)')
+  .replace(/\(l7\)/gi, '(17)')
+  .replace(/\(1O\)/gi, '(10)')
+  .replace(/\(IO\)/gi, '(10)')
+  .replace(/\(2I\)/gi, '(21)')
+  .replace(/\(Z1\)/gi, '(21)');
+
+const extractGS1FromOcrText = (text: string): string => {
+  const compact = normalizeOcrAiMarkers(text);
+  const gtinMatch = compact.match(/(?:\(01\)|01)([0-9OoQDIl|SB]{14})/);
+
+  if (!gtinMatch) {
+    const fallbackDigits = normalizeOcrDigitSegment(compact);
+    if (fallbackDigits.length >= 16 && fallbackDigits.startsWith('01')) {
+      return `(01)${fallbackDigits.substring(2, 16)}`;
+    }
+    if (fallbackDigits.length === 14) {
+      return `(01)${fallbackDigits}`;
+    }
+    return '';
+  }
+
+  const gtin = normalizeOcrDigitSegment(gtinMatch[1]).substring(0, 14);
+  if (gtin.length !== 14) return '';
+
+  const expiryMatch = compact.match(/(?:\(17\)|17)([0-9OoQDIl|SB]{6})/);
+  const productionMatch = compact.match(/(?:\(11\)|11)([0-9OoQDIl|SB]{6})/);
+  const lotMatch = compact.match(/(?:\(10\)|10)([A-Za-z0-9\-/.]{1,30}?)(?=(?:\(11\)|\(17\)|\(21\)|\(30\)|11|17|21|30|$))/);
+  const serialMatch = compact.match(/(?:\(21\)|21)([A-Za-z0-9\-/.]{1,30}?)(?=(?:\(10\)|\(11\)|\(17\)|\(30\)|10|11|17|30|$))/);
+
+  let result = `(01)${gtin}`;
+  if (productionMatch) {
+    const productionDate = normalizeOcrDigitSegment(productionMatch[1]).substring(0, 6);
+    if (productionDate.length === 6) result += `(11)${productionDate}`;
+  }
+  if (expiryMatch) {
+    const expiryDate = normalizeOcrDigitSegment(expiryMatch[1]).substring(0, 6);
+    if (expiryDate.length === 6) result += `(17)${expiryDate}`;
+  }
+  if (lotMatch) {
+    const lotNumber = lotMatch[1].replace(/[^A-Za-z0-9\-/.]/g, '');
+    if (lotNumber) result += `(10)${lotNumber}`;
+  }
+  if (serialMatch) {
+    const serialNumber = serialMatch[1].replace(/[^A-Za-z0-9\-/.]/g, '');
+    if (serialNumber) result += `(21)${serialNumber}`;
+  }
+
+  return result;
+};
 
 const BarcodeScanner: React.FC = () => {
   const navigate = useNavigate();
@@ -65,6 +181,7 @@ const BarcodeScanner: React.FC = () => {
   const handscannerInputRef = useRef<HTMLInputElement>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  const ocrWorkerRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanLoopRef = useRef<boolean>(false);
   
@@ -305,18 +422,20 @@ const BarcodeScanner: React.FC = () => {
             if (scanModeRef.current === 'barcode') {
               // Prüfe ob GS1-Modus aktiviert werden soll
               // GS1 ist Standard für Material-Scans, aber deaktiviert für Patienten-ID und Schrank-QR
-              const locState = location.state as { 
-                scanPatientBarcode?: boolean; 
-                scanCabinet?: boolean;
-                assumeGS1?: boolean;
-              } | null;
+              const locState = location.state as ScanContextState | null;
               
               // GS1-Modus: aktiviert außer bei Patienten-Barcode oder Schrank-QR-Scan
               const shouldAssumeGS1 = locState?.assumeGS1 !== false && 
                                       !locState?.scanPatientBarcode && 
                                       !locState?.scanCabinet;
               
+              const wasmReaderOptions = getWasmReaderOptions(locState);
               const hints = new Map();
+              const possibleFormats = getZXingJsFormats(locState);
+              hints.set(DecodeHintType.POSSIBLE_FORMATS, possibleFormats);
+              console.log('Aktive Barcode-Formate:', possibleFormats);
+              console.log('Aktive WASM-Barcode-Formate:', wasmReaderOptions.formats);
+
               if (shouldAssumeGS1) {
                 hints.set(DecodeHintType.ASSUME_GS1, true);
                 console.log('GS1-Modus aktiviert (Material-Scan)');
@@ -326,9 +445,13 @@ const BarcodeScanner: React.FC = () => {
               
               const codeReader = new BrowserMultiFormatReader(hints);
               codeReaderRef.current = codeReader;
+              Promise.resolve(prepareZXingModule({ fireImmediately: true })).catch((err) => {
+                console.warn('WASM-Scanner konnte nicht vorab geladen werden, Fallback bleibt aktiv:', err);
+              });
               
               console.log('Starte Barcode-Erkennung...');
               scanLoopRef.current = true;
+              let scanAttempt = 0;
               
               // Canvas für Scan-Bereich-Ausschnitt erstellen
               const cropCanvas = document.createElement('canvas');
@@ -362,24 +485,44 @@ const BarcodeScanner: React.FC = () => {
                     );
                   }
                   
-                  // ZXing auf dem zugeschnittenen Canvas scannen (als ImageData)
-                  // Canvas zu Data-URL konvertieren für ZXing (JPEG ist schneller als PNG)
-                  const imageUrl = cropCanvas.toDataURL('image/jpeg', 0.8);
-                  
-                  let result;
+                  const imageData = cropCtx?.getImageData(0, 0, scanAreaWidth, scanAreaHeight);
+                  scanAttempt += 1;
+
+                  let scannedCode = '';
+                  let scannedFormat: unknown = '';
+
                   try {
-                    result = await codeReader.decodeFromImageUrl(imageUrl);
-                  } catch (err: any) {
-                    // NotFoundException ist normal beim Scannen - ignorieren
-                    if (err.name !== 'NotFoundException') {
-                      throw err;
+                    if (imageData) {
+                      const wasmResults = await readBarcodes(imageData, wasmReaderOptions);
+                      const wasmResult = wasmResults.find(item => item.isValid && item.text);
+                      if (wasmResult) {
+                        scannedCode = wasmResult.text;
+                        scannedFormat = wasmResult.format;
+                      }
+                    }
+                  } catch (err) {
+                    console.warn('WASM-Scan fehlgeschlagen, nutze bei Bedarf Fallback:', err);
+                  }
+
+                  if (!scannedCode && scanAttempt % 6 === 0) {
+                    try {
+                      const imageUrl = cropCanvas.toDataURL('image/jpeg', 0.8);
+                      const fallbackResult = await codeReader.decodeFromImageUrl(imageUrl);
+                      if (fallbackResult) {
+                        scannedCode = fallbackResult.getText();
+                        scannedFormat = fallbackResult.getBarcodeFormat();
+                      }
+                    } catch (err: any) {
+                      // NotFoundException ist normal beim Scannen - ignorieren
+                      if (err.name !== 'NotFoundException') {
+                        throw err;
+                      }
                     }
                   }
                   
-                  if (result) {
-                    const scannedCode = result.getText();
+                  if (scannedCode) {
                     console.log('✓ Barcode gescannt:', scannedCode);
-                    console.log('Format:', result.getBarcodeFormat());
+                    console.log('Format:', scannedFormat);
                     
                     // Grüne Linie anzeigen bei Erkennung
                     setScanLineColor('green');
@@ -760,8 +903,10 @@ const BarcodeScanner: React.FC = () => {
         scale: { scaleX, scaleY }
       });
       
-      // Für bessere OCR: Bild hochskalieren (mindestens 2x, ideal 3x für kleine Texte)
-      const scaleFactor = Math.max(2, Math.min(4, 600 / cropHeight)); // Ziel: ~600px Höhe
+      // Für bessere OCR: Bild hochskalieren, aber auf iPad/Safari Canvas-/OCR-Kosten begrenzen
+      const desiredScale = Math.max(2, Math.min(4, 520 / cropHeight));
+      const maxPixelScale = Math.sqrt(MAX_OCR_PIXELS / Math.max(1, cropWidth * cropHeight));
+      const scaleFactor = Math.max(1.5, Math.min(desiredScale, maxPixelScale));
       const targetWidth = Math.round(cropWidth * scaleFactor);
       const targetHeight = Math.round(cropHeight * scaleFactor);
       
@@ -782,60 +927,82 @@ const BarcodeScanner: React.FC = () => {
       // Ausschnitt zeichnen und hochskalieren
       ctx.drawImage(img, cropX, cropY, cropWidth, cropHeight, 0, 0, targetWidth, targetHeight);
       
-      // Bildverarbeitung: Kontrast erhöhen und Schwarz/Weiß-Konvertierung
+      // Bildverarbeitung: Kontrast erhöhen und binarisieren
       const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
       const data = imageData.data;
       
-      // Berechne Histogram für adaptive Schwellwert
+      // Berechne Luminanzbereich und Durchschnitt für robuste Schwellwertbildung
       let minLum = 255, maxLum = 0;
+      let totalLum = 0;
       for (let i = 0; i < data.length; i += 4) {
         const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
         if (lum < minLum) minLum = lum;
         if (lum > maxLum) maxLum = lum;
+        totalLum += lum;
       }
       
-      // Kontrast stretchen und leicht aufhellen
+      const avgLum = totalLum / Math.max(1, data.length / 4);
       const range = maxLum - minLum || 1;
+      const threshold = Math.max(80, Math.min(190, avgLum));
+
       for (let i = 0; i < data.length; i += 4) {
-        // Luminanz berechnen
         const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        
-        // Kontrast stretchen (0-255)
         let newLum = ((lum - minLum) / range) * 255;
-        
-        // Leichte Gammakorrektion für besseren Kontrast
         newLum = Math.pow(newLum / 255, 0.8) * 255;
-        
-        // Grayscale mit erhöhtem Kontrast
+
+        // Bei ausreichend Kontrast harte Schwarz/Weiß-Kanten erzeugen; sonst Graustufen behalten
+        if (range > 45) {
+          newLum = lum < threshold ? 0 : 255;
+        }
+
         data[i] = newLum;     // R
         data[i + 1] = newLum; // G
         data[i + 2] = newLum; // B
-        // Alpha bleibt
       }
       
       ctx.putImageData(imageData, 0, 0);
       
       console.log('OCR Canvas erstellt:', targetWidth, 'x', targetHeight, '(skaliert von', cropWidth, 'x', cropHeight, ')');
       
-      // OCR durchführen mit optimierten Einstellungen
-      const worker = await Tesseract.createWorker('eng', undefined, {
-        logger: (m) => {
-          if (m.status === 'recognizing text') {
-            setOcrProgress(Math.round(m.progress * 100));
-          }
-        },
-      });
-      
-      // PSM 6 = Uniform block of text - für mehrzeilige GS1-Codes
-      // PSM 7 = Single line - nur wenn wirklich eine Zeile
-      await worker.setParameters({
-        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz()-/. ',
-        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK, // PSM 6 = Uniform block (mehrzeilig)
-        preserve_interword_spaces: '0',
-      });
-      
-      const result = await worker.recognize(canvas);
-      await worker.terminate();
+      let worker: any = null;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      let result: any;
+
+      try {
+        worker = await Tesseract.createWorker('eng', undefined, {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              setOcrProgress(Math.round(m.progress * 100));
+            }
+          },
+        });
+        ocrWorkerRef.current = worker;
+
+        await worker.setParameters({
+          tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz()-/. ',
+          tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+          preserve_interword_spaces: '0',
+        });
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('OCR_TIMEOUT')), OCR_TIMEOUT_MS);
+        });
+
+        result = await Promise.race([
+          worker.recognize(canvas),
+          timeoutPromise,
+        ]);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (worker) {
+          await worker.terminate().catch((terminateErr: unknown) => {
+            console.warn('OCR-Worker konnte nicht sauber beendet werden:', terminateErr);
+          });
+        }
+        if (ocrWorkerRef.current === worker) {
+          ocrWorkerRef.current = null;
+        }
+      }
       
       // Roher erkannter Text
       let recognizedText = result.data.text.trim();
@@ -851,13 +1018,16 @@ const BarcodeScanner: React.FC = () => {
         setSelectedOcrText(recognizedText);
         setSuccess(`Text erkannt (${Math.round(result.data.confidence)}% sicher): "${recognizedText.substring(0, 50)}${recognizedText.length > 50 ? '...' : ''}"`);
       } else {
-        setError('Kein Text im ausgewählten Bereich erkannt. Versuchen Sie einen größeren Bereich oder bessere Beleuchtung.');
+        setError('Kein GS1/GTIN-Text erkannt. Bitte einen größeren Bereich inklusive (01)/(17)/(10) markieren.');
       }
     } catch (err: any) {
       console.error('OCR Fehler:', err);
-      setError('OCR-Erkennung fehlgeschlagen: ' + err.message);
+      setError(err.message === 'OCR_TIMEOUT'
+        ? 'OCR hat zu lange gedauert und wurde abgebrochen. Bitte kleineren Textbereich markieren.'
+        : 'OCR-Erkennung fehlgeschlagen: ' + err.message);
     } finally {
       setOcrLoading(false);
+      setOcrProgress(0);
     }
   };
 
@@ -907,6 +1077,12 @@ const BarcodeScanner: React.FC = () => {
     // Entferne Sequenzen von 3+ ähnlichen Zeichen die wie Barcode-Striche aussehen
     text = text.replace(/[|Il1]{3,}/g, '');
     text = text.replace(/[!|]{3,}/g, '');
+
+    const extractedGS1 = extractGS1FromOcrText(text);
+    if (extractedGS1) {
+      console.log('cleanOcrForGS1: GS1 extrahiert:', { original: text, extractedGS1 });
+      return extractedGS1;
+    }
     
     // 2. Zeilen extrahieren und filtern
     const lines = text.split(/[\r\n]+/).map(line => line.trim()).filter(line => line.length > 0);
@@ -935,6 +1111,7 @@ const BarcodeScanner: React.FC = () => {
     
     // 5. Leerzeichen und unnötige Zeichen entfernen
     result = result.replace(/\s+/g, '');
+    result = extractGS1FromOcrText(result) || result;
     
     // 6. Häufige OCR-Fehler korrigieren
     // O -> 0 in Zahlenkontext (aber nicht in LOT-Nummern nach (10))
@@ -1021,6 +1198,12 @@ const BarcodeScanner: React.FC = () => {
   // OCR zurücksetzen und neu aufnehmen
   const resetOcr = async () => {
     console.log('resetOcr called');
+    if (ocrWorkerRef.current) {
+      await ocrWorkerRef.current.terminate().catch((err: unknown) => {
+        console.warn('OCR-Worker konnte beim Zurücksetzen nicht beendet werden:', err);
+      });
+      ocrWorkerRef.current = null;
+    }
     setOcrFrozen(false);
     setSelectionRect(null);
     setSelectedOcrText('');
