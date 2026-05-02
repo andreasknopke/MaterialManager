@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { materialAPI } from '../services/api';
+import { Link } from 'react-router-dom';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -94,7 +95,18 @@ const Reports: React.FC = () => {
 
   const lowStockProductColumns: GridColDef[] = [
     { field: 'gtin', headerName: 'GTIN', width: 140 },
-    { field: 'name', headerName: 'Produkt', width: 250 },
+    {
+      field: 'name',
+      headerName: 'Produkt',
+      width: 250,
+      renderCell: (params) => {
+        const productId = params.row.product_id;
+        if (productId) {
+          return <Link to={`/materials/${productId}`} style={{ textDecoration: 'none', color: 'inherit' }}>{params.value}</Link>;
+        }
+        return <span>{params.value}</span>;
+      },
+    },
     { field: 'category_name', headerName: 'Kategorie', width: 150 },
     { field: 'company_name', headerName: 'Firma', width: 130 },
     { field: 'total_stock', headerName: 'Bestand', width: 100, type: 'number' },
@@ -142,7 +154,18 @@ const Reports: React.FC = () => {
 
   const expiringColumns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'name', headerName: 'Bezeichnung', width: 250 },
+    {
+      field: 'name',
+      headerName: 'Bezeichnung',
+      width: 250,
+      renderCell: (params) => {
+        const id = params.row.id;
+        if (id) {
+          return <Link to={`/materials/${id}`} style={{ textDecoration: 'none', color: 'inherit' }}>{params.value}</Link>;
+        }
+        return <span>{params.value}</span>;
+      },
+    },
     { field: 'category_name', headerName: 'Kategorie', width: 150 },
     { field: 'company_name', headerName: 'Firma', width: 150 },
     {
@@ -164,7 +187,18 @@ const Reports: React.FC = () => {
 
   const inactiveColumns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
-    { field: 'name', headerName: 'Bezeichnung', width: 250 },
+    {
+      field: 'name',
+      headerName: 'Bezeichnung',
+      width: 250,
+      renderCell: (params) => {
+        const id = params.row.id;
+        if (id) {
+          return <Link to={`/materials/${id}`} style={{ textDecoration: 'none', color: 'inherit' }}>{params.value}</Link>;
+        }
+        return <span>{params.value}</span>;
+      },
+    },
     { field: 'article_number', headerName: 'Artikelnummer', width: 140 },
     { field: 'lot_number', headerName: 'LOT', width: 120 },
     { field: 'category_name', headerName: 'Kategorie', width: 150 },
