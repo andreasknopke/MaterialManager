@@ -425,7 +425,7 @@ router.get('/', async (req: Request, res: Response) => {
         p.description,
         p.size,
         COALESCE(last_material.unit, 'Stück') AS unit,
-        COALESCE(p.min_stock, last_material.min_stock, 0) AS min_stock,
+        COALESCE(last_material.min_stock, 0) AS min_stock,
         0 AS current_stock,
         NULL AS expiry_date,
         NULL AS lot_number,
@@ -440,7 +440,7 @@ router.get('/', async (req: Request, res: Response) => {
         NULL AS cabinet_location,
         NULL AS compartment_name,
         CASE
-          WHEN COALESCE(p.min_stock, last_material.min_stock, 0) > 0 THEN 'LOW'
+          WHEN COALESCE(last_material.min_stock, 0) > 0 THEN 'LOW'
           ELSE 'OK'
         END AS stock_status,
         p.shape_id,
@@ -1348,8 +1348,8 @@ router.get('/reports/counts', async (req: Request, res: Response) => {
     
     productQuery += `
         GROUP BY p.id
-        HAVING COALESCE(p.min_stock, MAX(m.min_stock), 0) > 0 
-           AND COALESCE(SUM(m.current_stock), 0) < COALESCE(p.min_stock, MAX(m.min_stock), 0)
+        HAVING MAX(COALESCE(m.min_stock, 0)) > 0
+          AND COALESCE(SUM(m.current_stock), 0) < MAX(COALESCE(m.min_stock, 0))
       ) AS low_stock_products
     `;
     
@@ -1470,7 +1470,7 @@ router.get('/reports/low-stock', async (req: Request, res: Response) => {
         p.id AS product_id,
         p.gtin,
         p.name,
-        COALESCE(p.min_stock, MAX(m.min_stock), 0) AS min_stock,
+        MAX(COALESCE(m.min_stock, 0)) AS min_stock,
         SUM(m.current_stock) AS total_stock,
         COUNT(m.id) AS lot_count,
         c.name AS category_name,
@@ -1493,10 +1493,10 @@ router.get('/reports/low-stock', async (req: Request, res: Response) => {
     }
     
     productQuery += `
-      GROUP BY p.id, p.gtin, p.name, p.min_stock, c.name, co.name
-      HAVING COALESCE(p.min_stock, MAX(m.min_stock), 0) > 0 
-         AND COALESCE(SUM(m.current_stock), 0) < COALESCE(p.min_stock, MAX(m.min_stock), 0)
-      ORDER BY (COALESCE(SUM(m.current_stock), 0) - COALESCE(p.min_stock, MAX(m.min_stock), 0)) ASC
+      GROUP BY p.id, p.gtin, p.name, c.name, co.name
+      HAVING MAX(COALESCE(m.min_stock, 0)) > 0
+        AND COALESCE(SUM(m.current_stock), 0) < MAX(COALESCE(m.min_stock, 0))
+      ORDER BY (COALESCE(SUM(m.current_stock), 0) - MAX(COALESCE(m.min_stock, 0))) ASC
     `;
     
     console.log('[REPORTS] Low stock products query, params:', productParams);

@@ -36,6 +36,20 @@ function isAuthenticationError(error: any): boolean {
   return error?.response?.status === 401;
 }
 
+function isFatalDatabaseConnectionError(error: any): boolean {
+  if (error?.response?.status !== 500) {
+    return false;
+  }
+
+  const errorCode = String(error?.response?.data?.code || '').toLowerCase();
+  const errorMessage = getErrorMessage(error).toLowerCase();
+
+  return (
+    /db[-_ ]?connection|database[-_ ]?connection|connection[-_ ]?lost|connection[-_ ]?refused|too many connections|cannot enqueue|pool is closed/i.test(errorCode) ||
+    /datenbankverbindung|database connection|connection lost|connection refused|too many connections|pool is closed|server has gone away/i.test(errorMessage)
+  );
+}
+
 function handleFatalOfflineFailure(message: string): never {
   dispatchForcedLogout({
     title: 'Sitzung beendet',
@@ -168,7 +182,7 @@ api.interceptors.response.use(
     const errorMessage = getErrorMessage(error);
     console.error('API Error:', error.response?.data || error.message);
 
-    if (error?.response?.status === 500 && /datenbank|database|db/i.test(errorMessage)) {
+    if (isFatalDatabaseConnectionError(error)) {
       dispatchForcedLogout({
         title: 'Datenbankverbindung verloren',
         message: 'Die Datenbankverbindung ist fehlgeschlagen. Bitte melden Sie sich erneut an, bevor Sie weitere Scans durchführen.',
