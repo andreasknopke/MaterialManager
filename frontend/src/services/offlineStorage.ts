@@ -1,3 +1,6 @@
+import { getDbToken } from '../utils/dbToken';
+import { dispatchForcedLogout } from '../utils/sessionEvents';
+
 /**
  * Offline Storage Service
  * Verwendet IndexedDB für persistente Speicherung von Offline-Änderungen
@@ -17,6 +20,7 @@ class OfflineStorageService {
   private db: IDBDatabase | null = null;
   private isOnline: boolean = navigator.onLine;
   private syncInProgress: boolean = false;
+  private serviceWorkerReloading: boolean = false;
   private listeners: Set<(isOnline: boolean) => void> = new Set();
 
   constructor() {
@@ -94,6 +98,13 @@ class OfflineStorageService {
 
     // Service Worker Messages
     if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (this.serviceWorkerReloading) return;
+
+        this.serviceWorkerReloading = true;
+        window.location.reload();
+      });
+
       navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data.type === 'OFFLINE_REQUEST') {
           this.addPendingChange(event.data.payload);
@@ -311,7 +322,7 @@ class OfflineStorageService {
         try {
           const response = await fetch(change.url, {
             method: change.method,
-            headers: change.headers,
+            headers: this.getFreshRequestHeaders(change.headers),
             body: change.body
           });
 
@@ -332,6 +343,17 @@ class OfflineStorageService {
 
             await this.logSync(change, status, errorText || `HTTP ${response.status}`);
             failed++;
+
+            if (this.isFatalSyncFailure(response.status, errorText)) {
+              dispatchForcedLogout({
+                title: response.status === 401 ? 'Anmeldung abgelaufen' : 'Datenbankverbindung verloren',
+                message: response.status === 401
+                  ? 'Die Offline-Synchronisation konnte wegen einer ungültigen Anmeldung nicht durchgeführt werden. Bitte melden Sie sich erneut an.'
+                  : 'Die Offline-Synchronisation konnte wegen eines Datenbankfehlers nicht durchgeführt werden. Bitte melden Sie sich erneut an.',
+                code: response.status === 401 ? 'auth' : 'db-connection'
+              });
+              break;
+            }
           }
         } catch (error) {
           console.error('[OfflineStorage] Sync failed for:', change.type, error);
@@ -356,6 +378,26 @@ class OfflineStorageService {
 
     console.log(`[OfflineStorage] Sync complete: ${success} success, ${failed} failed`);
     return { success, failed };
+  }
+
+  private getFreshRequestHeaders(headers: Record<string, string>): Record<string, string> {
+    const freshHeaders = { ...headers };
+    const authToken = localStorage.getItem('token');
+    const dbToken = getDbToken();
+
+    if (authToken) {
+      freshHeaders.Authorization = `Bearer ${authToken}`;
+    }
+
+    if (dbToken) {
+      freshHeaders['X-DB-Token'] = dbToken;
+    }
+
+    return freshHeaders;
+  }
+
+  private isFatalSyncFailure(status: number, errorText: string): boolean {
+    return status === 401 || (status >= 500 && /datenbank|database|db/i.test(errorText));
   }
 
   private async logSync(change: any, status: string, error?: string): Promise<void> {
@@ -402,10 +444,15 @@ class OfflineStorageService {
 
     try {
       const registration = await navigator.serviceWorker.register('/service-worker.js', {
-        scope: '/'
+        scope: '/',
+        updateViaCache: 'none'
       });
       
       console.log('[OfflineStorage] Service Worker registered:', registration.scope);
+
+      registration.update().catch((error) => {
+        console.warn('[OfflineStorage] Service Worker update check failed:', error);
+      });
 
       // Background Sync registrieren
       if ('sync' in registration) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'material-manager-v1';
+const CACHE_NAME = 'material-manager-v2';
 const OFFLINE_URL = '/offline.html';
 
 // Dateien, die sofort gecacht werden sollen (App Shell)
@@ -56,13 +56,9 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Nur GET-Requests cachen
+  // Nicht-GET-Requests nicht im Service Worker als Erfolg simulieren.
+  // Der Axios-Client queued Änderungen selbst und kann dabei prüfen, ob IndexedDB wirklich funktioniert.
   if (request.method !== 'GET') {
-    // POST/PUT/DELETE Requests bei Offline in IndexedDB speichern
-    if (!navigator.onLine && (request.method === 'POST' || request.method === 'PUT' || request.method === 'DELETE')) {
-      event.respondWith(handleOfflineRequest(request));
-      return;
-    }
     return;
   }
 
@@ -72,9 +68,36 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static Assets: Cache-first mit Network-Fallback
+  // Navigation und update-kritische Dateien: Network-first, damit iPad-PWAs nach Redeploy aktualisieren
+  if (request.mode === 'navigate' || ['/', '/index.html', '/service-worker.js', '/manifest.json', '/config.js'].includes(url.pathname)) {
+    event.respondWith(networkFirstStatic(request));
+    return;
+  }
+
+  // Static Assets mit Hash im Dateinamen: Cache-first mit Network-Fallback
   event.respondWith(cacheFirstWithNetwork(request));
 });
+
+async function networkFirstStatic(request) {
+  const cache = await caches.open(CACHE_NAME);
+
+  try {
+    const networkResponse = await fetch(request, { cache: 'no-store' });
+    if (networkResponse.ok) {
+      cache.put(request, networkResponse.clone());
+    }
+    return networkResponse;
+  } catch (error) {
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) return cachedResponse;
+
+    if (request.mode === 'navigate') {
+      return cache.match(OFFLINE_URL);
+    }
+
+    throw error;
+  }
+}
 
 // Network-first Strategie für API-Calls
 async function networkFirstWithCache(request) {
@@ -151,36 +174,6 @@ async function cacheFirstWithNetwork(request) {
 // Prüfen ob API-Route gecacht werden soll
 function isCacheableApiRoute(url) {
   return CACHEABLE_API_ROUTES.some(route => url.includes(route));
-}
-
-// Offline-Requests in IndexedDB speichern für spätere Sync
-async function handleOfflineRequest(request) {
-  const body = await request.clone().text();
-  const offlineRequest = {
-    url: request.url,
-    method: request.method,
-    headers: Object.fromEntries(request.headers.entries()),
-    body: body,
-    timestamp: Date.now()
-  };
-
-  // An Client senden zum Speichern in IndexedDB
-  const clients = await self.clients.matchAll();
-  clients.forEach(client => {
-    client.postMessage({
-      type: 'OFFLINE_REQUEST',
-      payload: offlineRequest
-    });
-  });
-
-  return new Response(JSON.stringify({ 
-    message: 'Änderung wird gespeichert und bei Verbindung synchronisiert',
-    offline: true,
-    queued: true
-  }), {
-    status: 202, // Accepted
-    headers: { 'Content-Type': 'application/json' }
-  });
 }
 
 // Background Sync für Offline-Änderungen
