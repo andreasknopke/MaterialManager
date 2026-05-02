@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
@@ -43,14 +43,38 @@ const AppLoadingFallback = () => (
 );
 
 function App() {
+  const [isBootstrapped, setIsBootstrapped] = useState(false);
+
   // Bei App-Start: DB-Token aus IndexedDB laden und aus URL extrahieren
   useEffect(() => {
-    // Zuerst IndexedDB mit localStorage synchronisieren (für PWA)
-    syncDbTokenFromIndexedDB().then(() => {
-      // Dann prüfen ob Token in URL vorhanden
-      extractAndSaveDbTokenFromUrl();
-    });
+    let isMounted = true;
+
+    const bootstrap = async () => {
+      try {
+        // Zuerst IndexedDB mit localStorage synchronisieren (für PWA)
+        await syncDbTokenFromIndexedDB();
+
+        // Dann prüfen ob Token in URL vorhanden
+        extractAndSaveDbTokenFromUrl();
+      } catch (error) {
+        console.error('[App] DB-Token-Initialisierung fehlgeschlagen:', error);
+      } finally {
+        if (isMounted) {
+          setIsBootstrapped(true);
+        }
+      }
+    };
+
+    bootstrap();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  if (!isBootstrapped) {
+    return <AppLoadingFallback />;
+  }
 
   return (
     <AuthProvider>
