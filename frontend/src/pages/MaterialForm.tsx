@@ -1388,7 +1388,8 @@ const MaterialForm: React.FC = () => {
                 multiline
                 minRows={2}
                 label="Alternative/verknüpfte GTINs"
-                value={formData.alternative_gtins}
+                size="small"
+              value={formData.alternative_gtins}
                 onChange={handleChange('alternative_gtins')}
                 helperText="Eine GTIN pro Zeile oder durch Komma/Semikolon getrennt, z.B. Packungs- und Einzelprodukt-GTIN"
               />
