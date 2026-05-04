@@ -4,6 +4,7 @@ import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { auditMaterial } from '../utils/auditLogger';
 import { authenticate } from '../middleware/auth';
 import { getDepartmentFilter } from '../utils/departmentFilter';
+import { getAlternativeGtinsForProduct, resolveEquivalentGtins } from '../utils/gtinAliases';
 
 const router = Router();
 
@@ -16,6 +17,12 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
   try {
     const currentPool = getPoolForRequest(req);
     const departmentFilter = getDepartmentFilter(req, 'm');
+    const resolvedGtins = await resolveEquivalentGtins(currentPool, req.params.gtin);
+
+    if (resolvedGtins.gtins.length === 0) {
+      return res.status(404).json({ found: false, message: 'GTIN nicht bekannt' });
+    }
+
     // Zuerst in der products-Tabelle suchen (normalisierte Stammdaten)
     const [products] = await currentPool.query<RowDataPacket[]>(
       `SELECT p.id as product_id, p.gtin, p.name, p.description, p.size,
@@ -26,12 +33,15 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
        FROM products p
        LEFT JOIN companies co ON p.company_id = co.id
        LEFT JOIN shapes s ON p.shape_id = s.id
-       WHERE p.gtin = ?
+       WHERE p.gtin IN (?)
+       ORDER BY p.gtin = ? DESC
        LIMIT 1`,
-      [req.params.gtin]
+      [resolvedGtins.gtins, resolvedGtins.scannedGtin]
     );
     
     if (products.length > 0) {
+      const alternativeGtins = await getAlternativeGtinsForProduct(currentPool, products[0].product_id);
+
       // Produkt gefunden - hole zusätzlich letzte Instanz-Daten (Kategorie, Schrank, etc.)
       let lastMaterialQuery = `SELECT m.category_id, c.name as category_name,
                 m.cabinet_id, cab.name as cabinet_name,
@@ -61,8 +71,13 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
       res.json({
         found: true,
         fromProducts: true,
+        scannedGtin: resolvedGtins.scannedGtin,
+        matchedGtin: products[0].gtin,
+        matchedViaAlias: products[0].gtin !== resolvedGtins.scannedGtin,
         masterData: {
           product_id: products[0].product_id,
+          gtin: products[0].gtin,
+          alternative_gtins: alternativeGtins,
           name: products[0].name,
           description: products[0].description,
           size: products[0].size,
@@ -104,8 +119,8 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
        LEFT JOIN companies co ON m.company_id = co.id
        LEFT JOIN cabinets cab ON m.cabinet_id = cab.id
        LEFT JOIN compartments comp ON m.compartment_id = comp.id
-       WHERE m.article_number = ? AND m.active = TRUE`;
-    const materialParams: any[] = [req.params.gtin];
+       WHERE m.article_number IN (?) AND m.active = TRUE`;
+    const materialParams: any[] = [resolvedGtins.gtins];
 
     if (departmentFilter.whereClause) {
       materialsQuery += ` AND ${departmentFilter.whereClause}`;
@@ -129,7 +144,12 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
     res.json({
       found: true,
       fromProducts: false,
+      scannedGtin: resolvedGtins.scannedGtin,
+      matchedGtin: materials[0].article_number,
+      matchedViaAlias: materials[0].article_number !== resolvedGtins.scannedGtin,
       masterData: {
+        gtin: materials[0].article_number,
+        alternative_gtins: resolvedGtins.gtins.filter(gtin => gtin !== materials[0].article_number),
         name: materials[0].name,
         description: materials[0].description,
         category_id: materials[0].category_id,
@@ -159,6 +179,11 @@ router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
   try {
     const currentPool = getPoolForRequest(req);
     const { lot } = req.query; // Optional: Batch/Lot-Nummer für direkte Suche
+    const resolvedGtins = await resolveEquivalentGtins(currentPool, req.params.gtin);
+
+    if (resolvedGtins.gtins.length === 0) {
+      return res.json({ materials: [], count: 0 });
+    }
     
     let query = `SELECT 
          GROUP_CONCAT(m.id) as material_ids,
@@ -171,6 +196,8 @@ router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
          c.name as cabinet_name,
          m.article_number,
          m.article_number as gtin,
+         ? as scanned_gtin,
+         IF(m.article_number <> ?, TRUE, FALSE) as matched_via_alias,
          cat.name as category_name,
          comp.name as company_name,
          MAX(m.is_consignment) as is_consignment,
@@ -179,9 +206,9 @@ router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
        LEFT JOIN cabinets c ON m.cabinet_id = c.id
        LEFT JOIN categories cat ON m.category_id = cat.id
        LEFT JOIN companies comp ON m.company_id = comp.id
-       WHERE m.article_number = ? AND m.active = TRUE AND m.current_stock > 0`;
+       WHERE m.article_number IN (?) AND m.active = TRUE AND m.current_stock > 0`;
     
-    const params: any[] = [req.params.gtin];
+    const params: any[] = [resolvedGtins.scannedGtin, resolvedGtins.scannedGtin, resolvedGtins.gtins];
     
     // Wenn Batch/Lot angegeben, danach filtern
     if (lot) {
@@ -197,7 +224,10 @@ router.get('/gtin/:gtin/materials', async (req: Request, res: Response) => {
     
     res.json({
       materials: materials,
-      count: materials.length
+      count: materials.length,
+      scannedGtin: resolvedGtins.scannedGtin,
+      resolvedGtins: resolvedGtins.gtins,
+      matchedViaAlias: resolvedGtins.matchedViaAlias
     });
   } catch (error) {
     console.error('Fehler bei der GTIN-Material-Suche:', error);

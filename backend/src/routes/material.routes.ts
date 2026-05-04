@@ -4,6 +4,13 @@ import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { authenticate } from '../middleware/auth';
 import { getDepartmentFilter } from '../utils/departmentFilter';
 import { auditMaterial } from '../utils/auditLogger';
+import {
+  addProductGtinAliases,
+  getAlternativeGtinsForPrimaryGtin,
+  getAlternativeGtinsForProduct,
+  resolveEquivalentGtins,
+  syncProductGtinAliases
+} from '../utils/gtinAliases';
 
 const router = Router();
 const MATERIAL_CREATE_IDEMPOTENCY_ENDPOINT = 'POST:/api/materials';
@@ -152,6 +159,7 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
     
     // Department-Filter
     const departmentFilter = getDepartmentFilter(req, '');
+    const resolvedGtins = await resolveEquivalentGtins(currentPool, gtin);
     
     // === Zuerst in products-Tabelle suchen (normalisierte Stammdaten) ===
     const [products] = await currentPool.query<RowDataPacket[]>(
@@ -161,12 +169,15 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
               p.french_size, p.guidewire_acceptance, p.cost, p.notes
        FROM products p
        LEFT JOIN companies co ON p.company_id = co.id
-       WHERE p.gtin = ?
+       WHERE p.gtin IN (?)
+       ORDER BY p.gtin = ? DESC
        LIMIT 1`,
-      [gtin]
+      [resolvedGtins.gtins, resolvedGtins.scannedGtin]
     );
     
     if (products.length > 0) {
+      const alternativeGtins = await getAlternativeGtinsForProduct(currentPool, products[0].product_id);
+
       // Produkt gefunden - hole letzte Instanz-Daten für Kategorie/Schrank
       let instanceQuery = `
         SELECT m.category_id, c.name as category_name, m.cabinet_id, m.compartment_id,
@@ -189,6 +200,9 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
       return res.json({
         found: true,
         fromProducts: true,
+        scannedGtin: resolvedGtins.scannedGtin,
+        matchedGtin: products[0].gtin,
+        matchedViaAlias: products[0].gtin !== resolvedGtins.scannedGtin,
         template: {
           product_id: products[0].product_id,
           name: products[0].name,
@@ -204,6 +218,7 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
           guidewire_acceptance: products[0].guidewire_acceptance,
           cost: products[0].cost,
           article_number: products[0].gtin,
+          alternative_gtins: alternativeGtins,
           // Instanz-Daten vom letzten Material
           category_id: lastInstance.category_id,
           category_name: lastInstance.category_name,
@@ -223,9 +238,9 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
       FROM materials m
       LEFT JOIN categories c ON m.category_id = c.id
       LEFT JOIN companies co ON m.company_id = co.id
-      WHERE m.article_number = ?
+      WHERE m.article_number IN (?)
     `;
-    const params: any[] = [gtin];
+    const params: any[] = [resolvedGtins.gtins];
     
     if (departmentFilter.whereClause) {
       query += ` AND ${departmentFilter.whereClause.replace('unit_id', 'm.unit_id')}`;
@@ -242,9 +257,14 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
     
     // Gib Template-Daten zurück (ohne unique Felder wie LOT, Verfallsdatum)
     const material = rows[0];
+    const alternativeGtins = await getAlternativeGtinsForPrimaryGtin(currentPool, material.article_number);
+
     res.json({
       found: true,
       fromProducts: false,
+      scannedGtin: resolvedGtins.scannedGtin,
+      matchedGtin: material.article_number,
+      matchedViaAlias: material.article_number !== resolvedGtins.scannedGtin,
       template: {
         name: material.name,
         description: material.description,
@@ -258,6 +278,7 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
         size: material.size,
         unit: material.unit,
         article_number: material.article_number,
+        alternative_gtins: alternativeGtins,
         cost: material.cost,
         location_in_cabinet: material.location_in_cabinet,
         is_consignment: material.is_consignment,
@@ -542,9 +563,17 @@ router.get('/:id', async (req: Request, res: Response) => {
       'SELECT * FROM barcodes WHERE material_id = ?',
       [req.params.id]
     );
+
+    let alternativeGtins: string[] = [];
+    if (materialRows[0].product_id) {
+      alternativeGtins = await getAlternativeGtinsForProduct(currentPool, materialRows[0].product_id);
+    } else if (materialRows[0].article_number) {
+      alternativeGtins = await getAlternativeGtinsForPrimaryGtin(currentPool, materialRows[0].article_number);
+    }
     
     res.json({
       ...materialRows[0],
+      alternative_gtins: alternativeGtins,
       custom_fields: customFields,
       barcodes: barcodes
     });
@@ -594,7 +623,8 @@ router.post('/', async (req: Request, res: Response) => {
     size, unit, min_stock, current_stock, expiry_date,
     lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes,
     custom_fields, barcodes, unit_id, is_consignment,
-    shape_id, shaft_length, device_length, device_diameter, french_size, guidewire_acceptance
+    shape_id, shaft_length, device_length, device_diameter, french_size, guidewire_acceptance,
+    alternative_gtins
   } = req.body;
   
   if (!name) {
@@ -666,6 +696,10 @@ router.post('/', async (req: Request, res: Response) => {
         console.log(`Neues Produkt erstellt (ID: ${productId}) für GTIN: ${article_number}`);
       } else {
         console.log(`Bestehendes Produkt gefunden (ID: ${productId}) für GTIN: ${article_number}`);
+      }
+
+      if (alternative_gtins !== undefined) {
+        await addProductGtinAliases(connection, productId, article_number, alternative_gtins);
       }
     }
     
@@ -759,7 +793,8 @@ router.put('/:id', async (req: Request, res: Response) => {
     category_id, company_id, cabinet_id, compartment_id, unit_id, name, description,
     size, unit, min_stock, expiry_date,
     lot_number, article_number, cost, location_in_cabinet, shipping_container_code, notes, active, is_consignment,
-    shape_id, shaft_length, device_length, device_diameter, french_size, guidewire_acceptance
+    shape_id, shaft_length, device_length, device_diameter, french_size, guidewire_acceptance,
+    alternative_gtins
   } = req.body;
   
   try {
@@ -853,6 +888,10 @@ router.put('/:id', async (req: Request, res: Response) => {
           'UPDATE materials SET product_id = ? WHERE id = ? AND product_id IS NULL',
           [existingProduct[0].id, req.params.id]
         );
+
+        if (Object.prototype.hasOwnProperty.call(req.body, 'alternative_gtins')) {
+          await syncProductGtinAliases(currentPool, existingProduct[0].id, article_number, alternative_gtins);
+        }
       }
     }
     

@@ -59,7 +59,19 @@ const getZXingJsFormats = (scanContext: ScanContextState | null) => {
   }
 
   if (scanContext?.scanPatientBarcode) {
-    return [ZXingBarcodeFormat.QR_CODE, ZXingBarcodeFormat.CODE_128];
+    return [
+      ZXingBarcodeFormat.QR_CODE,
+      ZXingBarcodeFormat.CODE_128,
+      ZXingBarcodeFormat.CODE_39,
+      ZXingBarcodeFormat.CODE_93,
+      ZXingBarcodeFormat.CODABAR,
+      ZXingBarcodeFormat.ITF,
+      ZXingBarcodeFormat.PDF_417,
+      ZXingBarcodeFormat.EAN_13,
+      ZXingBarcodeFormat.EAN_8,
+      ZXingBarcodeFormat.UPC_A,
+      ZXingBarcodeFormat.UPC_E,
+    ];
   }
 
   return [
@@ -77,7 +89,7 @@ const getWasmReaderOptions = (scanContext: ScanContextState | null): ReaderOptio
   if (scanContext?.scanCabinet) {
     formats = ['QRCode'];
   } else if (scanContext?.scanPatientBarcode) {
-    formats = ['QRCode', 'Code128'];
+    formats = ['QRCode', 'Code128', 'Code39', 'Code93', 'Codabar', 'ITF', 'PDF417', 'EAN-13', 'EAN-8', 'UPC-A', 'UPC-E'];
   } else {
     formats = ['Code128', 'DataMatrix', 'QRCode', 'EAN-13', 'EAN-8', 'DataBar', 'DataBarExpanded', 'DataBarLimited'];
   }
@@ -89,8 +101,16 @@ const getWasmReaderOptions = (scanContext: ScanContextState | null): ReaderOptio
     tryRotate: true,
     tryInvert: true,
     tryDownscale: true,
-    textMode: 'HRI',
+    textMode: scanContext?.scanPatientBarcode ? 'Plain' : 'HRI',
   };
+};
+
+const getScanAreaRatios = (scanContext: ScanContextState | null) => {
+  if (scanContext?.scanPatientBarcode) {
+    return { width: 0.95, height: 0.45 };
+  }
+
+  return { width: 0.85, height: 0.25 };
 };
 
 const OCR_TIMEOUT_MS = 22000;
@@ -249,9 +269,11 @@ const BarcodeScanner: React.FC = () => {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(0, 0, displayWidth, displayHeight);
 
-    // Scan-Bereich berechnen (85% der Breite, 25% der Höhe, zentriert)
-    const scanAreaWidth = displayWidth * 0.85;
-    const scanAreaHeight = displayHeight * 0.25;
+    // Scan-Bereich berechnen; Patientenarmbänder brauchen mehr Höhe/Breite als GS1-Materialcodes
+    const scanContext = location.state as ScanContextState | null;
+    const scanAreaRatios = getScanAreaRatios(scanContext);
+    const scanAreaWidth = displayWidth * scanAreaRatios.width;
+    const scanAreaHeight = displayHeight * scanAreaRatios.height;
     const scanAreaX = (displayWidth - scanAreaWidth) / 2;
     const scanAreaY = (displayHeight - scanAreaHeight) / 2;
 
@@ -318,7 +340,7 @@ const BarcodeScanner: React.FC = () => {
     if (cameraOpen && scanMode === 'barcode' && !ocrFrozen) {
       scanLineAnimationRef.current = requestAnimationFrame(() => drawScanOverlay(false));
     }
-  }, [cameraOpen, scanMode, ocrFrozen, scanLineColor]);
+  }, [cameraOpen, scanMode, ocrFrozen, scanLineColor, location.state]);
 
   // Auto-open camera if navigated from dashboard or scanning cabinet (nur wenn Kamera aktiviert)
   useEffect(() => {
@@ -463,12 +485,13 @@ const BarcodeScanner: React.FC = () => {
                 try {
                   const video = videoRef.current;
                   
-                  // Scan-Bereich berechnen (85% der Breite, 25% der Höhe, zentriert)
+                  // Scan-Bereich berechnen; muss mit drawScanOverlay übereinstimmen
                   // Diese Werte müssen mit drawScanOverlay übereinstimmen!
                   const videoWidth = video.videoWidth;
                   const videoHeight = video.videoHeight;
-                  const scanAreaWidth = Math.round(videoWidth * 0.85);
-                  const scanAreaHeight = Math.round(videoHeight * 0.25);
+                  const scanAreaRatios = getScanAreaRatios(locState);
+                  const scanAreaWidth = Math.round(videoWidth * scanAreaRatios.width);
+                  const scanAreaHeight = Math.round(videoHeight * scanAreaRatios.height);
                   const scanAreaX = Math.round((videoWidth - scanAreaWidth) / 2);
                   const scanAreaY = Math.round((videoHeight - scanAreaHeight) / 2);
                   

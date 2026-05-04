@@ -50,7 +50,7 @@ import {
   PhotoCamera as PhotoCameraIcon,
   Upload as UploadIcon,
 } from '@mui/icons-material';
-import { cabinetAPI, materialAPI, aiAPI } from '../services/api';
+import { cabinetAPI, materialAPI, aiAPI, barcodeAPI } from '../services/api';
 import { parseGS1Barcode, isValidGS1Barcode } from '../utils/gs1Parser';
 
 interface Cabinet {
@@ -252,7 +252,7 @@ const Inventory: React.FC = () => {
   };
   
   // Gescannten Barcode verarbeiten (mit optionalem materials-Array für Rückkehr vom Scanner)
-  const handleScannedBarcode = (barcode: string, materials?: Material[]) => {
+  const handleScannedBarcode = async (barcode: string, materials?: Material[]) => {
     const materialsToSearch = materials || cabinetMaterials;
     
     // Parse GS1 wenn vorhanden
@@ -284,6 +284,33 @@ const Inventory: React.FC = () => {
       setSuccess(`Material "${foundMaterial.name}" bestätigt!`);
       setTimeout(() => setSuccess(null), 3000);
     } else {
+      try {
+        const response = await barcodeAPI.searchMaterialsByGTIN(gtin, lotNumber);
+        const cabinetMatches = (response.data?.materials || []).filter((material: any) => {
+          return selectedCabinet ? Number(material.cabinet_id) === Number(selectedCabinet.id) : true;
+        });
+
+        const aliasMaterial = cabinetMatches
+          .map((match: any) => {
+            const ids = String(match.material_ids || match.id)
+              .split(',')
+              .map((value: string) => Number(value.trim()))
+              .filter((value: number) => !Number.isNaN(value));
+
+            return materialsToSearch.find(material => ids.includes(Number(material.id)));
+          })
+          .find(Boolean) as Material | undefined;
+
+        if (aliasMaterial) {
+          confirmMaterial(aliasMaterial.id, 'scan');
+          setSuccess(`Material "${aliasMaterial.name}" über verknüpfte GTIN bestätigt!`);
+          setTimeout(() => setSuccess(null), 3000);
+          return;
+        }
+      } catch (error) {
+        console.log('Keine verknüpfte GTIN für Inventur gefunden:', error);
+      }
+
       setError(`Material mit Barcode "${gtin}" nicht in diesem Schrank gefunden`);
       setTimeout(() => setError(null), 3000);
     }

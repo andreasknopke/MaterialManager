@@ -174,6 +174,7 @@ interface MaterialFormData {
   expiry_date: string;
   lot_number: string;
   article_number: string;
+  alternative_gtins: string;
   cost: string;
   location_in_cabinet: string;
   notes: string;
@@ -282,6 +283,7 @@ const MaterialForm: React.FC = () => {
     expiry_date: '',
     lot_number: '',
     article_number: '',
+    alternative_gtins: '',
     cost: '',
     location_in_cabinet: '',
     notes: '',
@@ -383,6 +385,11 @@ const MaterialForm: React.FC = () => {
           if (!prev.unit_id && template.unit_id) templateUpdates.unit_id = template.unit_id;
           if (!prev.size && template.size) templateUpdates.size = template.size;
           if (!prev.unit && template.unit) templateUpdates.unit = template.unit;
+          if (!prev.alternative_gtins && template.alternative_gtins) {
+            templateUpdates.alternative_gtins = Array.isArray(template.alternative_gtins)
+              ? template.alternative_gtins.join('\n')
+              : String(template.alternative_gtins);
+          }
           if (!prev.cost && template.cost) templateUpdates.cost = String(template.cost);
           if (!prev.location_in_cabinet && template.location_in_cabinet) templateUpdates.location_in_cabinet = template.location_in_cabinet;
           if (template.is_consignment !== undefined) templateUpdates.is_consignment = Boolean(template.is_consignment);
@@ -565,6 +572,9 @@ const MaterialForm: React.FC = () => {
         expiry_date: material.expiry_date ? material.expiry_date.split('T')[0] : '',
         lot_number: material.lot_number || '',
         article_number: material.article_number || '',
+        alternative_gtins: Array.isArray(material.alternative_gtins)
+          ? material.alternative_gtins.join('\n')
+          : (material.alternative_gtins || ''),
         cost: material.cost ? String(material.cost) : '',
         location_in_cabinet: material.location_in_cabinet || '',
         notes: material.notes || '',
@@ -781,6 +791,11 @@ const MaterialForm: React.FC = () => {
                 if (!prev.compartment_id && template.compartment_id) templateUpdates.compartment_id = template.compartment_id;
                 if (!prev.size && template.size) templateUpdates.size = template.size;
                 if (!prev.unit && template.unit) templateUpdates.unit = template.unit;
+                if (!prev.alternative_gtins && template.alternative_gtins) {
+                  templateUpdates.alternative_gtins = Array.isArray(template.alternative_gtins)
+                    ? template.alternative_gtins.join('\n')
+                    : String(template.alternative_gtins);
+                }
                 if (!prev.cost && template.cost) templateUpdates.cost = String(template.cost);
                 if (!prev.location_in_cabinet && template.location_in_cabinet) templateUpdates.location_in_cabinet = template.location_in_cabinet;
                 if (template.is_consignment !== undefined) templateUpdates.is_consignment = template.is_consignment;
@@ -818,6 +833,7 @@ const MaterialForm: React.FC = () => {
       expiry_date: '',
       lot_number: '',
       article_number: '',
+      alternative_gtins: '',
     }));
     setGs1Data(null);
     setGs1Warning(null);
@@ -1363,6 +1379,18 @@ const MaterialForm: React.FC = () => {
                     </InputAdornment>
                   ) : undefined,
                 }}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                multiline
+                minRows={2}
+                label="Alternative/verknüpfte GTINs"
+                value={formData.alternative_gtins}
+                onChange={handleChange('alternative_gtins')}
+                helperText="Eine GTIN pro Zeile oder durch Komma/Semikolon getrennt, z.B. Packungs- und Einzelprodukt-GTIN"
               />
             </Grid>
 
