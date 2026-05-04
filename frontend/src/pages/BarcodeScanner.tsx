@@ -89,7 +89,7 @@ const getWasmReaderOptions = (scanContext: ScanContextState | null): ReaderOptio
   if (scanContext?.scanCabinet) {
     formats = ['QRCode'];
   } else if (scanContext?.scanPatientBarcode) {
-    formats = ['QRCode', 'Code128', 'Code39', 'Code93', 'Codabar', 'ITF', 'PDF417', 'EAN-13', 'EAN-8', 'UPC-A', 'UPC-E'];
+    formats = ['Linear-Codes', 'QRCode', 'PDF417'];
   } else {
     formats = ['Code128', 'DataMatrix', 'QRCode', 'EAN-13', 'EAN-8', 'DataBar', 'DataBarExpanded', 'DataBarLimited'];
   }
@@ -101,8 +101,46 @@ const getWasmReaderOptions = (scanContext: ScanContextState | null): ReaderOptio
     tryRotate: true,
     tryInvert: true,
     tryDownscale: true,
+    tryCode39ExtendedMode: true,
     textMode: scanContext?.scanPatientBarcode ? 'Plain' : 'HRI',
   };
+};
+
+const getWasmReaderOptionCandidates = (scanContext: ScanContextState | null): ReaderOptions[] => {
+  const baseOptions = getWasmReaderOptions(scanContext);
+
+  if (!scanContext?.scanPatientBarcode) {
+    return [baseOptions];
+  }
+
+  return [
+    {
+      ...baseOptions,
+      binarizer: 'LocalAverage',
+      minLineCount: 1,
+      tryDownscale: false,
+    },
+    {
+      ...baseOptions,
+      binarizer: 'GlobalHistogram',
+      minLineCount: 1,
+      tryDownscale: false,
+    },
+    {
+      ...baseOptions,
+      binarizer: 'FixedThreshold',
+      minLineCount: 1,
+      tryDownscale: false,
+    },
+    {
+      ...baseOptions,
+      binarizer: 'LocalAverage',
+      minLineCount: 1,
+      tryDownscale: true,
+      downscaleThreshold: 250,
+      downscaleFactor: 2,
+    },
+  ];
 };
 
 const getScanAreaRatios = (scanContext: ScanContextState | null) => {
@@ -452,9 +490,12 @@ const BarcodeScanner: React.FC = () => {
                                       !locState?.scanCabinet;
               
               const wasmReaderOptions = getWasmReaderOptions(locState);
+              const wasmReaderOptionCandidates = getWasmReaderOptionCandidates(locState);
+              const isPatientBarcodeScan = Boolean(locState?.scanPatientBarcode);
               const hints = new Map();
               const possibleFormats = getZXingJsFormats(locState);
               hints.set(DecodeHintType.POSSIBLE_FORMATS, possibleFormats);
+              hints.set(DecodeHintType.TRY_HARDER, true);
               console.log('Aktive Barcode-Formate:', possibleFormats);
               console.log('Aktive WASM-Barcode-Formate:', wasmReaderOptions.formats);
 
@@ -478,6 +519,42 @@ const BarcodeScanner: React.FC = () => {
               // Canvas für Scan-Bereich-Ausschnitt erstellen
               const cropCanvas = document.createElement('canvas');
               const cropCtx = cropCanvas.getContext('2d');
+              const fullCanvas = document.createElement('canvas');
+              const fullCtx = fullCanvas.getContext('2d');
+              let nativeBarcodeDetector: any = null;
+
+              if (isPatientBarcodeScan && (window as any).BarcodeDetector) {
+                try {
+                  nativeBarcodeDetector = new (window as any).BarcodeDetector({
+                    formats: ['code_128', 'code_39', 'code_93', 'codabar', 'itf', 'pdf417', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code'],
+                  });
+                  console.log('Native BarcodeDetector für Patientenbarcode aktiviert');
+                } catch (err) {
+                  console.warn('Native BarcodeDetector konnte nicht aktiviert werden:', err);
+                }
+              }
+
+              const scanImageDataWithWasm = async (imageDataToScan: ImageData) => {
+                for (const options of wasmReaderOptionCandidates) {
+                  const wasmResults = await readBarcodes(imageDataToScan, options);
+                  const wasmResult = wasmResults.find(item => item.isValid && item.text);
+                  if (wasmResult) {
+                    return wasmResult;
+                  }
+                }
+
+                return null;
+              };
+
+              const scanCanvasWithNativeDetector = async (canvas: HTMLCanvasElement) => {
+                if (!nativeBarcodeDetector || canvas.width === 0 || canvas.height === 0) {
+                  return null;
+                }
+
+                const nativeResults = await nativeBarcodeDetector.detect(canvas);
+                const nativeResult = nativeResults?.find((item: any) => item.rawValue);
+                return nativeResult || null;
+              };
               
               // Kontinuierliches Scanning nur im Scan-Bereich
               const scanLoop = async () => {
@@ -514,10 +591,21 @@ const BarcodeScanner: React.FC = () => {
                   let scannedCode = '';
                   let scannedFormat: unknown = '';
 
+                  if (isPatientBarcodeScan && nativeBarcodeDetector) {
+                    try {
+                      const nativeResult = await scanCanvasWithNativeDetector(cropCanvas);
+                      if (nativeResult) {
+                        scannedCode = nativeResult.rawValue;
+                        scannedFormat = nativeResult.format;
+                      }
+                    } catch (err) {
+                      console.warn('Native Patientenbarcode-Erkennung fehlgeschlagen:', err);
+                    }
+                  }
+
                   try {
                     if (imageData) {
-                      const wasmResults = await readBarcodes(imageData, wasmReaderOptions);
-                      const wasmResult = wasmResults.find(item => item.isValid && item.text);
+                      const wasmResult = await scanImageDataWithWasm(imageData);
                       if (wasmResult) {
                         scannedCode = wasmResult.text;
                         scannedFormat = wasmResult.format;
@@ -527,9 +615,38 @@ const BarcodeScanner: React.FC = () => {
                     console.warn('WASM-Scan fehlgeschlagen, nutze bei Bedarf Fallback:', err);
                   }
 
-                  if (!scannedCode && scanAttempt % 6 === 0) {
+                  if (!scannedCode && isPatientBarcodeScan && scanAttempt % 3 === 0 && fullCtx) {
                     try {
-                      const imageUrl = cropCanvas.toDataURL('image/jpeg', 0.8);
+                      fullCanvas.width = videoWidth;
+                      fullCanvas.height = videoHeight;
+                      fullCtx.drawImage(video, 0, 0, videoWidth, videoHeight);
+
+                      if (nativeBarcodeDetector) {
+                        const nativeFullResult = await scanCanvasWithNativeDetector(fullCanvas);
+                        if (nativeFullResult) {
+                          scannedCode = nativeFullResult.rawValue;
+                          scannedFormat = nativeFullResult.format;
+                        }
+                      }
+
+                      if (scannedCode) {
+                        // Native Detector hat bereits im Vollbild gefunden.
+                      } else {
+                      const fullImageData = fullCtx.getImageData(0, 0, videoWidth, videoHeight);
+                      const fullWasmResult = await scanImageDataWithWasm(fullImageData);
+                      if (fullWasmResult) {
+                        scannedCode = fullWasmResult.text;
+                        scannedFormat = fullWasmResult.format;
+                      }
+                      }
+                    } catch (err) {
+                      console.warn('WASM-Vollbildscan fehlgeschlagen:', err);
+                    }
+                  }
+
+                  if (!scannedCode && scanAttempt % (isPatientBarcodeScan ? 3 : 6) === 0) {
+                    try {
+                      const imageUrl = (isPatientBarcodeScan && fullCanvas.width > 0 ? fullCanvas : cropCanvas).toDataURL('image/jpeg', 0.9);
                       const fallbackResult = await codeReader.decodeFromImageUrl(imageUrl);
                       if (fallbackResult) {
                         scannedCode = fallbackResult.getText();
