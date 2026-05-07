@@ -107,6 +107,20 @@ const getMaterialGroupingKey = (material: any): string => {
   return `name:${normalizeGroupingValue(material.name)}|lot:${lotKey}`;
 };
 
+const escapeSearchRegex = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const matchesWildcardSearch = (value: string | null | undefined, searchTerm: string): boolean => {
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  if (!normalizedSearch) {
+    return true;
+  }
+
+  const normalizedValue = value?.toLowerCase() || '';
+  const pattern = escapeSearchRegex(normalizedSearch).replace(/\\\*/g, '.*');
+  return new RegExp(pattern, 'i').test(normalizedValue);
+};
+
 interface FilterState {
   category_id: string;
   company_id: string;
@@ -698,11 +712,11 @@ const Materials: React.FC = () => {
   const filteredMaterials = materials.filter((material: any) => {
     // Textsuche
     const matchesSearch = searchTerm === '' || 
-      material.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      material.category_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      material.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      material.article_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      material.lot_number?.toLowerCase().includes(searchTerm.toLowerCase());
+      matchesWildcardSearch(material.name, searchTerm) ||
+      matchesWildcardSearch(material.category_name, searchTerm) ||
+      matchesWildcardSearch(material.company_name, searchTerm) ||
+      matchesWildcardSearch(material.article_number, searchTerm) ||
+      matchesWildcardSearch(material.lot_number, searchTerm);
     
     // Bestand-Filter
     const hasStock = hideZeroStock ? material.current_stock > 0 : true;
@@ -843,7 +857,7 @@ const Materials: React.FC = () => {
             size="small"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Name, GTIN, Kategorie, Firma, LOT..."
+            placeholder="Name, GTIN, Kategorie, Firma, LOT... (* als Platzhalter)"
           />
           <Button
             variant={showFilters ? "contained" : "outlined"}
