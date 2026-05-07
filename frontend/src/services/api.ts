@@ -240,6 +240,7 @@ export const materialAPI = {
   update: (id: number, data: any) => api.put(`/materials/${id}`, data),
   convertPackageToItems: (id: number, data: any) => api.post(`/materials/${id}/convert-package-to-items`, data),
   delete: (id: number) => api.delete(`/materials/${id}`),
+  bulkDeactivate: (ids: number[]) => api.post('/materials/bulk-deactivate', { ids }),
   reactivate: (id: number) => api.put(`/materials/${id}/reactivate`),
   stockIn: (id: number, data: any) => api.post(`/materials/${id}/stock-in`, data),
   stockOut: (id: number, data: any) => api.post(`/materials/${id}/stock-out`, data),

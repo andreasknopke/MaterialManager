@@ -4,6 +4,11 @@ import {
   Button,
   Typography,
   Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
   TextField,
   IconButton,
   Chip,
@@ -82,6 +87,24 @@ const matchesNumericFilter = (value: string | null | undefined, filterExpr: stri
   
   // Fallback: String-Vergleich
   return value.toLowerCase() === expr.toLowerCase();
+};
+
+const normalizeGroupingValue = (value: string | null | undefined): string =>
+  value?.trim().toLowerCase() || '';
+
+const getMaterialGroupingKey = (material: any): string => {
+  const lotKey = normalizeGroupingValue(material.lot_number) || '__no_lot__';
+
+  if (material.product_id) {
+    return `product:${material.product_id}|lot:${lotKey}`;
+  }
+
+  const articleNumber = normalizeGroupingValue(material.article_number);
+  if (articleNumber) {
+    return `gtin:${articleNumber}|lot:${lotKey}`;
+  }
+
+  return `name:${normalizeGroupingValue(material.name)}|lot:${lotKey}`;
 };
 
 interface FilterState {
@@ -218,6 +241,7 @@ const Materials: React.FC = () => {
   const [hideZeroStock, setHideZeroStock] = useState(savedFilters?.hideZeroStock ?? true);
   const [groupIdentical, setGroupIdentical] = useState(savedFilters?.groupIdentical ?? true);
   const [showFilters, setShowFilters] = useState(savedFilters?.showFilters ?? false);
+  const [deleteSelection, setDeleteSelection] = useState<any | null>(null);
   const [filters, setFilters] = useState<FilterState>(savedFilters?.filters || emptyFilters);
   
   // Dropdown-Daten für Filter
@@ -387,7 +411,7 @@ const Materials: React.FC = () => {
     };
   }, [fetchMaterials]);
 
-  const handleDelete = useCallback(async (id: number) => {
+  const handleDeleteSingle = useCallback(async (id: number) => {
     if (window.confirm('Material wirklich deaktivieren?')) {
       try {
         await materialAPI.delete(id);
@@ -397,6 +421,33 @@ const Materials: React.FC = () => {
       }
     }
   }, [fetchMaterials]);
+
+  const handleDeleteClick = useCallback((row: any) => {
+    if (row.grouped_count > 1 && Array.isArray(row.grouped_ids) && row.grouped_ids.length > 1) {
+      setDeleteSelection(row);
+      return;
+    }
+
+    handleDeleteSingle(row.id);
+  }, [handleDeleteSingle]);
+
+  const handleDeleteSelection = useCallback(async (mode: 'single' | 'all') => {
+    if (!deleteSelection) {
+      return;
+    }
+
+    try {
+      if (mode === 'all') {
+        await materialAPI.bulkDeactivate(deleteSelection.grouped_ids);
+      } else {
+        await materialAPI.delete(deleteSelection.id);
+      }
+      setDeleteSelection(null);
+      fetchMaterials();
+    } catch (error) {
+      console.error('Fehler beim Deaktivieren:', error);
+    }
+  }, [deleteSelection, fetchMaterials]);
 
   const getStatusChip = (status: string) => {
     switch (status) {
@@ -592,7 +643,7 @@ const Materials: React.FC = () => {
             <Tooltip title="Deaktivieren">
               <IconButton
                 size="small"
-                onClick={() => handleDelete(params.row.id)}
+                onClick={() => handleDeleteClick(params.row)}
               >
                 <DeleteIcon fontSize="small" />
               </IconButton>
@@ -601,7 +652,7 @@ const Materials: React.FC = () => {
         );
       },
     },
-  ], [groupIdentical, handleDelete, handleRestock, navigate, returnTo]);
+  ], [groupIdentical, handleDeleteClick, handleRestock, navigate, returnTo]);
 
   // Spalten nach gespeicherter Reihenfolge sortieren
   const columns = useMemo(() => {
@@ -678,15 +729,15 @@ const Materials: React.FC = () => {
            matchesDeviceDiameter && matchesGuidewire && matchesConsignment;
   });
 
-  // Gruppiere identische Materialien (gleiche GTIN oder gleicher Name)
+  // Gruppiere identische Materialien nur innerhalb derselben LOT/Charge.
+  // product_id deckt normalisierte Produkte inklusive alternativer GTINs ab.
   const groupedMaterials = React.useMemo(() => {
     if (!groupIdentical) return filteredMaterials;
 
     const groups = new Map<string, any>();
     
     filteredMaterials.forEach((material: any) => {
-      // Gruppierungsschlüssel: GTIN wenn vorhanden, sonst Name
-      const key = material.article_number || material.name;
+      const key = getMaterialGroupingKey(material);
       
       if (groups.has(key)) {
         const existing = groups.get(key);
@@ -988,7 +1039,7 @@ const Materials: React.FC = () => {
                 color="primary"
               />
             }
-            label="Identische Materialien gruppieren (GTIN/Name)"
+            label="Identische Materialien gruppieren (Produkt/GTIN + LOT)"
           />
         </Box>
       </Paper>
@@ -1018,6 +1069,24 @@ const Materials: React.FC = () => {
           }}
         />
       </Paper>
+      <Dialog open={Boolean(deleteSelection)} onClose={() => setDeleteSelection(null)}>
+        <DialogTitle>Gruppierte Materialien deaktivieren?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Diese Zeile steht für {deleteSelection?.grouped_count || 0} Materialien mit derselben GTIN bzw. demselben Produkt und derselben LOT/Charge.
+            Möchten Sie alle Materialien der Gruppe oder nur ein einzelnes Material deaktivieren?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteSelection(null)}>Abbrechen</Button>
+          <Button color="warning" onClick={() => handleDeleteSelection('single')}>
+            Nur eins deaktivieren
+          </Button>
+          <Button color="error" variant="contained" onClick={() => handleDeleteSelection('all')}>
+            Alle deaktivieren
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

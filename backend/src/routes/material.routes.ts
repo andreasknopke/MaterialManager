@@ -50,6 +50,84 @@ function parseStoredIdempotencyBody(value: any) {
   }
 }
 
+async function deactivateMaterials(req: Request, materialIds: number[]) {
+  const currentPool = getPoolForRequest(req);
+  const normalizedIds = Array.from(
+    new Set(
+      materialIds
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  );
+
+  if (normalizedIds.length === 0) {
+    return { ok: false as const, status: 400, error: 'Keine gültigen Material-IDs übergeben' };
+  }
+
+  const connection = await currentPool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const departmentFilter = getDepartmentFilter(req, '');
+    const placeholders = normalizedIds.map(() => '?').join(', ');
+    let materialQuery = `
+      SELECT id, name, current_stock, unit_id
+      FROM v_materials_overview
+      WHERE id IN (${placeholders})
+    `;
+    const materialParams: any[] = [...normalizedIds];
+
+    if (departmentFilter.whereClause) {
+      materialQuery += ` AND ${departmentFilter.whereClause}`;
+      materialParams.push(...departmentFilter.params);
+    }
+
+    const [materials] = await connection.query<RowDataPacket[]>(materialQuery, materialParams);
+
+    if (materials.length !== normalizedIds.length) {
+      await connection.rollback();
+      connection.release();
+      return { ok: false as const, status: 403, error: 'Mindestens ein Material nicht gefunden oder kein Zugriff' };
+    }
+
+    const userId = req.user?.id;
+    const userName = req.user?.fullName || req.user?.username || 'Unbekannt';
+
+    for (const material of materials) {
+      const previousStock = Number(material.current_stock) || 0;
+      const unitId = material.unit_id;
+
+      if (previousStock > 0) {
+        await connection.query(
+          `INSERT INTO material_transactions 
+           (material_id, transaction_type, usage_type, quantity, previous_stock, new_stock, notes, user_id, user_name, unit_id)
+           VALUES (?, 'out', 'correction', ?, ?, 0, 'Korrektur: Material über Tabelle deaktiviert', ?, ?, ?)`,
+          [material.id, previousStock, previousStock, userId, userName, unitId]
+        );
+      }
+    }
+
+    await connection.query(
+      `UPDATE materials SET active = FALSE, current_stock = 0 WHERE id IN (${placeholders})`,
+      normalizedIds
+    );
+
+    await connection.commit();
+    connection.release();
+
+    for (const material of materials) {
+      await auditMaterial.delete(req, { id: Number(material.id), name: material.name });
+    }
+
+    return { ok: true as const, count: materials.length };
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    throw error;
+  }
+}
+
 // Alle Routes benötigen Authentifizierung
 router.use(authenticate);
 
@@ -1250,80 +1328,37 @@ router.post('/:id/stock-out', async (req: Request, res: Response) => {
   }
 });
 
+// POST Materialien gesammelt deaktivieren
+router.post('/bulk-deactivate', async (req: Request, res: Response) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const result = await deactivateMaterials(req, ids);
+
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
+    }
+
+    res.json({
+      message: `${result.count} Material${result.count === 1 ? '' : 'ien'} erfolgreich deaktiviert`,
+      deactivatedCount: result.count,
+    });
+  } catch (error) {
+    console.error('Fehler beim Sammel-Deaktivieren der Materialien:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  }
+});
+
 // DELETE Material (soft delete) - mit Correction-Protokollierung
 router.delete('/:id', async (req: Request, res: Response) => {
-  // Verwende dynamischen Pool basierend auf DB-Token
-  const currentPool = getPoolForRequest(req);
-  
-  const connection = await currentPool.getConnection();
-  
   try {
-    await connection.beginTransaction();
-    
-    // Department-Validierung
-    const departmentFilter = getDepartmentFilter(req, '');
-    if (departmentFilter.whereClause) {
-      const [materials] = await connection.query<RowDataPacket[]>(
-        `SELECT id FROM v_materials_overview WHERE id = ? AND ${departmentFilter.whereClause}`,
-        [req.params.id, ...departmentFilter.params]
-      );
-      
-      if (materials.length === 0) {
-        await connection.rollback();
-        connection.release();
-        return res.status(403).json({ error: 'Material nicht gefunden oder kein Zugriff' });
-      }
+    const result = await deactivateMaterials(req, [Number(req.params.id)]);
+
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
     }
-    
-    // Hole aktuellen Bestand für Protokollierung
-    const [materials] = await connection.query<RowDataPacket[]>(
-      'SELECT current_stock, unit_id FROM materials WHERE id = ?',
-      [req.params.id]
-    );
-    
-    if (materials.length === 0) {
-      await connection.rollback();
-      connection.release();
-      return res.status(404).json({ error: 'Material nicht gefunden' });
-    }
-    
-    const previousStock = materials[0].current_stock;
-    const unitId = materials[0].unit_id;
-    const userId = req.user?.id;
-    const userName = req.user?.fullName || req.user?.username || 'Unbekannt';
-    
-    // Nur protokollieren wenn Bestand > 0 war
-    if (previousStock > 0) {
-      await connection.query(
-        `INSERT INTO material_transactions 
-         (material_id, transaction_type, usage_type, quantity, previous_stock, new_stock, notes, user_id, user_name, unit_id)
-         VALUES (?, 'out', 'correction', ?, ?, 0, 'Korrektur: Material über Tabelle gelöscht', ?, ?, ?)`,
-        [req.params.id, previousStock, previousStock, userId, userName, unitId]
-      );
-    }
-    
-    // Material deaktivieren und Bestand auf 0 setzen
-    await connection.query(
-      'UPDATE materials SET active = FALSE, current_stock = 0 WHERE id = ?',
-      [req.params.id]
-    );
-    
-    await connection.commit();
-    connection.release();
-    
-    // Audit-Log für Delete
-    const [materialInfo] = await currentPool.query<RowDataPacket[]>(
-      'SELECT name FROM materials WHERE id = ?',
-      [req.params.id]
-    );
-    if (materialInfo.length > 0) {
-      await auditMaterial.delete(req, { id: Number(req.params.id), name: materialInfo[0].name });
-    }
-    
+
     res.json({ message: 'Material erfolgreich deaktiviert' });
   } catch (error) {
-    await connection.rollback();
-    connection.release();
     console.error('Fehler beim Löschen des Materials:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
   }
