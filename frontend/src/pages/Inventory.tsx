@@ -101,6 +101,11 @@ interface CompartmentGroup {
   materials: Material[];
 }
 
+interface InventoryScanScope {
+  compartmentId: number;
+  compartmentName: string;
+}
+
 // Interface für KI-Analyse-Ergebnis
 interface AIAnalysisResult {
   overallMatch: number;
@@ -151,6 +156,7 @@ const Inventory: React.FC = () => {
   const [aiAnalysisResult, setAiAnalysisResult] = useState<AIAnalysisResult | null>(null);
   const [aiAnalysisError, setAiAnalysisError] = useState<string | null>(null);
   const [aiAnalysisCompartment, setAiAnalysisCompartment] = useState<{ id: number; name: string } | null>(null);
+  const [selectedScanScope, setSelectedScanScope] = useState<InventoryScanScope | null>(null);
 
   useEffect(() => {
     fetchCabinets();
@@ -172,11 +178,19 @@ const Inventory: React.FC = () => {
       const savedCabinetId = sessionStorage.getItem('inventoryCabinetId');
       const savedMaterials = sessionStorage.getItem('inventoryCabinetMaterials');
       const savedConfirmed = sessionStorage.getItem('inventoryConfirmedMaterials');
+      const savedCompartmentId = sessionStorage.getItem('inventoryCompartmentId');
+      const savedCompartmentName = sessionStorage.getItem('inventoryCompartmentName');
       
       if (savedCabinetId && savedMaterials) {
         const cabinetId = parseInt(savedCabinetId);
         const materials = JSON.parse(savedMaterials) as Material[];
         const confirmed = savedConfirmed ? new Map<number, ConfirmedMaterial>(JSON.parse(savedConfirmed)) : new Map();
+        const restoredScope = savedCompartmentId && savedCompartmentName
+          ? {
+              compartmentId: parseInt(savedCompartmentId),
+              compartmentName: savedCompartmentName,
+            }
+          : null;
         
         // Cabinet finden
         const cabinet = cabinets.find(c => c.id === cabinetId);
@@ -186,16 +200,19 @@ const Inventory: React.FC = () => {
         
         setCabinetMaterials(materials);
         setConfirmedMaterials(confirmed);
+        setSelectedScanScope(restoredScope);
         setDialogOpen(true);
         setInventoryMode(true);
         
         // Gescannten Barcode verarbeiten
-        handleScannedBarcode(state.scannedCode, materials);
+        handleScannedBarcode(state.scannedCode, materials, restoredScope?.compartmentId);
         
         // Session Storage aufräumen
         sessionStorage.removeItem('inventoryCabinetId');
         sessionStorage.removeItem('inventoryCabinetMaterials');
         sessionStorage.removeItem('inventoryConfirmedMaterials');
+        sessionStorage.removeItem('inventoryCompartmentId');
+        sessionStorage.removeItem('inventoryCompartmentName');
       }
       
       // State bereinigen
@@ -238,6 +255,13 @@ const Inventory: React.FC = () => {
     sessionStorage.setItem('inventoryCabinetId', selectedCabinet.id.toString());
     sessionStorage.setItem('inventoryCabinetMaterials', JSON.stringify(cabinetMaterials));
     sessionStorage.setItem('inventoryConfirmedMaterials', JSON.stringify(Array.from(confirmedMaterials.entries())));
+    if (selectedScanScope) {
+      sessionStorage.setItem('inventoryCompartmentId', selectedScanScope.compartmentId.toString());
+      sessionStorage.setItem('inventoryCompartmentName', selectedScanScope.compartmentName);
+    } else {
+      sessionStorage.removeItem('inventoryCompartmentId');
+      sessionStorage.removeItem('inventoryCompartmentName');
+    }
     
     // Navigiere zum BarcodeScanner mit Inventur-Check-Modus
     // assumeGS1: true für optimale GS1-Barcode-Erkennung
@@ -252,8 +276,12 @@ const Inventory: React.FC = () => {
   };
   
   // Gescannten Barcode verarbeiten (mit optionalem materials-Array für Rückkehr vom Scanner)
-  const handleScannedBarcode = async (barcode: string, materials?: Material[]) => {
-    const materialsToSearch = materials || cabinetMaterials;
+  const handleScannedBarcode = async (barcode: string, materials?: Material[], compartmentId?: number | null) => {
+    const activeCompartmentId = compartmentId === undefined ? selectedScanScope?.compartmentId : compartmentId;
+    const scopedMaterials = materials || cabinetMaterials;
+    const materialsToSearch = activeCompartmentId == null
+      ? scopedMaterials
+      : scopedMaterials.filter((material) => material.compartment_id === activeCompartmentId);
     
     // Parse GS1 wenn vorhanden
     let gtin = barcode;
@@ -287,7 +315,15 @@ const Inventory: React.FC = () => {
       try {
         const response = await barcodeAPI.searchMaterialsByGTIN(gtin, lotNumber);
         const cabinetMatches = (response.data?.materials || []).filter((material: any) => {
-          return selectedCabinet ? Number(material.cabinet_id) === Number(selectedCabinet.id) : true;
+          if (selectedCabinet && Number(material.cabinet_id) !== Number(selectedCabinet.id)) {
+            return false;
+          }
+
+          if (activeCompartmentId != null) {
+            return Number(material.compartment_id) === Number(activeCompartmentId);
+          }
+
+          return true;
         });
 
         const aliasMaterial = cabinetMatches
@@ -311,7 +347,11 @@ const Inventory: React.FC = () => {
         console.log('Keine verknüpfte GTIN für Inventur gefunden:', error);
       }
 
-      setError(`Material mit Barcode "${gtin}" nicht in diesem Schrank gefunden`);
+      setError(
+        activeCompartmentId != null && selectedScanScope
+          ? `Material mit Barcode "${gtin}" nicht im Fach "${selectedScanScope.compartmentName}" gefunden`
+          : `Material mit Barcode "${gtin}" nicht in diesem Schrank gefunden`
+      );
       setTimeout(() => setError(null), 3000);
     }
   };
@@ -528,8 +568,24 @@ const Inventory: React.FC = () => {
 
   const handleOpenInventory = async (cabinet: Cabinet) => {
     setSelectedCabinet(cabinet);
+    setSelectedScanScope(null);
     await fetchCabinetMaterials(cabinet.id);
     setDialogOpen(true);
+  };
+
+  const handleSelectScanScope = (compartment: CompartmentGroup) => {
+    if (!compartment.compartmentId) {
+      setError('Für "Ohne Fachzuordnung" ist aktuell nur der Schrank-Gesamtabgleich verfügbar.');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    setSelectedScanScope({
+      compartmentId: compartment.compartmentId,
+      compartmentName: compartment.compartmentName,
+    });
+    setSuccess(`Scan-Ziel auf Fach "${compartment.compartmentName}" gesetzt`);
+    setTimeout(() => setSuccess(null), 3000);
   };
 
   const handleClearCabinet = async () => {
@@ -655,7 +711,7 @@ const Inventory: React.FC = () => {
       {/* Inventur Dialog */}
       <Dialog 
         open={dialogOpen} 
-        onClose={() => { setDialogOpen(false); setInventoryMode(false); }}
+        onClose={() => { setDialogOpen(false); setInventoryMode(false); setSelectedScanScope(null); }}
         maxWidth="md"
         fullWidth
       >
@@ -694,7 +750,10 @@ const Inventory: React.FC = () => {
               <Button
                 variant="contained"
                 color="primary"
-                onClick={() => setInventoryMode(true)}
+                  onClick={() => {
+                    setInventoryMode(true);
+                    setSelectedScanScope(null);
+                  }}
                 startIcon={<CheckIcon />}
               >
                 Inventur starten
@@ -705,7 +764,7 @@ const Inventory: React.FC = () => {
               <Tooltip title="Inventur beenden">
                 <IconButton
                   color="secondary"
-                  onClick={() => { setInventoryMode(false); setConfirmedMaterials(new Map()); }}
+                  onClick={() => { setInventoryMode(false); setConfirmedMaterials(new Map()); setSelectedScanScope(null); }}
                   sx={{ border: '1px solid', borderColor: 'secondary.main' }}
                 >
                   <CloseIcon />
@@ -715,7 +774,7 @@ const Inventory: React.FC = () => {
               <Button
                 variant="outlined"
                 color="secondary"
-                onClick={() => { setInventoryMode(false); setConfirmedMaterials(new Map()); }}
+                onClick={() => { setInventoryMode(false); setConfirmedMaterials(new Map()); setSelectedScanScope(null); }}
               >
                 Inventur beenden
               </Button>
@@ -754,6 +813,18 @@ const Inventory: React.FC = () => {
               />
               
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {selectedScanScope ? (
+                  <Chip
+                    color="primary"
+                    label={`Nur Fach: ${selectedScanScope.compartmentName}`}
+                    onDelete={() => setSelectedScanScope(null)}
+                  />
+                ) : (
+                  <Chip
+                    color="default"
+                    label="Gesamter Schrank"
+                  />
+                )}
                 {isMobile ? (
                   <Tooltip title="Kamera-Scanner öffnen">
                     <IconButton
@@ -801,7 +872,7 @@ const Inventory: React.FC = () => {
               </Box>
               
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                Öffnet den vollständigen Barcode-Scanner mit GS1-Unterstützung und OCR
+                Öffnet den vollständigen Barcode-Scanner mit GS1-Unterstützung und OCR{selectedScanScope ? ` für das Fach "${selectedScanScope.compartmentName}"` : ' für den gesamten Schrank'}
               </Typography>
             </Paper>
           )}
@@ -869,19 +940,35 @@ const Inventory: React.FC = () => {
                       />
                     )}
                     <Box sx={{ ml: 'auto', mr: 1 }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="secondary"
-                        startIcon={<AIIcon />}
-                        disabled={!compartmentGroup.compartmentId}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenCompartmentAIAnalysis(compartmentGroup);
-                        }}
-                      >
-                        KI pro Fach
-                      </Button>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        {inventoryMode && compartmentGroup.compartmentId && (
+                          <Button
+                            size="small"
+                            variant={selectedScanScope?.compartmentId === compartmentGroup.compartmentId ? 'contained' : 'outlined'}
+                            color="primary"
+                            startIcon={<QrCodeScannerIcon />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectScanScope(compartmentGroup);
+                            }}
+                          >
+                            {selectedScanScope?.compartmentId === compartmentGroup.compartmentId ? 'Scan aktiv' : 'Nur dieses Fach scannen'}
+                          </Button>
+                        )}
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="secondary"
+                          startIcon={<AIIcon />}
+                          disabled={!compartmentGroup.compartmentId}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenCompartmentAIAnalysis(compartmentGroup);
+                          }}
+                        >
+                          KI pro Fach
+                        </Button>
+                      </Box>
                     </Box>
                   </Box>
                 </AccordionSummary>
@@ -1051,7 +1138,7 @@ const Inventory: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button onClick={() => { setDialogOpen(false); setInventoryMode(false); }}>
+          <Button onClick={() => { setDialogOpen(false); setInventoryMode(false); setSelectedScanScope(null); }}>
             Schließen
           </Button>
           <Button 
