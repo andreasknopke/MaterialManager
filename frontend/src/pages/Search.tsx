@@ -126,10 +126,12 @@ const Search: React.FC = () => {
     } | null;
 
     if (state?.fromScanner && state?.scannedCode && state.scanMode === 'gs1') {
+      const scannedCode = state.scannedCode;
+
       setTabValue(0);
-      setFreeTextSearch(state.scannedCode);
+      setFreeTextSearch(scannedCode);
       setTimeout(() => {
-        void runFreeTextSearch(state.scannedCode);
+        void runFreeTextSearch(scannedCode);
       }, 100);
 
       window.history.replaceState({}, document.title);
