@@ -129,7 +129,7 @@ const Search: React.FC = () => {
       setTabValue(0);
       setFreeTextSearch(state.scannedCode);
       setTimeout(() => {
-        handleFreeTextSearch(state.scannedCode);
+        void runFreeTextSearch(state.scannedCode);
       }, 100);
 
       window.history.replaceState({}, document.title);
@@ -231,9 +231,8 @@ const Search: React.FC = () => {
     }
   };
 
-  // Freitext-Suche
-  const handleFreeTextSearch = async (inputValue?: string) => {
-    const searchValue = (inputValue ?? freeTextSearch).trim();
+  const runFreeTextSearch = async (searchInput: string) => {
+    const searchValue = searchInput.trim();
 
     if (!searchValue) {
       setError('Bitte geben Sie einen Suchbegriff ein');
@@ -254,6 +253,11 @@ const Search: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Freitext-Suche
+  const handleFreeTextSearch = async () => {
+    await runFreeTextSearch(freeTextSearch);
   };
 
   // Kategorie-Suche
