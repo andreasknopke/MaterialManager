@@ -388,6 +388,7 @@ const BarcodeScanner: React.FC = () => {
       returnTo?: string; 
       removalMode?: boolean;
       returnToMaterialForm?: boolean;
+      returnToSearch?: boolean;
       scanMode?: 'gs1' | 'qr';
       scanPatientBarcode?: boolean;
       assumeGS1?: boolean;
@@ -397,7 +398,7 @@ const BarcodeScanner: React.FC = () => {
     } | null;
     
     // Auto-Open für verschiedene Szenarien
-    if ((state?.autoOpenCamera || state?.scanCabinet || state?.returnToMaterialForm || state?.scanPatientBarcode || state?.inventoryCheck) && scannerSettings.cameraEnabled) {
+    if ((state?.autoOpenCamera || state?.scanCabinet || state?.returnToMaterialForm || state?.returnToSearch || state?.scanPatientBarcode || state?.inventoryCheck) && scannerSettings.cameraEnabled) {
       console.log('Auto-opening camera:', state);
       setCameraOpen(true);
     }
@@ -685,6 +686,7 @@ const BarcodeScanner: React.FC = () => {
                       scanCabinet?: boolean; 
                       returnTo?: string;
                       returnToMaterialForm?: boolean;
+                      returnToSearch?: boolean;
                       scanMode?: 'gs1' | 'qr';
                       materialId?: string;
                       inventoryCheck?: boolean;
@@ -720,6 +722,20 @@ const BarcodeScanner: React.FC = () => {
                         state: {
                           fromScanner: true,
                           scannedCode: scannedCode,
+                          scanMode: state.scanMode,
+                        }
+                      });
+                      return;
+                    }
+
+                    if (state?.returnToSearch) {
+                      console.log('Rückkehr zur Suche mit Code:', scannedCode);
+                      setCameraOpen(false);
+                      setScanLineColor('red');
+                      navigate('/search', {
+                        state: {
+                          fromScanner: true,
+                          scannedCode,
                           scanMode: state.scanMode,
                         }
                       });
@@ -1287,6 +1303,7 @@ const BarcodeScanner: React.FC = () => {
     // Prüfen ob wir von MaterialForm kommen und zurück navigieren sollen
     const state = location.state as { 
       returnToMaterialForm?: boolean;
+      returnToSearch?: boolean;
       scanMode?: 'gs1' | 'qr';
       materialId?: string;
     } | null;
@@ -1312,6 +1329,22 @@ const BarcodeScanner: React.FC = () => {
         ? `/materials/${state.materialId}/edit` 
         : '/materials/new';
       navigate(returnPath, {
+        state: {
+          fromScanner: true,
+          scannedCode: cleanedText,
+          scanMode: state.scanMode,
+        }
+      });
+      return;
+    }
+
+    if (state?.returnToSearch) {
+      console.log('OCR: Rückkehr zur Suche mit Text:', cleanedText);
+      setCameraOpen(false);
+      setOcrFrozen(false);
+      setSelectionRect(null);
+      setSelectedOcrText('');
+      navigate('/search', {
         state: {
           fromScanner: true,
           scannedCode: cleanedText,

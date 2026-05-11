@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -37,6 +37,8 @@ import {
   Error as ErrorIcon,
   CheckCircle as CheckCircleIcon,
   Clear as ClearIcon,
+  CameraAlt as CameraIcon,
+  QrCodeScanner as QrCodeScannerIcon,
   Visibility as ViewIcon,
   Edit as EditIcon,
   ExpandMore as ExpandMoreIcon,
@@ -45,6 +47,7 @@ import {
 } from '@mui/icons-material';
 import { materialAPI, categoryAPI, interventionAPI } from '../services/api';
 import { isValidGS1Barcode, parseGS1Barcode } from '../utils/gs1Parser';
+import { getScannerSettings } from './Admin';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -93,6 +96,7 @@ interface InterventionResult {
 }
 
 const Search: React.FC = () => {
+  const location = useLocation();
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -100,6 +104,7 @@ const Search: React.FC = () => {
   const [interventionResults, setInterventionResults] = useState<InterventionResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<any[]>([]);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
 
   // Suchfelder
   const [lotSearch, setLotSearch] = useState('');
@@ -108,8 +113,28 @@ const Search: React.FC = () => {
   const [categorySearch, setCategorySearch] = useState<number | ''>('');
 
   useEffect(() => {
+    const settings = getScannerSettings();
+    setCameraEnabled(settings.cameraEnabled);
     loadCategories();
   }, []);
+
+  useEffect(() => {
+    const state = location.state as {
+      fromScanner?: boolean;
+      scannedCode?: string;
+      scanMode?: 'gs1' | 'qr';
+    } | null;
+
+    if (state?.fromScanner && state?.scannedCode && state.scanMode === 'gs1') {
+      setTabValue(0);
+      setFreeTextSearch(state.scannedCode);
+      setTimeout(() => {
+        handleFreeTextSearch(state.scannedCode);
+      }, 100);
+
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const loadCategories = async () => {
     try {
@@ -142,6 +167,16 @@ const Search: React.FC = () => {
     }
 
     return { query: trimmedInput };
+  };
+
+  const openScanner = () => {
+    navigate('/scanner', {
+      state: {
+        returnToSearch: true,
+        scanMode: 'gs1',
+        autoOpenCamera: true,
+      },
+    });
   };
 
   // Chargen-Suche (LOT) - sucht in Materialien UND Interventionsprotokollen
@@ -197,8 +232,10 @@ const Search: React.FC = () => {
   };
 
   // Freitext-Suche
-  const handleFreeTextSearch = async () => {
-    if (!freeTextSearch.trim()) {
+  const handleFreeTextSearch = async (inputValue?: string) => {
+    const searchValue = (inputValue ?? freeTextSearch).trim();
+
+    if (!searchValue) {
       setError('Bitte geben Sie einen Suchbegriff ein');
       return;
     }
@@ -206,7 +243,7 @@ const Search: React.FC = () => {
     setError(null);
     setInterventionResults([]);
     try {
-      const response = await materialAPI.search(buildFreeTextSearchParams(freeTextSearch));
+      const response = await materialAPI.search(buildFreeTextSearchParams(searchValue));
       setResults(response.data || []);
       if ((response.data || []).length === 0) {
         setError('Keine Materialien gefunden');
@@ -330,14 +367,23 @@ const Search: React.FC = () => {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <SearchIcon />
+                        <QrCodeScannerIcon />
                       </InputAdornment>
                     ),
-                    endAdornment: freeTextSearch && (
+                    endAdornment: (
                       <InputAdornment position="end">
-                        <IconButton size="small" onClick={() => setFreeTextSearch('')}>
-                          <ClearIcon />
-                        </IconButton>
+                        {cameraEnabled && (
+                          <Tooltip title="Kamera-Scanner öffnen">
+                            <IconButton size="small" onClick={openScanner} color="primary">
+                              <CameraIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {freeTextSearch && (
+                          <IconButton size="small" onClick={() => setFreeTextSearch('')}>
+                            <ClearIcon />
+                          </IconButton>
+                        )}
                       </InputAdornment>
                     ),
                   }}
