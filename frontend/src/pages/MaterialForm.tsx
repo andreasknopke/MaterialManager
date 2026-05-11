@@ -380,8 +380,6 @@ const MaterialForm: React.FC = () => {
           if (!prev.description && template.description) templateUpdates.description = template.description;
           if (!prev.category_id && template.category_id) templateUpdates.category_id = template.category_id;
           if (!prev.company_id && template.company_id) templateUpdates.company_id = template.company_id;
-          if (!prev.cabinet_id && template.cabinet_id) templateUpdates.cabinet_id = template.cabinet_id;
-          if (!prev.compartment_id && template.compartment_id) templateUpdates.compartment_id = template.compartment_id;
           if (!prev.unit_id && template.unit_id) templateUpdates.unit_id = template.unit_id;
           if (!prev.size && template.size) templateUpdates.size = template.size;
           if (!prev.unit && template.unit) templateUpdates.unit = template.unit;
@@ -391,7 +389,6 @@ const MaterialForm: React.FC = () => {
               : String(template.alternative_gtins);
           }
           if (!prev.cost && template.cost) templateUpdates.cost = String(template.cost);
-          if (!prev.location_in_cabinet && template.location_in_cabinet) templateUpdates.location_in_cabinet = template.location_in_cabinet;
           if (template.is_consignment !== undefined) templateUpdates.is_consignment = Boolean(template.is_consignment);
 
           if (!prev.shape_id && template.shape_id) templateUpdates.shape_id = template.shape_id;
@@ -787,8 +784,6 @@ const MaterialForm: React.FC = () => {
                 if (!prev.description && template.description) templateUpdates.description = template.description;
                 if (!prev.category_id && template.category_id) templateUpdates.category_id = template.category_id;
                 if (!prev.company_id && template.company_id) templateUpdates.company_id = template.company_id;
-                if (!prev.cabinet_id && template.cabinet_id) templateUpdates.cabinet_id = template.cabinet_id;
-                if (!prev.compartment_id && template.compartment_id) templateUpdates.compartment_id = template.compartment_id;
                 if (!prev.size && template.size) templateUpdates.size = template.size;
                 if (!prev.unit && template.unit) templateUpdates.unit = template.unit;
                 if (!prev.alternative_gtins && template.alternative_gtins) {
@@ -797,7 +792,6 @@ const MaterialForm: React.FC = () => {
                     : String(template.alternative_gtins);
                 }
                 if (!prev.cost && template.cost) templateUpdates.cost = String(template.cost);
-                if (!prev.location_in_cabinet && template.location_in_cabinet) templateUpdates.location_in_cabinet = template.location_in_cabinet;
                 if (template.is_consignment !== undefined) templateUpdates.is_consignment = template.is_consignment;
                 
                 // Device-Eigenschaften

@@ -297,14 +297,11 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
           cost: products[0].cost,
           article_number: products[0].gtin,
           alternative_gtins: alternativeGtins,
-          // Instanz-Daten vom letzten Material
+          // Instanz-Daten ohne standortbezogene Felder
           category_id: lastInstance.category_id,
           category_name: lastInstance.category_name,
-          cabinet_id: lastInstance.cabinet_id,
-          compartment_id: lastInstance.compartment_id,
           unit_id: lastInstance.unit_id,
           unit: lastInstance.unit,
-          location_in_cabinet: lastInstance.location_in_cabinet,
           is_consignment: lastInstance.is_consignment || false
         }
       });
@@ -350,15 +347,12 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
         category_name: material.category_name,
         company_id: material.company_id,
         company_name: material.company_name,
-        cabinet_id: material.cabinet_id,
-        compartment_id: material.compartment_id,
         unit_id: material.unit_id,
         size: material.size,
         unit: material.unit,
         article_number: material.article_number,
         alternative_gtins: alternativeGtins,
         cost: material.cost,
-        location_in_cabinet: material.location_in_cabinet,
         is_consignment: material.is_consignment,
         // Device-Eigenschaften
         shape_id: material.shape_id,

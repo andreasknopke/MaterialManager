@@ -92,16 +92,11 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
           guidewire_acceptance: products[0].guidewire_acceptance,
           cost: products[0].cost,
           notes: products[0].notes,
-          // Instanz-Daten vom letzten Material (als Vorschlag)
+          // Instanz-Daten ohne standortbezogene Felder
           category_id: lastMaterial[0]?.category_id,
           category_name: lastMaterial[0]?.category_name,
-          cabinet_id: lastMaterial[0]?.cabinet_id,
-          cabinet_name: lastMaterial[0]?.cabinet_name,
-          compartment_id: lastMaterial[0]?.compartment_id,
-          compartment_name: lastMaterial[0]?.compartment_name,
           unit: lastMaterial[0]?.unit,
           unit_id: lastMaterial[0]?.unit_id,
-          location_in_cabinet: lastMaterial[0]?.location_in_cabinet,
           is_consignment: Boolean(lastMaterial[0]?.is_consignment)
         }
       });
@@ -157,11 +152,6 @@ router.get('/gtin/:gtin', async (req: Request, res: Response) => {
         unit: materials[0].unit,
         unit_id: materials[0].unit_id,
         size: materials[0].size,
-        cabinet_id: materials[0].cabinet_id,
-        cabinet_name: materials[0].cabinet_name,
-        compartment_id: materials[0].compartment_id,
-        compartment_name: materials[0].compartment_name,
-        location_in_cabinet: materials[0].location_in_cabinet,
         is_consignment: Boolean(materials[0].is_consignment),
         category_name: materials[0].category_name,
         company_name: materials[0].company_name,
