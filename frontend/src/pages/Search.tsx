@@ -37,12 +37,13 @@ import {
   Error as ErrorIcon,
   CheckCircle as CheckCircleIcon,
   Clear as ClearIcon,
-  Visibility as ViewIcon,
+  Edit as EditIcon,
   ExpandMore as ExpandMoreIcon,
   Person as PersonIcon,
   LocalHospital as HospitalIcon,
 } from '@mui/icons-material';
 import { materialAPI, categoryAPI, interventionAPI } from '../services/api';
+import { isValidGS1Barcode, parseGS1Barcode } from '../utils/gs1Parser';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -125,6 +126,23 @@ const Search: React.FC = () => {
     setError(null);
   };
 
+  const buildFreeTextSearchParams = (input: string) => {
+    const trimmedInput = input.trim();
+
+    if (isValidGS1Barcode(trimmedInput)) {
+      const parsedGs1 = parseGS1Barcode(trimmedInput);
+
+      if (parsedGs1.gtin) {
+        return {
+          query: parsedGs1.gtin,
+          lot_number: parsedGs1.batchNumber,
+        };
+      }
+    }
+
+    return { query: trimmedInput };
+  };
+
   // Chargen-Suche (LOT) - sucht in Materialien UND Interventionsprotokollen
   const handleLotSearch = async () => {
     if (!lotSearch.trim()) {
@@ -185,8 +203,9 @@ const Search: React.FC = () => {
     }
     setLoading(true);
     setError(null);
+    setInterventionResults([]);
     try {
-      const response = await materialAPI.search({ query: freeTextSearch.trim() });
+      const response = await materialAPI.search(buildFreeTextSearchParams(freeTextSearch));
       setResults(response.data || []);
       if ((response.data || []).length === 0) {
         setError('Keine Materialien gefunden');
@@ -296,7 +315,7 @@ const Search: React.FC = () => {
               Freitext-Suche
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Suchen Sie nach Materialname, Artikelnummer, Beschreibung oder Notizen.
+              Suchen Sie nach Materialname, Artikelnummer, Beschreibung, Notizen oder scannen Sie einen GS1-Barcode.
             </Typography>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} sm={8}>
@@ -306,7 +325,7 @@ const Search: React.FC = () => {
                   value={freeTextSearch}
                   onChange={(e) => setFreeTextSearch(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleFreeTextSearch()}
-                  placeholder="z.B. Katheter, Schlauch, REF12345..."
+                  placeholder="z.B. Katheter, REF12345 oder GS1-Barcode..."
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -640,7 +659,9 @@ const Search: React.FC = () => {
                     <TableRow 
                       key={item.id} 
                       hover
+                      onClick={() => navigate(`/materials/${item.id}/edit`)}
                       sx={{
+                        cursor: 'pointer',
                         backgroundColor: item.is_consignment ? 'rgba(211, 47, 47, 0.08)' : 'transparent',
                         borderLeft: item.is_consignment ? '4px solid #d32f2f' : 'none',
                       }}
@@ -709,12 +730,15 @@ const Search: React.FC = () => {
                         {item.category_name || '-'}
                       </TableCell>
                       <TableCell align="center">
-                        <Tooltip title="Details anzeigen">
+                        <Tooltip title="Material bearbeiten">
                           <IconButton
                             size="small"
-                            onClick={() => navigate(`/materials/${item.id}`)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              navigate(`/materials/${item.id}/edit`);
+                            }}
                           >
-                            <ViewIcon fontSize="small" />
+                            <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                       </TableCell>
