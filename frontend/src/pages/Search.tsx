@@ -37,6 +37,7 @@ import {
   Error as ErrorIcon,
   CheckCircle as CheckCircleIcon,
   Clear as ClearIcon,
+  Visibility as ViewIcon,
   Edit as EditIcon,
   ExpandMore as ExpandMoreIcon,
   Person as PersonIcon,
