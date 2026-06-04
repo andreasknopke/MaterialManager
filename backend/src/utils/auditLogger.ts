@@ -181,6 +181,13 @@ export const auditIntervention = {
   },
   delete: async (req: Request, intervention: { id: number }) => {
     await logFromRequest(req, 'DELETE', 'INTERVENTION', intervention.id, `Intervention #${intervention.id}`);
+  },
+  removeItem: async (req: Request, protocolId: number, item: { id: number; material_name: string; article_number?: string; lot_number?: string; quantity?: number }) => {
+    await logFromRequest(req, 'DELETE', 'INTERVENTION_ITEM', item.id, 
+      `Material #${item.id}: ${item.material_name} (${item.article_number || 'keine Art.-Nr.'})`,
+      { protocol_id: protocolId, material_name: item.material_name, article_number: item.article_number, lot_number: item.lot_number, quantity: item.quantity },
+      undefined
+    );
   }
 };
 

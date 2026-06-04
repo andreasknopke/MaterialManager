@@ -376,6 +376,10 @@ export const interventionAPI = {
   // Admin-Funktion: Protokoll-Details bearbeiten
   updateProtocol: (id: number, data: { patient_id?: string; patient_name?: string; notes?: string; started_at?: string }) => 
     api.put(`/interventions/${id}`, data),
+  
+  // Admin-Funktion: Material aus gespeichertem Protokoll entfernen (mit Audit-Log)
+  adminRemoveItem: (protocolId: number, itemId: number) =>
+    api.delete(`/interventions/${protocolId}/items/${itemId}/admin-remove`),
 };
 
 // Audit-Logs (nur für Admins)

@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import pool, { getPoolForRequest } from '../config/database';
 import { RowDataPacket, ResultSetHeader, PoolConnection } from 'mysql2/promise';
-import { authenticate } from '../middleware/auth';
-import { auditTransaction, auditIntervention } from '../utils/auditLogger';
+import { authenticate, requireAdmin } from '../middleware/auth';
+import { auditTransaction, auditIntervention, logFromRequest } from '../utils/auditLogger';
 
 const router = Router();
 
@@ -732,6 +732,80 @@ router.delete('/:protocolId/items/:itemId', async (req: Request, res: Response) 
   } catch (error) {
     await connection.rollback();
     console.error('Fehler beim Entfernen des Items:', error);
+    res.status(500).json({ error: 'Datenbankfehler' });
+  } finally {
+    connection.release();
+  }
+});
+
+// ADMIN: Material aus gespeichertem Protokoll löschen (mit Audit-Log)
+router.delete('/:protocolId/items/:itemId/admin-remove', requireAdmin, async (req: Request, res: Response) => {
+  const currentPool = getPoolForRequest(req);
+  const connection = await currentPool.getConnection();
+  
+  try {
+    const { protocolId, itemId } = req.params;
+    
+    await connection.beginTransaction();
+    
+    // Item-Daten für Audit-Log sichern (vor dem Löschen)
+    const [items] = await connection.query<RowDataPacket[]>(
+      'SELECT * FROM intervention_protocol_items WHERE id = ? AND protocol_id = ?',
+      [itemId, protocolId]
+    );
+    
+    if (items.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Material nicht im Protokoll gefunden' });
+    }
+    
+    const item = items[0];
+    
+    // Verknüpfung in material_transactions aufheben (falls vorhanden)
+    if (item.transaction_id) {
+      await connection.query(
+        'UPDATE material_transactions SET protocol_item_id = NULL WHERE id = ?',
+        [item.transaction_id]
+      );
+    }
+    
+    // Item löschen
+    await connection.query(
+      'DELETE FROM intervention_protocol_items WHERE id = ? AND protocol_id = ?',
+      [itemId, protocolId]
+    );
+    
+    // total_items aktualisieren
+    await connection.query(
+      'UPDATE intervention_protocols SET total_items = (SELECT COUNT(*) FROM intervention_protocol_items WHERE protocol_id = ?) WHERE id = ?',
+      [protocolId, protocolId]
+    );
+    
+    await connection.commit();
+    
+    // Audit-Log erstellen
+    await auditIntervention.removeItem(req, Number(protocolId), {
+      id: item.id,
+      material_name: item.material_name,
+      article_number: item.article_number,
+      lot_number: item.lot_number,
+      quantity: item.quantity
+    });
+    
+    console.log(`[ADMIN] Material #${itemId} (${item.material_name}) aus Protokoll #${protocolId} entfernt durch User ${(req as any).user?.username}`);
+    
+    res.json({ 
+      success: true, 
+      message: `Material "${item.material_name}" aus Protokoll entfernt (dokumentiert im Audit-Log)`,
+      removed_item: {
+        id: item.id,
+        material_name: item.material_name,
+        article_number: item.article_number
+      }
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Fehler beim Admin-Entfernen des Items:', error);
     res.status(500).json({ error: 'Datenbankfehler' });
   } finally {
     connection.release();

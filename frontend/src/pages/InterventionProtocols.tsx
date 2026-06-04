@@ -37,6 +37,7 @@ import {
   Assignment as AssignmentIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
+  RemoveCircle as RemoveCircleIcon,
 } from '@mui/icons-material';
 import { interventionAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -105,6 +106,9 @@ const InterventionProtocols: React.FC = () => {
   const [editNotes, setEditNotes] = useState('');
   const [updating, setUpdating] = useState(false);
   const [updateSuccess, setUpdateSuccess] = useState('');
+  const [removeItemTarget, setRemoveItemTarget] = useState<ProtocolItem | null>(null);
+  const [removingItem, setRemovingItem] = useState(false);
+  const [removeItemSuccess, setRemoveItemSuccess] = useState('');
 
   const loadProtocols = async () => {
     setLoading(true);
@@ -223,6 +227,48 @@ const InterventionProtocols: React.FC = () => {
       setError(err.response?.data?.error || 'Fehler beim Aktualisieren');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleAdminRemoveItem = async () => {
+    if (!selectedProtocol || !removeItemTarget) return;
+
+    setRemovingItem(true);
+    setError('');
+    setRemoveItemSuccess('');
+
+    try {
+      await interventionAPI.adminRemoveItem(selectedProtocol.id, removeItemTarget.id);
+
+      setProtocolItems((prev) => prev.filter((item) => item.id !== removeItemTarget.id));
+      setProtocols((prev) =>
+        prev.map((protocol) =>
+          protocol.id === selectedProtocol.id
+            ? {
+                ...protocol,
+                item_count: Math.max((protocol.item_count || 0) - 1, 0),
+                total_items: Math.max((protocol.total_items || 0) - 1, 0),
+              }
+            : protocol
+        )
+      );
+      setSelectedProtocol((prev) =>
+        prev
+          ? {
+              ...prev,
+              item_count: Math.max((prev.item_count || 0) - 1, 0),
+              total_items: Math.max((prev.total_items || 0) - 1, 0),
+            }
+          : prev
+      );
+
+      setRemoveItemSuccess(`Material "${removeItemTarget.material_name}" wurde entfernt und im Audit-Log dokumentiert.`);
+      setRemoveItemTarget(null);
+      loadProtocols();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Fehler beim Entfernen des Materials');
+    } finally {
+      setRemovingItem(false);
     }
   };
 
@@ -538,6 +584,12 @@ const InterventionProtocols: React.FC = () => {
                 )}
               </Paper>
 
+              {removeItemSuccess && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  {removeItemSuccess}
+                </Alert>
+              )}
+
               {detailLoading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
                   <CircularProgress />
@@ -553,6 +605,7 @@ const InterventionProtocols: React.FC = () => {
                         <TableCell>LOT</TableCell>
                         <TableCell align="center">Kons.</TableCell>
                         <TableCell align="right">Menge</TableCell>
+                        {isAdmin && <TableCell align="center">Admin</TableCell>}
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -600,6 +653,23 @@ const InterventionProtocols: React.FC = () => {
                             ) : '-'}
                           </TableCell>
                           <TableCell align="right">{item.quantity}</TableCell>
+                          {isAdmin && (
+                            <TableCell align="center">
+                              <Tooltip title="Material aus Protokoll entfernen (Audit-Log)">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => {
+                                    setRemoveItemTarget(item);
+                                    setError('');
+                                    setRemoveItemSuccess('');
+                                  }}
+                                >
+                                  <RemoveCircleIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -615,6 +685,34 @@ const InterventionProtocols: React.FC = () => {
           </Button>
           <Button onClick={() => setShowDetailDialog(false)} variant="outlined">
             Schließen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!removeItemTarget}
+        onClose={() => !removingItem && setRemoveItemTarget(null)}
+      >
+        <DialogTitle>Material aus Protokoll entfernen?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Soll das Material <strong>{removeItemTarget?.material_name}</strong> wirklich aus dem gespeicherten Protokoll entfernt werden?
+          </Typography>
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Diese Admin-Aktion wird im Audit-Log dokumentiert.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRemoveItemTarget(null)} disabled={removingItem}>
+            Abbrechen
+          </Button>
+          <Button
+            onClick={handleAdminRemoveItem}
+            color="error"
+            variant="contained"
+            disabled={removingItem}
+          >
+            {removingItem ? <CircularProgress size={20} /> : 'Entfernen'}
           </Button>
         </DialogActions>
       </Dialog>
