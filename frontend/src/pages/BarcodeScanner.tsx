@@ -389,7 +389,7 @@ const BarcodeScanner: React.FC = () => {
       removalMode?: boolean;
       returnToMaterialForm?: boolean;
       returnToSearch?: boolean;
-      scanMode?: 'gs1' | 'qr';
+      scanMode?: 'gs1' | 'qr' | 'alt-gtin';
       scanPatientBarcode?: boolean;
       assumeGS1?: boolean;
       inventoryCheck?: boolean;
@@ -687,7 +687,7 @@ const BarcodeScanner: React.FC = () => {
                       returnTo?: string;
                       returnToMaterialForm?: boolean;
                       returnToSearch?: boolean;
-                      scanMode?: 'gs1' | 'qr';
+                      scanMode?: 'gs1' | 'qr' | 'alt-gtin';
                       materialId?: string;
                       inventoryCheck?: boolean;
                       cabinetId?: number;
@@ -1304,7 +1304,7 @@ const BarcodeScanner: React.FC = () => {
     const state = location.state as { 
       returnToMaterialForm?: boolean;
       returnToSearch?: boolean;
-      scanMode?: 'gs1' | 'qr';
+      scanMode?: 'gs1' | 'qr' | 'alt-gtin';
       materialId?: string;
     } | null;
     

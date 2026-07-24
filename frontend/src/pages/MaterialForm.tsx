@@ -884,7 +884,7 @@ const MaterialForm: React.FC = () => {
   };
 
   // Kamera-Scanner öffnen - navigiert zum BarcodeScanner-Modul
-  const openScanner = (mode: 'gs1' | 'qr') => {
+  const openScanner = (mode: 'gs1' | 'qr' | 'alt-gtin') => {
     // Speichere aktuellen Formular-Zustand in sessionStorage
     sessionStorage.setItem('materialFormData', JSON.stringify(formData));
     sessionStorage.setItem('materialFormScannerMode', mode);
@@ -900,12 +900,51 @@ const MaterialForm: React.FC = () => {
     });
   };
 
+  // Gescannte GTIN/Batch zu den alternativen GTINs hinzufügen (ohne Duplikate)
+  const addScannedAlternativeGtin = (scannedCode: string) => {
+    let gtin = scannedCode.trim();
+
+    // GS1-Barcodes parsen und GTIN (AI 01) extrahieren
+    if (isValidGS1Barcode(gtin)) {
+      const parsed = parseGS1Barcode(gtin);
+      gtin = parsed.gtin || gtin;
+    } else {
+      // Fallback: GTIN aus unformatiertem Text extrahieren (z.B. "01<14 Ziffern>...")
+      const match = gtin.replace(/\s+/g, '').match(/(?:\(01\)|^01)(\d{14})/);
+      if (match) gtin = match[1];
+    }
+
+    if (!gtin) {
+      setSuccess('⚠️ Keine GTIN im Scan gefunden - bitte manuell eintragen.');
+      setTimeout(() => setSuccess(null), 4000);
+      return;
+    }
+
+    setFormData(prev => {
+      const existing = prev.alternative_gtins
+        .split(/[\n,;]/)
+        .map(g => g.trim())
+        .filter(Boolean);
+
+      if (existing.some(g => g === gtin || g.padStart(14, '0') === gtin.padStart(14, '0'))) {
+        setSuccess(`GTIN ${gtin} ist bereits als alternative GTIN hinterlegt.`);
+        setTimeout(() => setSuccess(null), 4000);
+        return prev;
+      }
+
+      const next = existing.length > 0 ? [...existing, gtin].join('\n') : gtin;
+      setSuccess(`GTIN ${gtin} als alternative GTIN übernommen!`);
+      setTimeout(() => setSuccess(null), 4000);
+      return { ...prev, alternative_gtins: next };
+    });
+  };
+
   // Prüfe beim Laden, ob wir vom Scanner zurückkommen
   useEffect(() => {
     const state = location.state as { 
       fromScanner?: boolean; 
       scannedCode?: string;
-      scanMode?: 'gs1' | 'qr';
+      scanMode?: 'gs1' | 'qr' | 'alt-gtin';
     } | null;
     
     if (state?.fromScanner && state?.scannedCode) {
@@ -938,6 +977,14 @@ const MaterialForm: React.FC = () => {
         // Verzögert, damit restoredData-State angewendet wurde
         setTimeout(() => {
           handleGS1BarcodeChange({ target: { value: scannedCode } } as React.ChangeEvent<HTMLInputElement>);
+        }, 100);
+      } else if (state.scanMode === 'alt-gtin') {
+        // Gescannte GTIN den alternativen/verknüpften GTINs hinzufügen
+        if (restoredData) {
+          setFormData(prev => ({ ...prev, ...restoredData }));
+        }
+        setTimeout(() => {
+          addScannedAlternativeGtin(state.scannedCode!);
         }, 100);
       } else if (state.scanMode === 'qr') {
         // QR-Code für Fach verarbeiten
@@ -1386,6 +1433,17 @@ const MaterialForm: React.FC = () => {
               value={formData.alternative_gtins}
                 onChange={handleChange('alternative_gtins')}
                 helperText="Eine GTIN pro Zeile oder durch Komma/Semikolon getrennt, z.B. Packungs- und Einzelprodukt-GTIN"
+                InputProps={{
+                  endAdornment: cameraEnabled ? (
+                    <InputAdornment position="end" sx={{ alignSelf: 'flex-start', alignItems: 'flex-start', mt: 0.5 }}>
+                      <Tooltip title="GTIN per Kamera-Scanner hinzufügen">
+                        <IconButton onClick={() => openScanner('alt-gtin')} size="small" color="primary">
+                          <CameraIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </InputAdornment>
+                  ) : undefined,
+                }}
               />
             </Grid>
 
