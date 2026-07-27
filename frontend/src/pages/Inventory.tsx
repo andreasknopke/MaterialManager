@@ -101,6 +101,14 @@ interface CompartmentGroup {
   materials: Material[];
 }
 
+// Interface für gruppierte Materialien nach GTIN/LOT/Verfallsdatum
+interface GroupedMaterial {
+  groupKey: string;
+  material: Material;
+  count: number;
+  materialIds: number[];
+}
+
 interface InventoryScanScope {
   compartmentId: number;
   compartmentName: string;
@@ -487,6 +495,29 @@ const Inventory: React.FC = () => {
     });
 
     return sortedGroups;
+  };
+
+  // Materialien nach GTIN/LOT/Verfallsdatum gruppieren
+  const groupIdenticalMaterials = (materials: Material[]): GroupedMaterial[] => {
+    const groups: Map<string, GroupedMaterial> = new Map();
+
+    materials.forEach((material) => {
+      const key = `${material.article_number || ''}|${material.lot_number || ''}|${material.expiry_date || ''}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          groupKey: key,
+          material,
+          count: 1,
+          materialIds: [material.id],
+        });
+      } else {
+        const existing = groups.get(key)!;
+        existing.count += 1;
+        existing.materialIds.push(material.id);
+      }
+    });
+
+    return Array.from(groups.values());
   };
 
   // KI-Inhaltsabgleich starten
@@ -974,36 +1005,38 @@ const Inventory: React.FC = () => {
                 </AccordionSummary>
                 <AccordionDetails sx={{ p: 0 }}>
                   <List dense>
-                    {compartmentGroup.materials.map((material) => {
-                      const isConfirmed = confirmedMaterials.has(material.id);
+                    {groupIdenticalMaterials(compartmentGroup.materials).map((grouped) => {
+                      const material = grouped.material;
+                      const allConfirmed = grouped.materialIds.every(id => confirmedMaterials.has(id));
+                      const someConfirmed = grouped.materialIds.some(id => confirmedMaterials.has(id));
                       const confirmation = confirmedMaterials.get(material.id);
                 
                 return (
                   <ListItem 
-                    key={material.id}
+                    key={grouped.groupKey}
                     sx={{
                       border: '1px solid',
                       borderColor: inventoryMode 
-                        ? (isConfirmed ? 'success.main' : 'warning.main')
+                        ? (allConfirmed ? 'success.main' : 'warning.main')
                         : '#e0e0e0',
                       borderRadius: 1,
                       mb: 1,
                       bgcolor: isExpired(material.expiry_date) ? '#ffebee' : 
                                isExpiringSoon(material.expiry_date) ? '#fff3e0' : 
-                               (inventoryMode && isConfirmed) ? '#e8f5e9' : 'transparent'
+                               (inventoryMode && allConfirmed) ? '#e8f5e9' : 'transparent'
                     }}
                     secondaryAction={
                       inventoryMode && (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {isConfirmed ? (
+                          {allConfirmed ? (
                             <Tooltip title={`Bestätigt per ${confirmation?.method === 'scan' ? 'Scan' : 'Checkbox'}`}>
-                              <IconButton color="success" onClick={() => unconfirmMaterial(material.id)}>
+                              <IconButton color="success" onClick={() => grouped.materialIds.forEach(id => unconfirmMaterial(id))}>
                                 <ConfirmedIcon />
                               </IconButton>
                             </Tooltip>
                           ) : (
                             <Tooltip title="Als vorhanden bestätigen">
-                              <IconButton color="warning" onClick={() => confirmMaterial(material.id, 'manual')}>
+                              <IconButton color="warning" onClick={() => grouped.materialIds.forEach(id => confirmMaterial(id, 'manual'))}>
                                 <UnconfirmedIcon />
                               </IconButton>
                             </Tooltip>
@@ -1022,15 +1055,24 @@ const Inventory: React.FC = () => {
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                           {inventoryMode && (
                             <Checkbox
-                              checked={isConfirmed}
+                              checked={allConfirmed}
+                              indeterminate={someConfirmed && !allConfirmed}
                               onChange={(e) => {
                                 if (e.target.checked) {
-                                  confirmMaterial(material.id, 'manual');
+                                  grouped.materialIds.forEach(id => confirmMaterial(id, 'manual'));
                                 } else {
-                                  unconfirmMaterial(material.id);
+                                  grouped.materialIds.forEach(id => unconfirmMaterial(id));
                                 }
                               }}
                               sx={{ p: 0, mr: 1 }}
+                            />
+                          )}
+                          {grouped.count > 1 && (
+                            <Chip 
+                              label={`${grouped.count} x`} 
+                              size="small" 
+                              color="primary"
+                              sx={{ fontWeight: 'bold', fontSize: '0.9rem' }}
                             />
                           )}
                           <Typography variant="subtitle1" fontWeight="bold">
@@ -1042,7 +1084,7 @@ const Inventory: React.FC = () => {
                           {material.category_name && (
                             <Chip label={material.category_name} size="small" variant="outlined" />
                           )}
-                          {inventoryMode && isConfirmed && confirmation?.method === 'scan' && (
+                          {inventoryMode && allConfirmed && confirmation?.method === 'scan' && (
                             <Chip label="Gescannt" size="small" color="success" icon={<QrCodeScannerIcon />} />
                           )}
                         </Box>
