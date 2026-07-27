@@ -256,25 +256,51 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
     if (products.length > 0) {
       const alternativeGtins = await getAlternativeGtinsForProduct(currentPool, products[0].product_id);
 
-      // Produkt gefunden - hole letzte Instanz-Daten für Kategorie/Schrank
+      // Produkt gefunden - hole aggregierte Instanz-Daten für Kategorie/Konsignation
+      // Verwende den Modus (häufigsten Wert) für category_id und is_consignment
+      // Berücksichtigt ALLE Materialien (aktiv und inaktiv), da die Anforderung
+      // "egal ob aktiver Bestand oder nicht" lautet.
+      const deptClause = departmentFilter.whereClause
+        ? `AND ${departmentFilter.whereClause.replace('unit_id', 'm2.unit_id')}`
+        : '';
+
       let instanceQuery = `
-        SELECT m.category_id, c.name as category_name, m.cabinet_id, m.compartment_id,
-               m.unit_id, m.unit, m.location_in_cabinet, m.is_consignment
-        FROM materials m
-        LEFT JOIN categories c ON m.category_id = c.id
-        WHERE m.product_id = ? AND m.active = TRUE
+        SELECT
+          (SELECT m2.category_id FROM materials m2
+           WHERE m2.product_id = ? ${deptClause}
+           AND m2.category_id IS NOT NULL
+           GROUP BY m2.category_id ORDER BY COUNT(*) DESC, MAX(m2.created_at) DESC LIMIT 1) as category_id,
+          (SELECT c2.name FROM materials m2
+           LEFT JOIN categories c2 ON m2.category_id = c2.id
+           WHERE m2.product_id = ? ${deptClause}
+           AND m2.category_id IS NOT NULL
+           GROUP BY m2.category_id ORDER BY COUNT(*) DESC, MAX(m2.created_at) DESC LIMIT 1) as category_name,
+          (SELECT m2.is_consignment FROM materials m2
+           WHERE m2.product_id = ? ${deptClause}
+           GROUP BY m2.is_consignment ORDER BY COUNT(*) DESC, MAX(m2.created_at) DESC LIMIT 1) as is_consignment,
+          (SELECT m2.unit_id FROM materials m2
+           WHERE m2.product_id = ? ${deptClause}
+           AND m2.unit_id IS NOT NULL
+           GROUP BY m2.unit_id ORDER BY COUNT(*) DESC, MAX(m2.created_at) DESC LIMIT 1) as unit_id,
+          (SELECT m2.unit FROM materials m2
+           WHERE m2.product_id = ? ${deptClause}
+           AND m2.unit IS NOT NULL
+           GROUP BY m2.unit ORDER BY COUNT(*) DESC, MAX(m2.created_at) DESC LIMIT 1) as unit
       `;
-      const instanceParams: any[] = [products[0].product_id];
-      
+      const instanceParams: any[] = [
+        products[0].product_id, products[0].product_id, products[0].product_id,
+        products[0].product_id, products[0].product_id
+      ];
       if (departmentFilter.whereClause) {
-        instanceQuery += ` AND ${departmentFilter.whereClause.replace('unit_id', 'm.unit_id')}`;
-        instanceParams.push(...departmentFilter.params);
+        // departmentFilter.params wird 5x benötigt (eine pro Subquery)
+        for (let i = 0; i < 5; i++) {
+          instanceParams.push(...departmentFilter.params);
+        }
       }
-      instanceQuery += ' ORDER BY m.created_at DESC LIMIT 1';
-      
+
       const [instances] = await currentPool.query<RowDataPacket[]>(instanceQuery, instanceParams);
-      const lastInstance = instances[0] || {};
-      
+      const aggInstance = instances[0] || {};
+
       return res.json({
         found: true,
         fromProducts: true,
@@ -298,11 +324,13 @@ router.get('/by-gtin/:gtin', async (req: Request, res: Response) => {
           article_number: products[0].gtin,
           alternative_gtins: alternativeGtins,
           // Instanz-Daten ohne standortbezogene Felder
-          category_id: lastInstance.category_id,
-          category_name: lastInstance.category_name,
-          unit_id: lastInstance.unit_id,
-          unit: lastInstance.unit,
-          is_consignment: lastInstance.is_consignment || false
+          category_id: aggInstance.category_id,
+          category_name: aggInstance.category_name,
+          unit_id: aggInstance.unit_id,
+          unit: aggInstance.unit,
+          is_consignment: aggInstance.is_consignment !== null && aggInstance.is_consignment !== undefined
+            ? Boolean(aggInstance.is_consignment)
+            : false
         }
       });
     }
